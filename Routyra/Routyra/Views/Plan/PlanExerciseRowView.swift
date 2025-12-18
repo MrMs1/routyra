@@ -28,10 +28,13 @@ struct PlanExerciseRowView: View {
             // Expanded content (set editing)
             if isExpanded {
                 expandedContent
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.opacity.animation(.easeOut(duration: 1)))
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+        .background(AppColors.cardBackground)
+        .cornerRadius(12)
         .contentShape(Rectangle())
         .contextMenu {
             Button {
@@ -51,50 +54,56 @@ struct PlanExerciseRowView: View {
     // MARK: - Header Row
 
     private var headerRow: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
+        HStack(spacing: 12) {
+            // Expand/collapse button area
+            Button {
                 onToggleExpand()
-            }
-        } label: {
-            HStack(spacing: 8) {
-                // Exercise name and summary (left-aligned)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 8) {
-                        Text(exercise?.localizedName ?? "Unknown")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundColor(AppColors.textPrimary)
+            } label: {
+                HStack(spacing: 12) {
+                    // Chevron (left side like PlanDayCardView)
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppColors.textMuted)
+                        .frame(width: 16)
 
-                        // Body part chip (smaller, inline)
-                        if let bodyPart = bodyPart {
-                            Text(bodyPart.localizedName)
-                                .font(.caption2)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(AppColors.mutedBlue.opacity(0.2))
-                                .foregroundColor(AppColors.textSecondary)
-                                .cornerRadius(3)
+                    // Exercise info
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 8) {
+                            // Body part color dot
+                            if let bodyPart = bodyPart {
+                                Circle()
+                                    .fill(bodyPart.color)
+                                    .frame(width: 8, height: 8)
+                            }
+
+                            Text(exercise?.localizedName ?? "Unknown")
+                                .font(.headline)
+                                .foregroundColor(AppColors.textPrimary)
+
+                            // Body part chip
+                            if let bodyPart = bodyPart {
+                                Text(bodyPart.localizedName)
+                                    .font(.caption2)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(AppColors.mutedBlue.opacity(0.2))
+                                    .foregroundColor(AppColors.textSecondary)
+                                    .cornerRadius(4)
+                            }
                         }
-                    }
 
-                    // Show summary when collapsed
-                    if !isExpanded {
+                        // Summary
                         Text(planExercise.setsSummary)
-                            .font(.caption)
+                            .font(.subheadline)
                             .foregroundColor(AppColors.textSecondary)
                     }
+
+                    Spacer()
                 }
-
-                Spacer()
-
-                // Expand/collapse indicator
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                    .font(.caption)
-                    .foregroundColor(AppColors.textMuted)
-                    .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Expanded Content

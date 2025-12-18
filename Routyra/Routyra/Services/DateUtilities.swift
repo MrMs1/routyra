@@ -99,6 +99,59 @@ enum DateUtilities {
         return (weekday + 5) % 7
     }
 
+    // MARK: - Workout Day Calculation
+
+    /// Calculates the "workout date" for a given time, accounting for the day transition hour.
+    /// For example, if transitionHour is 3 (3:00 AM), a time of 2:00 AM on Dec 16
+    /// would return Dec 15 (still counted as the previous workout day).
+    /// - Parameters:
+    ///   - date: The actual date/time.
+    ///   - transitionHour: The hour at which the workout day transitions (0-23).
+    /// - Returns: The effective workout date (normalized to start of day).
+    nonisolated static func workoutDate(for date: Date, transitionHour: Int) -> Date {
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: date)
+
+        // If current time is before the transition hour, it belongs to the previous day
+        if hour < transitionHour {
+            if let previousDay = calendar.date(byAdding: .day, value: -1, to: date) {
+                return startOfDay(previousDay)
+            }
+        }
+
+        return startOfDay(date)
+    }
+
+    /// Gets today's workout date, accounting for the transition hour.
+    /// - Parameter transitionHour: The hour at which the workout day transitions (0-23).
+    /// - Returns: The effective workout date for right now.
+    nonisolated static func todayWorkoutDate(transitionHour: Int) -> Date {
+        workoutDate(for: Date(), transitionHour: transitionHour)
+    }
+
+    /// Checks if the given date falls on today's workout day, accounting for transition hour.
+    /// - Parameters:
+    ///   - date: The date to check.
+    ///   - transitionHour: The hour at which the workout day transitions (0-23).
+    /// - Returns: True if the date is on today's workout day.
+    nonisolated static func isWorkoutToday(_ date: Date, transitionHour: Int) -> Bool {
+        let todayWorkout = todayWorkoutDate(transitionHour: transitionHour)
+        let dateWorkout = workoutDate(for: date, transitionHour: transitionHour)
+        return isSameDay(todayWorkout, dateWorkout)
+    }
+
+    /// Checks if two dates are on the same workout day, accounting for transition hour.
+    /// - Parameters:
+    ///   - date1: First date.
+    ///   - date2: Second date.
+    ///   - transitionHour: The hour at which the workout day transitions (0-23).
+    /// - Returns: True if both dates are on the same workout day.
+    nonisolated static func isSameWorkoutDay(_ date1: Date, _ date2: Date, transitionHour: Int) -> Bool {
+        let workout1 = workoutDate(for: date1, transitionHour: transitionHour)
+        let workout2 = workoutDate(for: date2, transitionHour: transitionHour)
+        return isSameDay(workout1, workout2)
+    }
+
     // MARK: - Formatting
 
     /// Formats a date for display (e.g., "Mon, Dec 15").

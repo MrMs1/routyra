@@ -65,7 +65,7 @@ final class PlanExercise {
     /// Summary string for display (e.g., "3セット" or "60kg×10 / 60kg×10 / 60kg×10").
     var setsSummary: String {
         if plannedSets.isEmpty {
-            return "\(plannedSetCount)セット"
+            return "セット未設定"
         }
 
         let sorted = sortedPlannedSets
@@ -77,6 +77,45 @@ final class PlanExercise {
         }
 
         return sorted.map { $0.summary }.joined(separator: " / ")
+    }
+
+    /// Compact summary for Plan view (e.g., "3 sets • 8–10 reps • 75–80kg").
+    var compactSummary: String {
+        let sets = sortedPlannedSets
+        guard !sets.isEmpty else {
+            return "セット未設定"
+        }
+
+        let setsCount = sets.count
+        let weights = sets.compactMap(\.targetWeight)
+        let reps = sets.compactMap(\.targetReps)
+
+        var parts: [String] = ["\(setsCount)セット"]
+
+        if !reps.isEmpty {
+            let minReps = reps.min()!
+            let maxReps = reps.max()!
+            if minReps == maxReps {
+                parts.append("\(minReps)reps")
+            } else {
+                parts.append("\(minReps)–\(maxReps)reps")
+            }
+        }
+
+        if !weights.isEmpty {
+            let minWeight = weights.min()!
+            let maxWeight = weights.max()!
+            let formatWeight: (Double) -> String = { w in
+                w.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(w))" : String(format: "%.1f", w)
+            }
+            if minWeight == maxWeight {
+                parts.append("\(formatWeight(minWeight))kg")
+            } else {
+                parts.append("\(formatWeight(minWeight))–\(formatWeight(maxWeight))kg")
+            }
+        }
+
+        return parts.joined(separator: " • ")
     }
 
     // MARK: - Methods

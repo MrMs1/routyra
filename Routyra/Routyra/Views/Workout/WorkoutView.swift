@@ -6,13 +6,21 @@
 import SwiftUI
 import SwiftData
 
+/// Navigation destinations for WorkoutView
+enum WorkoutDestination: Hashable {
+    case exercisePicker
+    case setEditor(exercise: Exercise)
+}
+
 struct WorkoutView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkoutDay.date, order: .reverse) private var workoutDays: [WorkoutDay]
     @Query private var exercises: [Exercise]
+    @Query private var bodyParts: [BodyPart]
     @Binding var navigateToHistory: Bool
+    @Binding var navigateToRoutines: Bool
 
-    @State private var selectedDate: Date = Date()
+    @State private var selectedDate: Date = DateUtilities.todayWorkoutDate(transitionHour: 3)
     @State private var expandedEntryId: UUID?
     @State private var snackBarMessage: String?
     @State private var snackBarUndoAction: (() -> Void)?
@@ -21,17 +29,26 @@ struct WorkoutView: View {
     @State private var showExercisePicker: Bool = false
     @State private var entryToChange: WorkoutExerciseEntry?
     @State private var profile: LocalProfile?
+    @State private var navigationPath = NavigationPath()
 
     // Cycle support
     @State private var activeCycle: PlanCycle?
     @State private var cycleStateInfo: (cycleName: String, planName: String, dayInfo: String)?
 
+    private var transitionHour: Int {
+        profile?.dayTransitionHour ?? 3
+    }
+
+    private var todayWorkoutDate: Date {
+        DateUtilities.todayWorkoutDate(transitionHour: transitionHour)
+    }
+
     private var isViewingToday: Bool {
-        Calendar.current.isDateInToday(selectedDate)
+        DateUtilities.isSameWorkoutDay(selectedDate, Date(), transitionHour: transitionHour)
     }
 
     private var selectedWorkoutDay: WorkoutDay? {
-        workoutDays.first { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }
+        workoutDays.first { DateUtilities.isSameWorkoutDay($0.date, selectedDate, transitionHour: transitionHour) }
     }
 
     private var sortedEntries: [WorkoutExerciseEntry] {
@@ -56,7 +73,8 @@ struct WorkoutView: View {
         for workoutDay in workoutDays {
             if let dayDiff = calendar.dateComponents([.day], from: weekStart, to: workoutDay.date).day,
                dayDiff >= 0 && dayDiff < 7 {
-                let totalSets = workoutDay.entries.reduce(0) { $0 + $1.plannedSetCount }
+                // Count actual sets (completed + incomplete)
+                let totalSets = workoutDay.entries.reduce(0) { $0 + $1.activeSets.count }
                 let completedSets = workoutDay.totalCompletedSets
                 if totalSets > 0 {
                     progress[dayDiff] = Double(completedSets) / Double(totalSets)
@@ -70,119 +88,203 @@ struct WorkoutView: View {
         sortedEntries.firstIndex { $0.id == expandedEntryId }
     }
 
+    /// Exercises dictionary for quick lookup
+    private var exercisesDict: [UUID: Exercise] {
+        Dictionary(uniqueKeysWithValues: exercises.map { ($0.id, $0) })
+    }
+
+    /// Body parts dictionary for quick lookup
+    private var bodyPartsDict: [UUID: BodyPart] {
+        Dictionary(uniqueKeysWithValues: bodyParts.map { ($0.id, $0) })
+    }
+
     var body: some View {
-        ZStack(alignment: .bottom) {
-            AppColors.background
-                .ignoresSafeArea()
+        NavigationStack(path: $navigationPath) {
+            ZStack(alignment: .bottom) {
+                AppColors.background
+                    .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                WorkoutHeaderView(
-                    date: selectedDate,
-                    streakCount: 12,
-                    isViewingToday: isViewingToday,
-                    onDateTap: handleDateTap
-                )
-
-                // Cycle context (when active cycle exists and viewing today)
-                if isViewingToday, let info = cycleStateInfo {
-                    CycleContextView(
-                        cycleName: info.cycleName,
-                        planName: info.planName,
-                        dayInfo: info.dayInfo,
-                        onComplete: {
-                            completeAndAdvanceCycle()
-                        }
+                VStack(spacing: 0) {
+                    WorkoutHeaderView(
+                        date: selectedDate,
+                        streakCount: 12,
+                        isViewingToday: isViewingToday,
+                        onDateTap: handleDateTap
                     )
+
+                    // Cycle context (when active cycle exists and viewing today)
+                    if isViewingToday, let info = cycleStateInfo {
+                        CycleContextView(
+                            cycleName: info.cycleName,
+                            planName: info.planName,
+                            dayInfo: info.dayInfo,
+                            onComplete: {
+                                completeAndAdvanceCycle()
+                            }
+                        )
+                    }
+
+                    WeeklyActivityStripView(
+                        dayProgress: weeklyProgress,
+                        selectedDayIndex: selectedDayIndex,
+                        onDayTap: selectDay
+                    )
+
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(spacing: 8) {
+                                ForEach(Array(sortedEntries.enumerated()), id: \.element.id) { index, entry in
+                                    let isExpanded = expandedEntryId == entry.id
+                                    let exerciseName = getExerciseName(for: entry.exerciseId)
+                                    let bodyPartColor = getBodyPartColor(for: entry.exerciseId)
+
+                                    ExerciseEntryCardView(
+                                        entry: entry,
+                                        exerciseName: exerciseName,
+                                        bodyPartColor: bodyPartColor,
+                                        isExpanded: isExpanded,
+                                        currentWeight: $currentWeight,
+                                        currentReps: $currentReps,
+                                        onTap: {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                expandedEntryId = isExpanded ? nil : entry.id
+                                            }
+                                            // Update weight/reps to next incomplete set's values
+                                            if !isExpanded {
+                                                updateCurrentWeightReps(for: entry)
+                                            }
+                                        },
+                                        onLogSet: {
+                                            logSet(for: entry, scrollProxy: proxy)
+                                        },
+                                        onAddSet: {
+                                            addSet(to: entry)
+                                        },
+                                        onRemovePlannedSet: { set in
+                                            removePlannedSet(set, from: entry)
+                                        },
+                                        onDeleteSet: { set in
+                                            deleteCompletedSet(set, from: entry)
+                                        },
+                                        onChangeExercise: {
+                                            entryToChange = entry
+                                            showExercisePicker = true
+                                        }
+                                    )
+                                    .id(entry.id)
+
+                                    if shouldShowAd(afterIndex: index) {
+                                        AdPlaceholderView()
+                                    }
+                                }
+
+                                if sortedEntries.isEmpty {
+                                    EmptyWorkoutView(
+                                        onAddExercise: {
+                                            navigationPath.append(WorkoutDestination.exercisePicker)
+                                        },
+                                        onCreatePlan: {
+                                            navigateToRoutines = true
+                                        }
+                                    )
+                                }
+                            }
+                            .padding(.horizontal)
+                            .padding(.bottom, UIScreen.main.bounds.height * 0.6)
+                        }
+                        .scrollDismissesKeyboard(.interactively)
+                    }
+
+                    Spacer(minLength: 0)
                 }
 
-                WeeklyActivityStripView(
-                    dayProgress: weeklyProgress,
-                    selectedDayIndex: selectedDayIndex,
-                    onDayTap: selectDay
-                )
-
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(Array(sortedEntries.enumerated()), id: \.element.id) { index, entry in
-                            let isExpanded = expandedEntryId == entry.id
-                            let exerciseName = getExerciseName(for: entry.exerciseId)
-
-                            ExerciseEntryCardView(
-                                entry: entry,
-                                exerciseName: exerciseName,
-                                isExpanded: isExpanded,
-                                currentWeight: $currentWeight,
-                                currentReps: $currentReps,
-                                onTap: {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        expandedEntryId = isExpanded ? nil : entry.id
-                                    }
-                                },
-                                onLogSet: {
-                                    logSet(for: entry)
-                                },
-                                onAddSet: {
-                                    addSet(to: entry)
-                                },
-                                onRemovePlannedSet: { set in
-                                    removePlannedSet(set, from: entry)
-                                },
-                                onDeleteSet: { set in
-                                    deleteCompletedSet(set, from: entry)
-                                },
-                                onChangeExercise: {
-                                    entryToChange = entry
-                                    showExercisePicker = true
-                                }
-                            )
-
-                            if shouldShowAd(afterIndex: index) {
-                                AdPlaceholderView()
+                // Floating add button (when entries exist)
+                if !sortedEntries.isEmpty {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Button {
+                                navigationPath.append(WorkoutDestination.exercisePicker)
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 22, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 56, height: 56)
+                                    .background(AppColors.accentBlue)
+                                    .clipShape(Circle())
+                                    .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
                             }
-                        }
-
-                        if sortedEntries.isEmpty {
-                            EmptyWorkoutView(onAddExercise: addSampleExercises)
+                            .padding(.trailing, 20)
+                            .padding(.bottom, 140)
                         }
                     }
-                    .padding(.horizontal)
-                    .padding(.bottom, 100)
                 }
-                .scrollDismissesKeyboard(.interactively)
 
-                Spacer(minLength: 0)
+                VStack(spacing: 0) {
+                    if let message = snackBarMessage {
+                        SnackBarView(
+                            message: message,
+                            onUndo: {
+                                snackBarUndoAction?()
+                                dismissSnackBar()
+                            },
+                            onAdjustWeight: { delta in
+                                currentWeight += delta
+                            },
+                            onAdjustReps: { delta in
+                                currentReps += delta
+                            },
+                            onDismiss: {
+                                dismissSnackBar()
+                            }
+                        )
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+
+                    BottomStatusBarView(
+                        sets: selectedWorkoutDay?.totalCompletedSets ?? 0,
+                        exercises: selectedWorkoutDay?.totalExercisesWithSets ?? 0,
+                        volume: Double(truncating: (selectedWorkoutDay?.totalVolume ?? 0) as NSNumber)
+                    )
+                }
             }
+            .navigationBarHidden(true)
+            .navigationDestination(for: WorkoutDestination.self) { destination in
+                switch destination {
+                case .exercisePicker:
+                    if let profile = profile {
+                        WorkoutExercisePickerView(
+                            profile: profile,
+                            exercises: exercisesDict,
+                            bodyParts: bodyPartsDict,
+                            onSelect: { exercise in
+                                // Navigate to set editor instead of directly adding
+                                navigationPath.removeLast()
+                                navigationPath.append(WorkoutDestination.setEditor(exercise: exercise))
+                            }
+                        )
+                    }
 
-            VStack(spacing: 0) {
-                if let message = snackBarMessage {
-                    SnackBarView(
-                        message: message,
-                        onUndo: {
-                            snackBarUndoAction?()
-                            dismissSnackBar()
-                        },
-                        onAdjustWeight: { delta in
-                            currentWeight += delta
-                        },
-                        onAdjustReps: { delta in
-                            currentReps += delta
-                        },
-                        onDismiss: {
-                            dismissSnackBar()
+                case .setEditor(let exercise):
+                    let bodyPart = exercise.bodyPartId.flatMap { bodyPartsDict[$0] }
+                    WorkoutSetEditorView(
+                        exercise: exercise,
+                        bodyPart: bodyPart,
+                        initialWeight: currentWeight,
+                        initialReps: currentReps,
+                        onConfirm: { sets in
+                            addExerciseToWorkout(exercise, withSets: sets)
+                            navigationPath.removeLast()
                         }
                     )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-
-                BottomStatusBarView(
-                    sets: selectedWorkoutDay?.totalCompletedSets ?? 0,
-                    exercises: selectedWorkoutDay?.totalExercisesWithSets ?? 0,
-                    volume: Double(truncating: (selectedWorkoutDay?.totalVolume ?? 0) as NSNumber)
-                )
             }
         }
         .onAppear {
             profile = ProfileService.getOrCreateProfile(modelContext: modelContext)
+            // Update selectedDate with actual profile settings
+            selectedDate = todayWorkoutDate
             loadActiveCycle()
             ensureTodayWorkout()
             if let first = sortedEntries.first {
@@ -217,6 +319,27 @@ struct WorkoutView: View {
 
     private func getExerciseName(for exerciseId: UUID) -> String {
         exercises.first { $0.id == exerciseId }?.localizedName ?? "Unknown Exercise"
+    }
+
+    private func getBodyPartColor(for exerciseId: UUID) -> Color? {
+        guard let exercise = exercisesDict[exerciseId],
+              let bodyPartId = exercise.bodyPartId,
+              let bodyPart = bodyPartsDict[bodyPartId] else {
+            return nil
+        }
+        return bodyPart.color
+    }
+
+    /// Updates currentWeight and currentReps to match the entry's next incomplete set
+    private func updateCurrentWeightReps(for entry: WorkoutExerciseEntry) {
+        if let nextSet = entry.sortedSets.first(where: { !$0.isCompleted }) {
+            currentWeight = nextSet.weightDouble
+            currentReps = nextSet.reps
+        } else if let lastSet = entry.sortedSets.last {
+            // All sets completed, use last set's values
+            currentWeight = lastSet.weightDouble
+            currentReps = lastSet.reps
+        }
     }
 
     private func handleDateTap() {
@@ -291,26 +414,50 @@ struct WorkoutView: View {
     private func ensureTodayWorkout() {
         guard let profile = profile else { return }
 
+        let workoutDate = todayWorkoutDate
+
+        // Check if we need to auto-advance the cycle
+        checkAndAutoAdvanceCycle(workoutDate: workoutDate)
+
         // First check if we should setup from active cycle
         if let cycle = activeCycle,
            let (plan, planDay) = CycleService.getCurrentPlanDay(for: cycle, modelContext: modelContext) {
-            setupWorkoutFromCycle(plan: plan, planDay: planDay)
+            setupWorkoutFromCycle(plan: plan, planDay: planDay, workoutDate: workoutDate)
             return
         }
 
-        // Fall back to existing logic
-        let todayWorkout = workoutDays.first { Calendar.current.isDateInToday($0.date) }
+        // Fall back to existing logic - create empty workout day if none exists
+        let todayWorkout = workoutDays.first { DateUtilities.isSameDay($0.date, workoutDate) }
         if todayWorkout == nil {
-            let workoutDay = WorkoutDay(profileId: profile.id, date: Date())
+            let workoutDay = WorkoutDay(profileId: profile.id, date: workoutDate)
             modelContext.insert(workoutDay)
         }
     }
 
-    private func setupWorkoutFromCycle(plan: WorkoutPlan, planDay: PlanDay) {
+    /// Checks if the cycle should be auto-advanced based on the last workout date
+    private func checkAndAutoAdvanceCycle(workoutDate: Date) {
+        guard let cycle = activeCycle,
+              let progress = cycle.progress else { return }
+
+        // If last completed date exists and is different from today's workout date,
+        // and the workout was completed, we should auto-advance
+        if let lastCompleted = progress.lastCompletedAt {
+            let lastWorkoutDate = DateUtilities.workoutDate(for: lastCompleted, transitionHour: transitionHour)
+
+            // If different workout day and already completed
+            if !DateUtilities.isSameDay(lastWorkoutDate, workoutDate) {
+                // Auto-advance to next day
+                CycleService.advance(cycle: cycle, modelContext: modelContext)
+                cycleStateInfo = CycleService.getCurrentStateInfo(for: cycle, modelContext: modelContext)
+            }
+        }
+    }
+
+    private func setupWorkoutFromCycle(plan: WorkoutPlan, planDay: PlanDay, workoutDate: Date) {
         guard let profile = profile else { return }
 
-        // Check if workout already exists for today
-        if let existingWorkout = workoutDays.first(where: { Calendar.current.isDateInToday($0.date) }) {
+        // Check if workout already exists for today's workout date
+        if let existingWorkout = workoutDays.first(where: { DateUtilities.isSameDay($0.date, workoutDate) }) {
             // If it's already set up for this plan day, do nothing
             if existingWorkout.routineDayId == planDay.id {
                 return
@@ -320,7 +467,7 @@ struct WorkoutView: View {
         // Create new workout day in plan mode
         let workoutDay = WorkoutService.getOrCreateWorkoutDay(
             profileId: profile.id,
-            date: Date(),
+            date: workoutDate,
             mode: .routine,
             routinePresetId: plan.id,
             routineDayId: planDay.id,
@@ -333,40 +480,68 @@ struct WorkoutView: View {
         }
     }
 
-    private func addSampleExercises() {
+    /// Adds a selected exercise to the current workout with specified sets
+    private func addExerciseToWorkout(_ exercise: Exercise, withSets sets: [(weight: Double, reps: Int)]) {
         guard let profile = profile else { return }
+        guard !sets.isEmpty else { return }
 
-        if selectedWorkoutDay == nil {
-            let workoutDay = WorkoutDay(profileId: profile.id, date: selectedDate)
-            modelContext.insert(workoutDay)
+        let workoutDate = DateUtilities.workoutDate(for: selectedDate, transitionHour: transitionHour)
+
+        // Create workout day if needed
+        var workoutDay = selectedWorkoutDay
+        if workoutDay == nil {
+            let newWorkoutDay = WorkoutDay(profileId: profile.id, date: workoutDate)
+            modelContext.insert(newWorkoutDay)
+            workoutDay = newWorkoutDay
         }
 
-        guard let workoutDay = selectedWorkoutDay else { return }
+        guard let workoutDay = workoutDay else { return }
 
-        let exerciseNames = ["Bench Press", "Squat", "Deadlift", "Barbell Row"]
-        for (index, name) in exerciseNames.enumerated() {
-            if let exercise = exercises.first(where: { $0.name == name }) {
-                let entry = WorkoutExerciseEntry(
-                    exerciseId: exercise.id,
-                    orderIndex: index,
-                    source: .free,
-                    plannedSetCount: 5
-                )
-                for setIndex in 1...5 {
-                    let set = WorkoutSet(setIndex: setIndex, weight: Decimal(60), reps: 8)
-                    entry.addSet(set)
-                }
-                workoutDay.addEntry(entry)
+        // Get next order index
+        let nextOrder = (workoutDay.entries.map(\.orderIndex).max() ?? -1) + 1
+
+        // Create entry with the specified sets
+        let entry = WorkoutExerciseEntry(
+            exerciseId: exercise.id,
+            orderIndex: nextOrder,
+            source: .free,
+            plannedSetCount: sets.count
+        )
+
+        // Add all sets as incomplete
+        for (index, setData) in sets.enumerated() {
+            let set = WorkoutSet(
+                setIndex: index + 1,
+                weight: Decimal(setData.weight),
+                reps: setData.reps,
+                isCompleted: false
+            )
+            entry.addSet(set)
+        }
+
+        workoutDay.addEntry(entry)
+
+        // Update current weight/reps to match first set
+        if let firstSet = sets.first {
+            currentWeight = firstSet.weight
+            currentReps = firstSet.reps
+        }
+
+        // Expand the newly added entry
+        withAnimation(.easeInOut(duration: 0.2)) {
+            expandedEntryId = entry.id
+        }
+
+        showSnackBar(
+            message: "\(exercise.localizedName)を追加しました（\(sets.count)セット）",
+            undoAction: {
+                workoutDay.removeEntry(entry)
             }
-        }
-
-        if let first = workoutDay.sortedEntries.first {
-            expandedEntryId = first.id
-        }
+        )
     }
 
     private func addSet(to entry: WorkoutExerciseEntry) {
-        let newSet = entry.createSet(weight: Decimal(currentWeight), reps: currentReps, isCompleted: true)
+        let newSet = entry.createSet(weight: Decimal(currentWeight), reps: currentReps, isCompleted: false)
 
         showSnackBar(
             message: "Set added: \(formatWeight(currentWeight)) kg × \(currentReps)",
@@ -376,7 +551,7 @@ struct WorkoutView: View {
         )
     }
 
-    private func logSet(for entry: WorkoutExerciseEntry) {
+    private func logSet(for entry: WorkoutExerciseEntry, scrollProxy: ScrollViewProxy) {
         guard let nextSet = entry.sortedSets.first(where: { !$0.isCompleted }) else { return }
 
         let previousWeight = nextSet.weight
@@ -407,6 +582,7 @@ struct WorkoutView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         expandedEntryId = nextEntry.id
+                        scrollProxy.scrollTo(nextEntry.id, anchor: .top)
                     }
                 }
             }
@@ -468,15 +644,16 @@ struct WorkoutView: View {
 
 struct EmptyWorkoutView: View {
     let onAddExercise: () -> Void
+    let onCreatePlan: () -> Void
 
     var body: some View {
         VStack(spacing: 16) {
-            Text("No exercises yet")
+            Text("種目がありません")
                 .font(.headline)
                 .foregroundColor(AppColors.textSecondary)
 
             Button(action: onAddExercise) {
-                Text("Add Sample Exercises")
+                Text("種目を追加")
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(AppColors.textPrimary)
@@ -484,6 +661,12 @@ struct EmptyWorkoutView: View {
                     .padding(.vertical, 12)
                     .background(AppColors.accentBlue)
                     .cornerRadius(10)
+            }
+
+            Button(action: onCreatePlan) {
+                Text("またはワークアウトプランを作成する")
+                    .font(.caption)
+                    .foregroundColor(AppColors.accentBlue)
             }
         }
         .frame(maxWidth: .infinity)
@@ -588,7 +771,7 @@ struct ExercisePickerSheet: View {
 }
 
 #Preview {
-    WorkoutView(navigateToHistory: .constant(false))
+    WorkoutView(navigateToHistory: .constant(false), navigateToRoutines: .constant(false))
         .modelContainer(for: [
             LocalProfile.self,
             Exercise.self,

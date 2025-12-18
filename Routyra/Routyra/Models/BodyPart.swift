@@ -8,6 +8,7 @@
 
 import Foundation
 import SwiftData
+import SwiftUI
 
 @Model
 final class BodyPart {
@@ -168,5 +169,33 @@ final class BodyPart {
     func unarchive() {
         self.isArchived = false
         touch()
+    }
+
+    // MARK: - Color
+
+    /// Returns a color associated with this body part based on its code.
+    var color: Color {
+        switch code {
+        case "chest":
+            return Color(red: 0.95, green: 0.3, blue: 0.3)   // Red
+        case "back":
+            return Color(red: 0.3, green: 0.6, blue: 0.95)   // Blue
+        case "shoulders":
+            return Color(red: 0.95, green: 0.6, blue: 0.2)   // Orange
+        case "arms":
+            return Color(red: 0.6, green: 0.4, blue: 0.9)    // Purple
+        case "abs":
+            return Color(red: 0.95, green: 0.8, blue: 0.2)   // Yellow
+        case "legs":
+            return Color(red: 0.3, green: 0.8, blue: 0.5)    // Green
+        case "glutes":
+            return Color(red: 0.95, green: 0.5, blue: 0.6)   // Pink
+        case "full_body":
+            return Color(red: 0.4, green: 0.8, blue: 0.9)    // Cyan
+        case "cardio":
+            return Color(red: 0.6, green: 0.6, blue: 0.6)    // Gray
+        default:
+            return Color(red: 0.5, green: 0.5, blue: 0.5)    // Default gray
+        }
     }
 }

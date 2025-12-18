@@ -8,6 +8,7 @@ import SwiftUI
 struct ExerciseEntryCardView: View {
     @Bindable var entry: WorkoutExerciseEntry
     let exerciseName: String
+    let bodyPartColor: Color?
     let isExpanded: Bool
     @Binding var currentWeight: Double
     @Binding var currentReps: Int
@@ -41,8 +42,10 @@ struct ExerciseEntryCardView: View {
         VStack(alignment: .leading, spacing: 0) {
             if isExpanded {
                 expandedContent
+                    .transition(.opacity.animation(.easeOut(duration: 1)))
             } else {
                 collapsedContent
+                    .transition(.opacity.animation(.easeOut(duration: 1)))
             }
         }
         .background(AppColors.cardBackground)
@@ -64,7 +67,14 @@ struct ExerciseEntryCardView: View {
             // Header with exercise name and delete button (always same size)
             HStack {
                 Button(action: onChangeExercise) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 8) {
+                        // Body part color dot
+                        if let color = bodyPartColor {
+                            Circle()
+                                .fill(color)
+                                .frame(width: 10, height: 10)
+                        }
+
                         Text(exerciseName)
                             .font(.title3)
                             .fontWeight(.semibold)
@@ -173,9 +183,18 @@ struct ExerciseEntryCardView: View {
 
     private var collapsedContent: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(exerciseName)
-                .font(.headline)
-                .foregroundColor(AppColors.textPrimary)
+            HStack(spacing: 8) {
+                // Body part color dot
+                if let color = bodyPartColor {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 8, height: 8)
+                }
+
+                Text(exerciseName)
+                    .font(.headline)
+                    .foregroundColor(AppColors.textPrimary)
+            }
 
             if let subtitle = subtitleText {
                 Text(subtitle)
@@ -224,16 +243,16 @@ struct WeightRepsInputView: View {
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
+        HStack(spacing: 0) {
             // Weight input
-            VStack(spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
                 if isEditingWeight {
                     TextField("", text: $weightText)
                         .keyboardType(.decimalPad)
-                        .font(.system(size: 42, weight: .semibold))
+                        .font(.system(size: 28, weight: .semibold))
                         .foregroundColor(AppColors.textPrimary)
-                        .frame(width: 85)
-                        .multilineTextAlignment(.center)
+                        .frame(width: 70)
+                        .multilineTextAlignment(.trailing)
                         .focused($weightFieldFocused)
                         .onChange(of: weightFieldFocused) { _, focused in
                             if !focused {
@@ -249,39 +268,32 @@ struct WeightRepsInputView: View {
                         }
                 } else {
                     Text(formatWeight(weight))
-                        .font(.system(size: 42, weight: .semibold))
+                        .font(.system(size: 28, weight: .semibold))
                         .foregroundColor(AppColors.textPrimary)
-                        .frame(minWidth: 60)
                 }
 
-                Rectangle()
-                    .fill(isEditingWeight ? AppColors.accentBlue : AppColors.divider)
-                    .frame(width: 70, height: 2)
-                    .cornerRadius(1)
+                Text("kg")
+                    .font(.system(size: 13))
+                    .foregroundColor(AppColors.textMuted)
             }
             .onTapGesture {
                 isEditingWeight = true
             }
 
-            Text("kg")
-                .font(.system(size: 16))
-                .foregroundColor(AppColors.textMuted)
-                .padding(.leading, 2)
-
             Text("×")
-                .font(.system(size: 18))
+                .font(.system(size: 14))
                 .foregroundColor(AppColors.textMuted)
                 .padding(.horizontal, 8)
 
             // Reps input
-            VStack(spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
                 if isEditingReps {
                     TextField("", text: $repsText)
                         .keyboardType(.numberPad)
-                        .font(.system(size: 48, weight: .bold))
+                        .font(.system(size: 32, weight: .bold))
                         .foregroundColor(AppColors.textPrimary)
-                        .frame(width: 65)
-                        .multilineTextAlignment(.center)
+                        .frame(width: 50)
+                        .multilineTextAlignment(.leading)
                         .focused($repsFieldFocused)
                         .onChange(of: repsFieldFocused) { _, focused in
                             if !focused {
@@ -297,24 +309,17 @@ struct WeightRepsInputView: View {
                         }
                 } else {
                     Text("\(reps)")
-                        .font(.system(size: 48, weight: .bold))
+                        .font(.system(size: 32, weight: .bold))
                         .foregroundColor(AppColors.textPrimary)
-                        .frame(minWidth: 40)
                 }
 
-                Rectangle()
-                    .fill(isEditingReps ? AppColors.accentBlue : AppColors.divider)
-                    .frame(width: 50, height: 2)
-                    .cornerRadius(1)
+                Text("reps")
+                    .font(.system(size: 13))
+                    .foregroundColor(AppColors.textMuted)
             }
             .onTapGesture {
                 isEditingReps = true
             }
-
-            Text("reps")
-                .font(.system(size: 16))
-                .foregroundColor(AppColors.textMuted)
-                .padding(.leading, 2)
         }
     }
 }
@@ -328,37 +333,81 @@ struct SetDotsView: View {
     let onCompletedSetTap: (Int) -> Void
     let onFutureSetLongPress: (Int) -> Void
 
+    private let dotSize: CGFloat = 26
+    private let dotSpacing: CGFloat = 8
+    private let lineWidth: CGFloat = 2
+
+    private var completedCount: Int {
+        sets.filter { $0.isCompleted }.count
+    }
+
+    private var lineSegmentCount: Int {
+        // Line extends from first completed to active set (or last completed if all done)
+        if let active = activeSetIndex, completedCount > 0 {
+            return active // extends to active set
+        } else {
+            return max(0, completedCount - 1) // only between completed
+        }
+    }
+
     var body: some View {
-        VStack(spacing: 8) {
-            ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
-                let isActive = activeSetIndex == index && selectedSetIndex == nil
-                let isSelected = selectedSetIndex == index
+        ZStack(alignment: .top) {
+            // Progress line (from first completed to active set)
+            if lineSegmentCount > 0 {
+                let baseHeight = CGFloat(lineSegmentCount) * (dotSize + dotSpacing)
+                // Stop at edge of active circle (subtract half of dotSize)
+                let lineHeight = activeSetIndex != nil && completedCount > 0
+                    ? baseHeight - dotSize / 2
+                    : baseHeight
 
-                ZStack {
-                    if isActive || isSelected {
-                        Circle()
-                            .stroke(isSelected ? AppColors.accentBlue : AppColors.textSecondary, lineWidth: 1.5)
-                            .frame(width: 26, height: 26)
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(AppColors.dotFilled)
+                    .frame(width: lineWidth)
+                    .frame(height: lineHeight)
+                    .offset(y: dotSize / 2)
+                    .animation(.easeOut(duration: 0.3), value: lineSegmentCount)
+            }
 
-                        Text("\(index + 1)")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(isSelected ? AppColors.accentBlue : AppColors.textPrimary)
-                    } else {
-                        Circle()
-                            .fill(set.isCompleted ? AppColors.dotFilled : AppColors.dotEmpty)
-                            .frame(width: 10, height: 10)
+            // Dots
+            VStack(spacing: dotSpacing) {
+                ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
+                    let isActive = activeSetIndex == index && selectedSetIndex == nil
+                    let isSelected = selectedSetIndex == index
+
+                    ZStack {
+                        if isActive || isSelected {
+                            // Background circle to cover the progress line
+                            Circle()
+                                .fill(AppColors.cardBackground)
+                                .frame(width: dotSize, height: dotSize)
+
+                            Circle()
+                                .stroke(isSelected ? AppColors.accentBlue : AppColors.textSecondary, lineWidth: 1.5)
+                                .frame(width: dotSize, height: dotSize)
+
+                            Text("\(index + 1)")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(isSelected ? AppColors.accentBlue : AppColors.textPrimary)
+                        } else {
+                            Circle()
+                                .fill(set.isCompleted ? AppColors.dotFilled : AppColors.dotEmpty)
+                                .frame(width: 10, height: 10)
+                        }
                     }
-                }
-                .frame(width: 26, height: 26)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if set.isCompleted {
-                        onCompletedSetTap(index)
+                    .frame(width: dotSize, height: dotSize)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if set.isCompleted {
+                            onCompletedSetTap(index)
+                        } else if index == activeSetIndex {
+                            // Tap on active set clears selection
+                            selectedSetIndex = nil
+                        }
                     }
-                }
-                .onLongPressGesture(minimumDuration: 0.3) {
-                    if !set.isCompleted && index != activeSetIndex {
-                        onFutureSetLongPress(index)
+                    .onLongPressGesture(minimumDuration: 0.3) {
+                        if !set.isCompleted && index != activeSetIndex {
+                            onFutureSetLongPress(index)
+                        }
                     }
                 }
             }
@@ -381,6 +430,7 @@ struct SetDotsView: View {
     return ExerciseEntryCardView(
         entry: entry,
         exerciseName: "Bench Press",
+        bodyPartColor: Color(red: 0.95, green: 0.3, blue: 0.3),
         isExpanded: true,
         currentWeight: .constant(60),
         currentReps: .constant(8),

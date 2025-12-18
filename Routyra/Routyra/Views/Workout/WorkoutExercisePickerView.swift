@@ -1,35 +1,30 @@
 //
-//  ExercisePickerView.swift
+//  WorkoutExercisePickerView.swift
 //  Routyra
 //
-//  View for selecting an exercise when adding to a plan day.
-//  Works as a push destination within NavigationStack (no modals).
-//  Shows existing exercises grouped by body part, with option to create new.
+//  Exercise picker for adding exercises to a workout (free mode).
+//  Shows existing exercises grouped by body part with search and filter.
 //
 
 import SwiftUI
 import SwiftData
 
-/// Navigation destination for exercise picker
-enum ExercisePickerDestination: Hashable {
-    case newExercise
-}
-
-struct ExercisePickerView: View {
+struct WorkoutExercisePickerView: View {
     let profile: LocalProfile
-    let dayTitle: String
+    let exercises: [UUID: Exercise]
+    let bodyParts: [UUID: BodyPart]
     let onSelect: (Exercise) -> Void
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
-    @State private var exercises: [Exercise] = []
-    @State private var bodyParts: [BodyPart] = []
+    @State private var allExercises: [Exercise] = []
+    @State private var allBodyParts: [BodyPart] = []
     @State private var searchText: String = ""
     @State private var selectedBodyPartId: UUID?
 
     private var filteredExercises: [Exercise] {
-        var result = exercises
+        var result = allExercises
 
         // Filter by body part
         if let bodyPartId = selectedBodyPartId {
@@ -48,7 +43,7 @@ struct ExercisePickerView: View {
 
     private var groupedExercises: [(BodyPart?, [Exercise])] {
         let grouped = Dictionary(grouping: filteredExercises) { $0.bodyPartId }
-        return bodyParts.compactMap { bodyPart in
+        return allBodyParts.compactMap { bodyPart in
             if let exercises = grouped[bodyPart.id], !exercises.isEmpty {
                 return (bodyPart, exercises)
             }
@@ -81,7 +76,6 @@ struct ExercisePickerView: View {
                         ForEach(exercises, id: \.id) { exercise in
                             Button {
                                 onSelect(exercise)
-                                dismiss()
                             } label: {
                                 HStack {
                                     Text(exercise.localizedName)
@@ -122,7 +116,7 @@ struct ExercisePickerView: View {
             .background(AppColors.background)
             .searchable(text: $searchText, prompt: "種目を検索")
         }
-        .navigationTitle("\(dayTitle)に追加")
+        .navigationTitle("種目を追加")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: ExercisePickerDestination.self) { destination in
             switch destination {
@@ -146,7 +140,7 @@ struct ExercisePickerView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 // All filter
-                FilterChip(
+                FilterChipView(
                     title: "すべて",
                     isSelected: selectedBodyPartId == nil
                 ) {
@@ -154,8 +148,8 @@ struct ExercisePickerView: View {
                 }
 
                 // Body part filters
-                ForEach(bodyParts, id: \.id) { bodyPart in
-                    FilterChip(
+                ForEach(allBodyParts, id: \.id) { bodyPart in
+                    FilterChipView(
                         title: bodyPart.localizedName,
                         color: bodyPart.color,
                         isSelected: selectedBodyPartId == bodyPart.id
@@ -175,19 +169,19 @@ struct ExercisePickerView: View {
     private func loadData() {
         // Load body parts
         ExerciseCreationService.seedSystemBodyPartsIfNeeded(modelContext: modelContext)
-        bodyParts = ExerciseCreationService.fetchBodyParts(for: profile, modelContext: modelContext)
+        allBodyParts = ExerciseCreationService.fetchBodyParts(for: profile, modelContext: modelContext)
 
         // Load exercises
-        exercises = PlanService.getAvailableExercises(
+        allExercises = PlanService.getAvailableExercises(
             profileId: profile.id,
             modelContext: modelContext
         )
     }
 }
 
-// MARK: - Filter Chip
+// MARK: - Filter Chip View
 
-private struct FilterChip: View {
+private struct FilterChipView: View {
     let title: String
     var color: Color? = nil
     let isSelected: Bool
@@ -220,9 +214,10 @@ private struct FilterChip: View {
 
 #Preview {
     NavigationStack {
-        ExercisePickerView(
+        WorkoutExercisePickerView(
             profile: LocalProfile(),
-            dayTitle: "Day 1 - Push",
+            exercises: [:],
+            bodyParts: [:],
             onSelect: { _ in }
         )
         .modelContainer(for: [

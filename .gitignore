@@ -1,0 +1,57 @@
+# Xcode
+.derivedData/
+build/
+DerivedData/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# User-specific files
+*.xcuserstate
+*.xcuserdatad/
+
+# Build products
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Dependency managers
+Pods/
+Carthage/Build/
+.build/
+.swiftpm/
+
+# Code coverage
+*.gcno
+*.gcda
+*.profraw
+*.profdata
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# CocoaPods
+Podfile.lock
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# IDE
+.idea/
+*.hmap
+
+# Secrets (don't commit these)
+*.pem
+*.p12
+*.mobileprovision
+.env
+.env.*

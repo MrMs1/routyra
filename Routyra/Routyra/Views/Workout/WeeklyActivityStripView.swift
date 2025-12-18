@@ -25,7 +25,8 @@ struct WeeklyActivityStripView: View {
             ForEach(0..<7, id: \.self) { index in
                 VStack(spacing: 6) {
                     ProgressBar(
-                        progress: dayProgress[index] ?? 0,
+                        progress: dayProgress[index],
+                        hasWorkout: dayProgress[index] != nil,
                         isSelected: index == selectedDayIndex,
                         isToday: index == todayIndex,
                         width: barWidth,
@@ -56,7 +57,8 @@ struct WeeklyActivityStripView: View {
 }
 
 struct ProgressBar: View {
-    let progress: Double
+    let progress: Double?
+    let hasWorkout: Bool
     let isSelected: Bool
     let isToday: Bool
     let width: CGFloat
@@ -82,16 +84,29 @@ struct ProgressBar: View {
         }
     }
 
+    /// Minimum fill height when workout exists but 0% complete
+    private var minFillHeight: CGFloat {
+        width * 0.6
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             Capsule()
                 .fill(backgroundColor)
                 .frame(width: width, height: height)
 
-            if progress > 0 {
-                Capsule()
-                    .fill(fillColor)
-                    .frame(width: width, height: max(width, height * CGFloat(min(progress, 1.0))))
+            if let progress = progress {
+                if progress > 0 {
+                    // Show actual progress
+                    Capsule()
+                        .fill(fillColor)
+                        .frame(width: width, height: max(width, height * CGFloat(min(progress, 1.0))))
+                } else if hasWorkout {
+                    // Show minimum indicator for planned but not started workout
+                    Capsule()
+                        .fill(fillColor.opacity(0.4))
+                        .frame(width: width, height: minFillHeight)
+                }
             }
         }
     }

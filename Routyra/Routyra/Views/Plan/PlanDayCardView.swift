@@ -2,241 +2,182 @@
 //  PlanDayCardView.swift
 //  Routyra
 //
-//  Displays a day within the plan editor.
-//  Collapsible: shows summary when collapsed, exercises when expanded.
-//  Supports drag-to-reorder for exercises.
+//  Displays a day card within the plan editor.
+//  Supports expansion to show exercises, with edit button for navigation.
 //
 
 import SwiftUI
 import SwiftData
 
-struct PlanDayCardView: View {
-    @Bindable var day: PlanDay
+struct PlanDayCardView<Destination: Hashable>: View {
+    let day: PlanDay
     let exercises: [UUID: Exercise]
     let bodyParts: [UUID: BodyPart]
     let isExpanded: Bool
-    let expandedExerciseId: UUID?
-    let editorMode: PlanEditorMode
+    let editDestination: Destination
     let onToggleExpand: () -> Void
-    let onToggleExerciseExpand: (UUID) -> Void
-    let onAddExerciseDestination: () -> PlanEditorDestination
-    let onReorderExercisesDestination: () -> PlanEditorDestination
-    let onDelete: () -> Void
-    let onDuplicate: () -> Void
-    let onExerciseDeleted: () -> Void
 
-    @Environment(\.modelContext) private var modelContext
-    @State private var isEditingTitle: Bool = false
-    @State private var editingTitle: String = ""
-    @State private var exercisesList: [PlanExercise] = []
+    @State private var expandedExerciseIds: Set<UUID> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header (always visible)
             headerRow
 
-            // Expanded content (exercises)
+            // Expanded content (exercise cards)
             if isExpanded {
                 expandedContent
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.opacity.animation(.easeOut(duration: 1)))
             }
         }
+        .frame(maxWidth: .infinity, alignment: .top)
         .background(AppColors.cardBackground)
         .cornerRadius(12)
-        .contextMenu {
-            Button {
-                onDuplicate()
-            } label: {
-                Label("Dayを複製", systemImage: "doc.on.doc")
-            }
-
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label("Dayを削除", systemImage: "trash")
-            }
-        }
-        .onAppear {
-            syncExercises()
-        }
-        .onChange(of: day.exercises.count) { _, _ in
-            syncExercises()
-        }
+        .clipped()
     }
 
     // MARK: - Header Row
 
     private var headerRow: some View {
-        Button {
-            onToggleExpand()
-        } label: {
-            HStack(spacing: 12) {
-                // Day info
-                VStack(alignment: .leading, spacing: 2) {
-                    if isEditingTitle {
-                        TextField("タイトル (例: Push)", text: $editingTitle)
-                            .font(.headline)
-                            .foregroundColor(AppColors.textPrimary)
-                            .textFieldStyle(.plain)
-                            .onSubmit {
-                                day.name = editingTitle.isEmpty ? nil : editingTitle
-                                isEditingTitle = false
-                            }
-                    } else {
+        HStack(spacing: 12) {
+            // Expand/collapse button area
+            Button {
+                onToggleExpand()
+            } label: {
+                HStack(spacing: 12) {
+                    // Chevron
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppColors.textMuted)
+                        .frame(width: 16)
+
+                    // Day info
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(day.fullTitle)
                             .font(.headline)
                             .foregroundColor(AppColors.textPrimary)
+
+                        HStack(spacing: 4) {
+                            // Body part color dots (collapsed state)
+                            if !isExpanded {
+                                let uniqueBodyParts = getUniqueBodyParts()
+                                if !uniqueBodyParts.isEmpty {
+                                    HStack(spacing: 4) {
+                                        ForEach(uniqueBodyParts, id: \.id) { bodyPart in
+                                            Circle()
+                                                .fill(bodyPart.color)
+                                                .frame(width: 6, height: 6)
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text(day.summary)
+                                .font(.subheadline)
+                                .foregroundColor(AppColors.textSecondary)
+                        }
                     }
 
-                    if !isExpanded {
-                        Text(day.summary)
-                            .font(.caption)
-                            .foregroundColor(AppColors.textSecondary)
-                    }
+                    Spacer()
                 }
-                .padding(.vertical, 12)
-                .padding(.leading, 12)
-                .onTapGesture {
-                    editingTitle = day.name ?? ""
-                    isEditingTitle = true
-                }
-
-                Spacer()
-
-                // Expand/collapse indicator
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppColors.textMuted)
-                    .frame(width: 32, height: 32)
-                    .padding(.trailing, 8)
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+
+            // Edit button (NavigationLink hidden to prevent disclosure indicator)
+            Image(systemName: "pencil.circle.fill")
+                .font(.system(size: 24))
+                .foregroundColor(AppColors.accentBlue)
+                .background(
+                    NavigationLink(value: editDestination) {
+                        EmptyView()
+                    }
+                    .opacity(0)
+                )
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
     }
 
     // MARK: - Expanded Content
 
     private var expandedContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             Divider()
                 .background(AppColors.divider)
                 .padding(.horizontal, 12)
 
-            // Reorder exercises button (only in exercise edit mode)
-            if editorMode == .editExercises && exercisesList.count > 1 {
-                NavigationLink(value: onReorderExercisesDestination()) {
-                    HStack {
-                        Image(systemName: "arrow.up.arrow.down")
-                        Text("種目の並び替え")
-                        Spacer()
-                        Image(systemName: "chevron.right")
+            let sortedExercises = day.sortedExercises
+
+            if sortedExercises.isEmpty {
+                // Empty state
+                HStack {
+                    Spacer()
+                    VStack(spacing: 4) {
+                        Text("種目がありません")
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.textMuted)
+                        Text("編集ボタンから追加")
                             .font(.caption)
                             .foregroundColor(AppColors.textMuted)
                     }
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.accentBlue)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
+                    Spacer()
                 }
-                .buttonStyle(.plain)
+                .padding(.vertical, 16)
+                .padding(.horizontal, 12)
+            } else {
+                // Exercise cards
+                VStack(spacing: 8) {
+                    ForEach(sortedExercises, id: \.id) { planExercise in
+                        let exercise = exercises[planExercise.exerciseId]
+                        let bodyPartId = exercise?.bodyPartId
+                        let bodyPart = bodyPartId.flatMap { bodyParts[$0] }
 
-                Divider()
-                    .background(AppColors.divider)
-                    .padding(.horizontal, 12)
-            }
-
-            // Exercise list
-            ForEach(exercisesList, id: \.id) { planExercise in
-                let exercise = exercises[planExercise.exerciseId]
-                let bodyPartId = exercise?.bodyPartId
-                let bodyPart = bodyPartId.flatMap { bodyParts[$0] }
-
-                exerciseRow(
-                    planExercise: planExercise,
-                    exercise: exercise,
-                    bodyPart: bodyPart
-                )
-            }
-
-            // Add exercise button (NavigationLink) - hide in exercise edit mode
-            if editorMode != .editExercises {
-                NavigationLink(value: onAddExerciseDestination()) {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("種目を追加")
+                        PlanExerciseCardView(
+                            planExercise: planExercise,
+                            exercise: exercise,
+                            bodyPart: bodyPart,
+                            isExpanded: expandedExerciseIds.contains(planExercise.id),
+                            onToggle: {
+                                toggleExercise(planExercise.id)
+                            }
+                        )
                     }
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.accentBlue)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
                 }
-                .buttonStyle(.plain)
                 .padding(.horizontal, 12)
                 .padding(.bottom, 12)
-            } else {
-                // Bottom padding in edit mode
-                Spacer()
-                    .frame(height: 12)
             }
         }
-    }
-
-    @ViewBuilder
-    private func exerciseRow(
-        planExercise: PlanExercise,
-        exercise: Exercise?,
-        bodyPart: BodyPart?
-    ) -> some View {
-        PlanExerciseRowView(
-            planExercise: planExercise,
-            exercise: exercise,
-            bodyPart: bodyPart,
-            isExpanded: expandedExerciseId == planExercise.id,
-            onToggleExpand: {
-                onToggleExerciseExpand(planExercise.id)
-            },
-            onDelete: {
-                deleteExercise(planExercise)
-            },
-            onDuplicate: {
-                duplicateExercise(planExercise)
-            }
-        )
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
     }
 
     // MARK: - Actions
 
-    private func syncExercises() {
-        exercisesList = day.sortedExercises
+    private func toggleExercise(_ id: UUID) {
+        if expandedExerciseIds.contains(id) {
+            expandedExerciseIds.remove(id)
+        } else {
+            expandedExerciseIds.insert(id)
+        }
     }
 
-    private func deleteExercise(_ planExercise: PlanExercise) {
-        day.removeExercise(planExercise)
-        day.reindexExercises()
-        syncExercises()
-        onExerciseDeleted()
-    }
+    // MARK: - Helpers
 
-    private func duplicateExercise(_ planExercise: PlanExercise) {
-        let newExercise = PlanExercise(
-            exerciseId: planExercise.exerciseId,
-            orderIndex: (day.exercises.map(\.orderIndex).max() ?? -1) + 1,
-            plannedSetCount: planExercise.plannedSetCount
-        )
+    /// Returns unique body parts for exercises in this day, maintaining order
+    private func getUniqueBodyParts() -> [BodyPart] {
+        var seen = Set<UUID>()
+        var result: [BodyPart] = []
 
-        // Copy planned sets
-        for plannedSet in planExercise.sortedPlannedSets {
-            newExercise.createPlannedSet(
-                weight: plannedSet.targetWeight,
-                reps: plannedSet.targetReps
-            )
+        for planExercise in day.sortedExercises {
+            if let exercise = exercises[planExercise.exerciseId],
+               let bodyPartId = exercise.bodyPartId,
+               let bodyPart = bodyParts[bodyPartId],
+               !seen.contains(bodyPart.id) {
+                seen.insert(bodyPart.id)
+                result.append(bodyPart)
+            }
         }
 
-        day.addExercise(newExercise)
-        syncExercises()
+        return result
     }
 }
 
@@ -246,10 +187,14 @@ struct PlanDayCardView: View {
         let exercise1 = PlanExercise(exerciseId: UUID(), orderIndex: 0, plannedSetCount: 3)
         exercise1.createPlannedSet(weight: 60, reps: 10)
         exercise1.createPlannedSet(weight: 60, reps: 10)
-        exercise1.createPlannedSet(weight: 60, reps: 8)
+        exercise1.createPlannedSet(weight: 65, reps: 8)
         day.addExercise(exercise1)
 
-        let exercise2 = PlanExercise(exerciseId: UUID(), orderIndex: 1, plannedSetCount: 3)
+        let exercise2 = PlanExercise(exerciseId: UUID(), orderIndex: 1, plannedSetCount: 4)
+        exercise2.createPlannedSet(weight: 80, reps: 8)
+        exercise2.createPlannedSet(weight: 80, reps: 8)
+        exercise2.createPlannedSet(weight: 85, reps: 6)
+        exercise2.createPlannedSet(weight: 85, reps: 6)
         day.addExercise(exercise2)
 
         return ScrollView {
@@ -259,15 +204,8 @@ struct PlanDayCardView: View {
                     exercises: [:],
                     bodyParts: [:],
                     isExpanded: false,
-                    expandedExerciseId: nil,
-                    editorMode: .none,
-                    onToggleExpand: {},
-                    onToggleExerciseExpand: { _ in },
-                    onAddExerciseDestination: { .exercisePicker(dayId: day.id) },
-                    onReorderExercisesDestination: { .exerciseOrder(dayId: day.id) },
-                    onDelete: {},
-                    onDuplicate: {},
-                    onExerciseDeleted: {}
+                    editDestination: "edit1",
+                    onToggleExpand: {}
                 )
 
                 PlanDayCardView(
@@ -275,15 +213,18 @@ struct PlanDayCardView: View {
                     exercises: [:],
                     bodyParts: [:],
                     isExpanded: true,
-                    expandedExerciseId: nil,
-                    editorMode: .editExercises,
-                    onToggleExpand: {},
-                    onToggleExerciseExpand: { _ in },
-                    onAddExerciseDestination: { .exercisePicker(dayId: day.id) },
-                    onReorderExercisesDestination: { .exerciseOrder(dayId: day.id) },
-                    onDelete: {},
-                    onDuplicate: {},
-                    onExerciseDeleted: {}
+                    editDestination: "edit2",
+                    onToggleExpand: {}
+                )
+
+                let emptyDay = PlanDay(dayIndex: 2, name: nil)
+                PlanDayCardView(
+                    day: emptyDay,
+                    exercises: [:],
+                    bodyParts: [:],
+                    isExpanded: true,
+                    editDestination: "edit3",
+                    onToggleExpand: {}
                 )
             }
             .padding()

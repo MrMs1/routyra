@@ -3,8 +3,7 @@
 //  Routyra
 //
 //  Main editor view for creating and editing workout plans.
-//  Uses push navigation for exercise selection (no modals).
-//  Supports drag-to-reorder for days.
+//  Days can be expanded to view exercises. Edit via edit button on each day.
 //
 
 import SwiftUI
@@ -12,30 +11,7 @@ import SwiftData
 
 /// Navigation destination types for plan editor
 enum PlanEditorDestination: Hashable {
-    case exercisePicker(dayId: UUID)
-    case newExercise(dayId: UUID)
-    case exerciseOrder(dayId: UUID)
-
-    func hash(into hasher: inout Hasher) {
-        switch self {
-        case .exercisePicker(let dayId):
-            hasher.combine(0)
-            hasher.combine(dayId)
-        case .newExercise(let dayId):
-            hasher.combine(1)
-            hasher.combine(dayId)
-        case .exerciseOrder(let dayId):
-            hasher.combine(2)
-            hasher.combine(dayId)
-        }
-    }
-}
-
-/// Editor mode for plan editing
-enum PlanEditorMode {
-    case none
-    case editDays
-    case editExercises
+    case dayEditor(dayId: UUID)
 }
 
 struct PlanEditorView: View {
@@ -45,85 +21,64 @@ struct PlanEditorView: View {
     let onDiscard: () -> Void
 
     @Environment(\.modelContext) private var modelContext
-    @State private var expandedDayIds: Set<UUID> = []
-    @State private var expandedExerciseId: UUID?
     @State private var showDiscardConfirmation: Bool = false
     @State private var isDirty: Bool = false
-    @State private var editorMode: PlanEditorMode = .none
 
-    // For day reordering
+    // For day display and reordering
     @State private var days: [PlanDay] = []
+    @State private var expandedDayIds: Set<UUID> = []
 
-    // Cached lookups
+    // Cached lookups for exercise display
     @State private var exercisesMap: [UUID: Exercise] = [:]
     @State private var bodyPartsMap: [UUID: BodyPart] = [:]
-    @State private var profile: LocalProfile?
 
     var body: some View {
         List {
             // Plan info section
             Section {
                 TextField("プラン名", text: $plan.name)
+                    .font(.body)
                     .foregroundColor(AppColors.textPrimary)
 
                 TextField("メモ (任意)", text: Binding(
                     get: { plan.note ?? "" },
                     set: { plan.note = $0.isEmpty ? nil : $0 }
                 ))
+                .font(.body)
                 .foregroundColor(AppColors.textPrimary)
             } header: {
                 Text("プラン情報")
             }
 
-            // Days section with reordering
+            // Days section
             Section {
-                // Edit mode guide for exercise editing
-                if editorMode == .editExercises && expandedDayIds.isEmpty {
-                    HStack {
-                        Image(systemName: "info.circle")
-                        Text("並び替えたいDayを開いてください")
-                    }
-                    .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                }
-
                 ForEach(days, id: \.id) { day in
                     PlanDayCardView(
                         day: day,
                         exercises: exercisesMap,
                         bodyParts: bodyPartsMap,
                         isExpanded: expandedDayIds.contains(day.id),
-                        expandedExerciseId: expandedExerciseId,
-                        editorMode: editorMode,
+                        editDestination: PlanEditorDestination.dayEditor(dayId: day.id),
                         onToggleExpand: {
                             toggleDayExpansion(day.id)
-                        },
-                        onToggleExerciseExpand: { exerciseId in
-                            toggleExerciseExpansion(exerciseId)
-                        },
-                        onAddExerciseDestination: {
-                            PlanEditorDestination.exercisePicker(dayId: day.id)
-                        },
-                        onReorderExercisesDestination: {
-                            PlanEditorDestination.exerciseOrder(dayId: day.id)
-                        },
-                        onDelete: {
-                            deleteDay(day)
-                        },
-                        onDuplicate: {
-                            duplicateDay(day)
-                        },
-                        onExerciseDeleted: {
-                            isDirty = true
                         }
                     )
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
+                    .contextMenu {
+                        Button {
+                            duplicateDay(day)
+                        } label: {
+                            Label("Dayを複製", systemImage: "doc.on.doc")
+                        }
+
+                        Button(role: .destructive) {
+                            deleteDay(day)
+                        } label: {
+                            Label("Dayを削除", systemImage: "trash")
+                        }
+                    }
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
                             deleteDay(day)
@@ -131,7 +86,6 @@ struct PlanEditorView: View {
                             Label("削除", systemImage: "trash")
                         }
                     }
-                    .moveDisabled(editorMode != .editDays)
                 }
                 .onMove(perform: moveDays)
 
@@ -151,13 +105,20 @@ struct PlanEditorView: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             } header: {
-                editorModeHeader
+                HStack {
+                    Text("Days")
+                    Spacer()
+                    Text("\(days.count)日間")
+                        .font(.caption)
+                        .foregroundColor(AppColors.textSecondary)
+                    EditButton()
+                        .font(.subheadline)
+                }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(AppColors.background)
-        .environment(\.editMode, editorMode == .editDays ? .constant(.active) : .constant(.inactive))
         .navigationTitle(plan.name.isEmpty ? "新規プラン" : plan.name)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -178,29 +139,12 @@ struct PlanEditorView: View {
         }
         .navigationDestination(for: PlanEditorDestination.self) { destination in
             switch destination {
-            case .exercisePicker(let dayId):
-                if let profile = profile, let day = findDay(byId: dayId) {
-                    ExercisePickerView(
-                        profile: profile,
-                        dayTitle: day.fullTitle,
-                        onSelect: { exercise in
-                            addExerciseToDay(exercise, dayId: dayId)
-                        }
-                    )
-                }
-            case .newExercise(let dayId):
-                if let profile = profile {
-                    NewExerciseFlowView(
-                        profile: profile,
-                        onCreated: { exercise in
-                            addExerciseToDay(exercise, dayId: dayId)
-                        }
-                    )
-                }
-            case .exerciseOrder(let dayId):
+            case .dayEditor(let dayId):
                 if let day = findDay(byId: dayId) {
-                    ExerciseOrderEditorView(day: day) {
+                    PlanDayEditorView(day: day) {
                         isDirty = true
+                        syncDays()
+                        loadLookupData()
                     }
                 }
             }
@@ -233,79 +177,16 @@ struct PlanEditorView: View {
     }
 
     private func toggleDayExpansion(_ id: UUID) {
-        withAnimation(.easeInOut(duration: 0.25)) {
-            if expandedDayIds.contains(id) {
-                expandedDayIds.remove(id)
-            } else {
-                expandedDayIds.insert(id)
-            }
-        }
-    }
-
-    private func toggleExerciseExpansion(_ id: UUID) {
-        // Don't allow expansion in Day edit mode
-        guard editorMode != .editDays else { return }
-
-        withAnimation(.easeInOut(duration: 0.25)) {
-            if expandedExerciseId == id {
-                expandedExerciseId = nil
-            } else {
-                expandedExerciseId = id
-            }
-        }
-    }
-
-    // MARK: - Editor Mode Header
-
-    private var editorModeHeader: some View {
-        HStack {
-            Text("Days")
-            Spacer()
-            Text("\(days.count)日間")
-                .font(.caption)
-                .foregroundColor(AppColors.textSecondary)
-
-            if editorMode == .none {
-                Button("編集") {
-                    withAnimation {
-                        editorMode = .editDays
-                        // Collapse all days for cleaner reordering
-                        expandedDayIds.removeAll()
-                    }
-                }
-                .font(.subheadline)
-            } else {
-                // Edit mode selector
-                Picker("", selection: $editorMode) {
-                    Text("Day").tag(PlanEditorMode.editDays)
-                    Text("種目").tag(PlanEditorMode.editExercises)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 120)
-                .onChange(of: editorMode) { _, newMode in
-                    if newMode == .editDays {
-                        // Collapse all days for cleaner reordering
-                        withAnimation {
-                            expandedDayIds.removeAll()
-                        }
-                    }
-                }
-
-                Button("完了") {
-                    withAnimation {
-                        editorMode = .none
-                    }
-                }
-                .font(.subheadline)
-                .fontWeight(.medium)
-            }
+        if expandedDayIds.contains(id) {
+            expandedDayIds.remove(id)
+        } else {
+            expandedDayIds.insert(id)
         }
     }
 
     private func addDay() {
-        let day = plan.createDay()
+        _ = plan.createDay()
         syncDays()
-        expandedDayIds.insert(day.id)
         isDirty = true
     }
 
@@ -313,28 +194,8 @@ struct PlanEditorView: View {
         plan.removeDay(day)
         modelContext.delete(day)
         plan.reindexDays()
+        expandedDayIds.remove(day.id)
         syncDays()
-        isDirty = true
-    }
-
-    private func deleteDays(at offsets: IndexSet) {
-        for index in offsets {
-            let day = days[index]
-            plan.removeDay(day)
-            modelContext.delete(day)
-        }
-        plan.reindexDays()
-        syncDays()
-        isDirty = true
-    }
-
-    private func moveDays(from source: IndexSet, to destination: Int) {
-        days.move(fromOffsets: source, toOffset: destination)
-
-        // Update dayIndex for all days
-        for (index, day) in days.enumerated() {
-            day.dayIndex = index + 1
-        }
         isDirty = true
     }
 
@@ -351,28 +212,25 @@ struct PlanEditorView: View {
         isDirty = true
     }
 
+    private func moveDays(from source: IndexSet, to destination: Int) {
+        days.move(fromOffsets: source, toOffset: destination)
+
+        // Reindex all days
+        for (index, day) in days.enumerated() {
+            day.dayIndex = index + 1
+        }
+
+        try? modelContext.save()
+        isDirty = true
+    }
+
     private func findDay(byId id: UUID) -> PlanDay? {
         days.first { $0.id == id }
     }
 
-    private func addExerciseToDay(_ exercise: Exercise, dayId: UUID) {
-        guard let day = findDay(byId: dayId) else { return }
-
-        let planExercise = day.createExercise(exerciseId: exercise.id, plannedSetCount: 3)
-
-        // Auto-expand the day and the newly added exercise
-        expandedDayIds.insert(dayId)
-        expandedExerciseId = planExercise.id
-
-        // Refresh lookup data
-        loadLookupData()
-        isDirty = true
-    }
-
     private func ensureAtLeastOneDay() {
         if plan.days.isEmpty {
-            let day = plan.createDay()
-            expandedDayIds.insert(day.id)
+            _ = plan.createDay()
         }
     }
 
@@ -381,15 +239,14 @@ struct PlanEditorView: View {
     }
 
     private func loadData() {
-        profile = ProfileService.getOrCreateProfile(modelContext: modelContext)
         loadLookupData()
     }
 
     private func loadLookupData() {
         // Load exercises
         let exerciseDescriptor = FetchDescriptor<Exercise>()
-        if let exercises = try? modelContext.fetch(exerciseDescriptor) {
-            exercisesMap = Dictionary(uniqueKeysWithValues: exercises.map { ($0.id, $0) })
+        if let allExercises = try? modelContext.fetch(exerciseDescriptor) {
+            exercisesMap = Dictionary(uniqueKeysWithValues: allExercises.map { ($0.id, $0) })
         }
 
         // Load body parts

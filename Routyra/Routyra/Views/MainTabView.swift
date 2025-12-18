@@ -8,10 +8,11 @@ import SwiftUI
 struct MainTabView: View {
     @State private var selectedTab = 0
     @State private var navigateToHistory = false
+    @State private var navigateToRoutines = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            WorkoutView(navigateToHistory: $navigateToHistory)
+            WorkoutView(navigateToHistory: $navigateToHistory, navigateToRoutines: $navigateToRoutines)
                 .tabItem {
                     Image(systemName: "figure.strengthtraining.traditional")
                     Text("Workout")
@@ -46,6 +47,14 @@ struct MainTabView: View {
                     selectedTab = 1
                 }
                 navigateToHistory = false
+            }
+        }
+        .onChange(of: navigateToRoutines) { _, shouldNavigate in
+            if shouldNavigate {
+                withAnimation {
+                    selectedTab = 2
+                }
+                navigateToRoutines = false
             }
         }
     }
