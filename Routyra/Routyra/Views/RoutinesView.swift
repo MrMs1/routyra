@@ -2,8 +2,8 @@
 //  RoutinesView.swift
 //  Routyra
 //
-//  Main view for managing workout plans.
-//  Uses NavigationStack with push navigation (no modals).
+//  Main view for managing workout plans and execution mode.
+//  Handles single plan and cycle mode selection.
 //
 
 import SwiftUI
@@ -13,160 +13,168 @@ struct RoutinesView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var profile: LocalProfile?
     @State private var plans: [WorkoutPlan] = []
+    @State private var activeCycle: PlanCycle?
     @State private var navigationPath = NavigationPath()
+
+    // Alerts
     @State private var planToDelete: WorkoutPlan?
+    @State private var showNewPlanAlert: Bool = false
+    @State private var newPlanName: String = ""
+    @State private var showActivePlanPicker: Bool = false
+    @State private var showDeleteActiveWarning: Bool = false
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            ZStack {
-                AppColors.background
-                    .ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Large header
+                    Text(NSLocalizedString("workout_plans", comment: ""))
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.textPrimary)
+                        .padding(.horizontal)
+                        .padding(.top, 8)
 
-                if plans.isEmpty {
-                    emptyState
-                } else {
-                    planList
-                }
-            }
-            .navigationTitle("ワークアウトプラン")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        createNewPlan()
-                    } label: {
-                        Image(systemName: "plus")
+                    // Content
+                    LazyVStack(spacing: 12) {
+                        // Execution mode section
+                        executionModeSection
+
+                        // Mode-specific settings
+                        if profile?.executionMode == .single {
+                            activePlanSection
+                        } else {
+                            cycleSection
+                        }
+
+                        // Divider
+                        dividerSection
+
+                        // Add plan card
+                        addPlanCard
+
+                        // Plans list
+                        plansSection
                     }
+                    .padding(.horizontal)
                 }
+                .padding(.bottom, 20)
             }
+            .background(AppColors.background)
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: WorkoutPlan.self) { plan in
-                PlanEditorView(
-                    plan: plan,
-                    isNewPlan: plan.name.isEmpty,
-                    onSave: {
-                        savePlan(plan)
-                        navigationPath.removeLast()
-                        loadData()
-                    },
-                    onDiscard: {
-                        discardPlan(plan)
-                        navigationPath.removeLast()
+                PlanEditorView(plan: plan)
+                    .onDisappear {
                         loadData()
                     }
-                )
             }
             .onAppear {
                 loadData()
             }
-            .alert("プランを削除", isPresented: .init(
-                get: { planToDelete != nil },
+            .alert(NSLocalizedString("delete_plan", comment: ""), isPresented: .init(
+                get: { planToDelete != nil && !showDeleteActiveWarning },
                 set: { if !$0 { planToDelete = nil } }
             )) {
-                Button("削除", role: .destructive) {
+                Button(NSLocalizedString("delete", comment: ""), role: .destructive) {
                     if let plan = planToDelete {
                         deletePlan(plan)
                     }
                 }
-                Button("キャンセル", role: .cancel) {
+                Button(NSLocalizedString("cancel", comment: ""), role: .cancel) {
                     planToDelete = nil
                 }
             } message: {
-                Text("「\(planToDelete?.name ?? "")」を削除しますか？この操作は取り消せません。")
+                Text(String(format: NSLocalizedString("delete_plan_confirm", comment: ""), planToDelete?.name ?? ""))
+            }
+            .alert(NSLocalizedString("delete_active_plan", comment: ""), isPresented: $showDeleteActiveWarning) {
+                Button(NSLocalizedString("delete", comment: ""), role: .destructive) {
+                    if let plan = planToDelete {
+                        deletePlan(plan)
+                    }
+                    showDeleteActiveWarning = false
+                }
+                Button(NSLocalizedString("cancel", comment: ""), role: .cancel) {
+                    planToDelete = nil
+                    showDeleteActiveWarning = false
+                }
+            } message: {
+                Text(NSLocalizedString("delete_active_plan_warning", comment: ""))
+            }
+            .alert(NSLocalizedString("new_plan", comment: ""), isPresented: $showNewPlanAlert) {
+                TextField(NSLocalizedString("plan_name", comment: ""), text: $newPlanName)
+                Button(NSLocalizedString("cancel", comment: ""), role: .cancel) {}
+                Button(NSLocalizedString("create", comment: "")) {
+                    createPlan()
+                }
+                .disabled(newPlanName.trimmingCharacters(in: .whitespaces).isEmpty)
+            } message: {
+                Text(NSLocalizedString("enter_plan_name", comment: ""))
+            }
+            .confirmationDialog(
+                NSLocalizedString("select_active_plan", comment: ""),
+                isPresented: $showActivePlanPicker,
+                titleVisibility: .visible
+            ) {
+                ForEach(plans, id: \.id) { plan in
+                    Button(plan.name) {
+                        setActivePlan(plan)
+                    }
+                }
+                Button(NSLocalizedString("none", comment: "")) {
+                    clearActivePlan()
+                }
+                Button(NSLocalizedString("cancel", comment: ""), role: .cancel) {}
             }
         }
     }
 
-    // MARK: - Empty State
+    // MARK: - Execution Mode Section
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "calendar.badge.plus")
-                .font(.system(size: 48))
-                .foregroundColor(AppColors.textMuted)
-
-            Text("プランがありません")
-                .font(.headline)
-                .foregroundColor(AppColors.textPrimary)
-
-            Text("ワークアウトプランを作成して\n計画的にトレーニングしましょう")
-                .font(.subheadline)
-                .foregroundColor(AppColors.textSecondary)
-                .multilineTextAlignment(.center)
-
-            Button {
-                createNewPlan()
-            } label: {
-                HStack {
-                    Image(systemName: "plus.circle.fill")
-                    Text("プランを作成")
-                }
+    private var executionModeSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(NSLocalizedString("execution_mode", comment: ""))
                 .font(.subheadline)
                 .fontWeight(.medium)
-                .foregroundColor(.white)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .background(AppColors.accentBlue)
-                .cornerRadius(8)
+                .foregroundColor(AppColors.textSecondary)
+
+            Picker("", selection: Binding(
+                get: { profile?.executionMode ?? .single },
+                set: { newMode in
+                    profile?.executionMode = newMode
+                    try? modelContext.save()
+                }
+            )) {
+                Text(NSLocalizedString("single_plan", comment: "")).tag(ExecutionMode.single)
+                Text(NSLocalizedString("cycle", comment: "")).tag(ExecutionMode.cycle)
             }
-            .padding(.top, 8)
+            .pickerStyle(.segmented)
         }
         .padding()
+        .background(AppColors.cardBackground)
+        .cornerRadius(12)
     }
 
-    // MARK: - Plan List
+    // MARK: - Active Plan Section (Single Mode)
 
-    private var planList: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                // Cycle section
-                cycleSection
-
-                // Plans
-                ForEach(plans, id: \.id) { plan in
-                    PlanCardView(
-                        plan: plan,
-                        isActive: profile?.activePlanId == plan.id,
-                        onTap: {
-                            navigationPath.append(plan)
-                        },
-                        onSetActive: {
-                            setActivePlan(plan)
-                        },
-                        onDelete: {
-                            planToDelete = plan
-                        }
-                    )
-                }
-            }
-            .padding()
-        }
-    }
-
-    // MARK: - Cycle Section
-
-    private var cycleSection: some View {
-        NavigationLink(destination: CycleListView()) {
-            HStack(spacing: 12) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 20))
-                    .foregroundColor(AppColors.accentBlue)
-                    .frame(width: 36, height: 36)
-                    .background(AppColors.accentBlue.opacity(0.15))
-                    .cornerRadius(8)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("サイクル")
+    private var activePlanSection: some View {
+        Button {
+            showActivePlanPicker = true
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(NSLocalizedString("active_plan", comment: ""))
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.textPrimary)
 
-                    Text("複数のプランを順番に回す")
+                    Text(activePlanName)
                         .font(.caption)
                         .foregroundColor(AppColors.textSecondary)
                 }
 
                 Spacer()
 
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.up.chevron.down")
                     .font(.caption)
                     .foregroundColor(AppColors.textMuted)
             }
@@ -175,6 +183,164 @@ struct RoutinesView: View {
             .cornerRadius(12)
         }
         .buttonStyle(.plain)
+    }
+
+    private var activePlanName: String {
+        guard let activePlanId = profile?.activePlanId,
+              let plan = plans.first(where: { $0.id == activePlanId }) else {
+            return NSLocalizedString("not_set", comment: "")
+        }
+        return plan.name
+    }
+
+    // MARK: - Cycle Section (Cycle Mode)
+
+    private var cycleSection: some View {
+        VStack(spacing: 0) {
+            // Cycle toggle row
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(NSLocalizedString("cycle", comment: ""))
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(AppColors.textPrimary)
+
+                    if let cycle = activeCycle {
+                        Text(cycleSummary(for: cycle))
+                            .font(.caption)
+                            .foregroundColor(AppColors.textSecondary)
+                            .lineLimit(1)
+                    } else {
+                        Text(NSLocalizedString("no_active_cycle", comment: ""))
+                            .font(.caption)
+                            .foregroundColor(AppColors.textMuted)
+                    }
+                }
+
+                Spacer()
+
+                Toggle("", isOn: Binding(
+                    get: { activeCycle != nil },
+                    set: { isOn in
+                        if !isOn, let cycle = activeCycle {
+                            CycleService.deactivateCycle(cycle)
+                            try? modelContext.save()
+                            loadActiveCycle()
+                        }
+                    }
+                ))
+                .labelsHidden()
+            }
+            .padding()
+
+            // Edit button (navigate to cycle list)
+            NavigationLink(destination: CycleListView()) {
+                HStack {
+                    Text(NSLocalizedString("edit_cycles", comment: ""))
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.accentBlue)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(AppColors.textMuted)
+                }
+                .padding()
+                .background(AppColors.cardBackground.opacity(0.5))
+            }
+            .buttonStyle(.plain)
+        }
+        .background(AppColors.cardBackground)
+        .cornerRadius(12)
+    }
+
+    private func cycleSummary(for cycle: PlanCycle) -> String {
+        let planNames = cycle.sortedItems.compactMap { $0.plan?.name }
+        if planNames.isEmpty {
+            return NSLocalizedString("no_plans_in_cycle", comment: "")
+        }
+        return planNames.joined(separator: " → ")
+    }
+
+    // MARK: - Divider Section
+
+    private var dividerSection: some View {
+        HStack {
+            Rectangle()
+                .fill(AppColors.textMuted.opacity(0.3))
+                .frame(height: 1)
+
+            Text(NSLocalizedString("plans", comment: ""))
+                .font(.caption)
+                .foregroundColor(AppColors.textMuted)
+
+            Rectangle()
+                .fill(AppColors.textMuted.opacity(0.3))
+                .frame(height: 1)
+        }
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Add Plan Card
+
+    private var addPlanCard: some View {
+        Button {
+            newPlanName = ""
+            showNewPlanAlert = true
+        } label: {
+            ActionCardButton(
+                title: NSLocalizedString("add_plan", comment: ""),
+                subtitle: NSLocalizedString("add_plan_subtitle", comment: ""),
+                icon: "plus",
+                showChevron: false
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Plans Section
+
+    private var plansSection: some View {
+        Group {
+            if plans.isEmpty {
+                emptyPlansMessage
+            } else {
+                ForEach(plans, id: \.id) { plan in
+                    PlanCardView(
+                        plan: plan,
+                        isActive: isActivePlan(plan),
+                        onTap: {
+                            navigationPath.append(plan)
+                        },
+                        onDelete: {
+                            requestDeletePlan(plan)
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    private func isActivePlan(_ plan: WorkoutPlan) -> Bool {
+        guard profile?.executionMode == .single else { return false }
+        return profile?.activePlanId == plan.id
+    }
+
+    // MARK: - Empty Plans Message
+
+    private var emptyPlansMessage: some View {
+        VStack(spacing: 8) {
+            Text(NSLocalizedString("no_plans", comment: ""))
+                .font(.subheadline)
+                .foregroundColor(AppColors.textSecondary)
+
+            Text(NSLocalizedString("create_plan_hint", comment: ""))
+                .font(.caption)
+                .foregroundColor(AppColors.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
     }
 
     // MARK: - Actions
@@ -187,50 +353,91 @@ struct RoutinesView: View {
             profileId: profile.id,
             modelContext: modelContext
         )
+
+        loadActiveCycle()
     }
 
-    private func createNewPlan() {
-        guard let profile = profile else { return }
-
-        let plan = WorkoutPlan(profileId: profile.id, name: "")
-        modelContext.insert(plan)
-        navigationPath.append(plan)
-    }
-
-    private func savePlan(_ plan: WorkoutPlan) {
-        plan.touch()
-        try? modelContext.save()
-    }
-
-    private func discardPlan(_ plan: WorkoutPlan) {
-        // If it's a new plan (no name), delete it entirely
-        if plan.name.isEmpty {
-            modelContext.delete(plan)
+    private func loadActiveCycle() {
+        guard let profile = profile else {
+            activeCycle = nil
+            return
         }
+        activeCycle = CycleService.getActiveCycle(profileId: profile.id, modelContext: modelContext)
+    }
+
+    private func createPlan() {
+        guard let profile = profile,
+              !newPlanName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+
+        let trimmedName = newPlanName.trimmingCharacters(in: .whitespaces)
+        let plan = WorkoutPlan(profileId: profile.id, name: trimmedName)
+
+        // Create initial Day 1
+        _ = plan.createDay()
+
+        modelContext.insert(plan)
         try? modelContext.save()
+        loadData()
+
+        // Navigate to the created plan
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            navigationPath.append(plan)
+        }
+    }
+
+    private func requestDeletePlan(_ plan: WorkoutPlan) {
+        planToDelete = plan
+
+        // Check if this is the active plan in single mode
+        if profile?.executionMode == .single && profile?.activePlanId == plan.id {
+            showDeleteActiveWarning = true
+            return
+        }
+
+        // Check if this plan is in a cycle
+        // (Deletion will proceed, but we'll remove from cycles in deletePlan)
     }
 
     private func deletePlan(_ plan: WorkoutPlan) {
-        // If this was the active plan, clear it
+        // If this was the active plan in single mode, clear it
         if profile?.activePlanId == plan.id {
             profile?.activePlanId = nil
         }
+
+        // Remove from any cycles
+        removePlanFromCycles(plan)
+
         modelContext.delete(plan)
         try? modelContext.save()
+        planToDelete = nil
         loadData()
     }
 
-    private func setActivePlan(_ plan: WorkoutPlan) {
-        guard let profile = profile else { return }
+    private func removePlanFromCycles(_ plan: WorkoutPlan) {
+        // Find all cycle items referencing this plan
+        let planId = plan.id
+        let descriptor = FetchDescriptor<PlanCycleItem>()
 
-        if profile.activePlanId == plan.id {
-            // Toggle off
-            profile.activePlanId = nil
-        } else {
-            profile.activePlanId = plan.id
+        if let items = try? modelContext.fetch(descriptor) {
+            let matchingItems = items.filter { $0.plan?.id == planId }
+            for item in matchingItems {
+                if let cycle = item.cycle {
+                    cycle.removeItem(item)
+                    cycle.reindexItems()
+                }
+                modelContext.delete(item)
+            }
         }
+    }
+
+    private func setActivePlan(_ plan: WorkoutPlan) {
+        profile?.activePlanId = plan.id
         try? modelContext.save()
-        loadData()
+    }
+
+    private func clearActivePlan() {
+        profile?.activePlanId = nil
+        try? modelContext.save()
     }
 }
 
@@ -240,7 +447,6 @@ private struct PlanCardView: View {
     let plan: WorkoutPlan
     let isActive: Bool
     let onTap: () -> Void
-    let onSetActive: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -250,12 +456,12 @@ private struct PlanCardView: View {
             VStack(alignment: .leading, spacing: 8) {
                 // Header
                 HStack {
-                    Text(plan.name.isEmpty ? "新規プラン" : plan.name)
+                    Text(plan.name.isEmpty ? NSLocalizedString("new_plan", comment: "") : plan.name)
                         .font(.headline)
                         .foregroundColor(AppColors.textPrimary)
 
                     if isActive {
-                        Text("アクティブ")
+                        Text(NSLocalizedString("active", comment: ""))
                             .font(.caption)
                             .fontWeight(.medium)
                             .padding(.horizontal, 8)
@@ -274,8 +480,8 @@ private struct PlanCardView: View {
 
                 // Summary
                 HStack(spacing: 16) {
-                    Label("\(plan.dayCount)日", systemImage: "calendar")
-                    Label("\(plan.totalExerciseCount)種目", systemImage: "figure.strengthtraining.traditional")
+                    Label("\(plan.dayCount)\(NSLocalizedString("days_unit", comment: ""))", systemImage: "calendar")
+                    Label("\(plan.totalExerciseCount)\(NSLocalizedString("exercises_unit", comment: ""))", systemImage: "figure.strengthtraining.traditional")
                 }
                 .font(.caption)
                 .foregroundColor(AppColors.textSecondary)
@@ -294,21 +500,17 @@ private struct PlanCardView: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button {
-                onSetActive()
-            } label: {
-                Label(
-                    isActive ? "アクティブを解除" : "アクティブに設定",
-                    systemImage: isActive ? "star.slash" : "star.fill"
-                )
-            }
-
-            Divider()
-
             Button(role: .destructive) {
                 onDelete()
             } label: {
-                Label("削除", systemImage: "trash")
+                Label(NSLocalizedString("delete", comment: ""), systemImage: "trash")
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label(NSLocalizedString("delete", comment: ""), systemImage: "trash")
             }
         }
     }
@@ -325,7 +527,10 @@ private struct PlanCardView: View {
             Exercise.self,
             BodyPart.self,
             BodyPartTranslation.self,
-            ExerciseTranslation.self
+            ExerciseTranslation.self,
+            PlanCycle.self,
+            PlanCycleItem.self,
+            PlanCycleProgress.self
         ], inMemory: true)
         .preferredColorScheme(.dark)
 }

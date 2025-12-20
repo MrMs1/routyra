@@ -73,5 +73,4 @@ enum ProfileService {
     static func clearActivePlan(_ profile: LocalProfile) {
         profile.activePlanId = nil
     }
-
 }

@@ -20,6 +20,7 @@ struct PlanDayEditorView: View {
     let onChanged: () -> Void
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.editMode) private var editMode
 
     @State private var exercises: [PlanExercise] = []
     @State private var expandedExerciseId: UUID?
@@ -29,19 +30,11 @@ struct PlanDayEditorView: View {
     @State private var exercisesMap: [UUID: Exercise] = [:]
     @State private var bodyPartsMap: [UUID: BodyPart] = [:]
 
+    // Sheet state
+    @State private var showEditDaySheet: Bool = false
+
     var body: some View {
         List {
-            // Day title section
-            Section {
-                TextField("タイトル (例: Push)", text: Binding(
-                    get: { day.name ?? "" },
-                    set: { day.name = $0.isEmpty ? nil : $0 }
-                ))
-                .foregroundColor(AppColors.textPrimary)
-            } header: {
-                Text("Day情報")
-            }
-
             // Exercises section
             Section {
                 if exercises.isEmpty {
@@ -84,16 +77,15 @@ struct PlanDayEditorView: View {
                 }
 
                 // Add exercise button
-                NavigationLink(value: PlanDayEditorDestination.exercisePicker) {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("種目を追加")
+                ZStack {
+                    NavigationLink(value: PlanDayEditorDestination.exercisePicker) {
+                        EmptyView()
                     }
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.accentBlue)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .opacity(0)
+
+                    ActionCardButton(title: "種目を追加")
                 }
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             } header: {
@@ -103,8 +95,14 @@ struct PlanDayEditorView: View {
                     Text("\(exercises.count)種目")
                         .font(.caption)
                         .foregroundColor(AppColors.textSecondary)
-                    EditButton()
-                        .font(.subheadline)
+                    Button {
+                        withAnimation {
+                            editMode?.wrappedValue = editMode?.wrappedValue == .active ? .inactive : .active
+                        }
+                    } label: {
+                        Text(editMode?.wrappedValue == .active ? "完了" : "並び替え")
+                            .font(.subheadline)
+                    }
                 }
             }
         }
@@ -113,7 +111,25 @@ struct PlanDayEditorView: View {
         .background(AppColors.background)
         .navigationTitle(day.fullTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("編集") {
+                    showEditDaySheet = true
+                }
+            }
+        }
         .toolbar(.hidden, for: .tabBar)
+        .sheet(isPresented: $showEditDaySheet) {
+            EditDaySheetView(
+                dayIndex: day.dayIndex,
+                currentTitle: day.name,
+                onSave: { newTitle in
+                    day.name = newTitle
+                    onChanged()
+                }
+            )
+            .presentationDetents([.medium])
+        }
         .navigationDestination(for: PlanDayEditorDestination.self) { destination in
             // Use a wrapper view to ensure profile is loaded
             PlanDayEditorDestinationView(

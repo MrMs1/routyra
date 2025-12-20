@@ -4,6 +4,7 @@
 //
 //  Read-only exercise card for Plan viewing.
 //  Shows exercise summary when collapsed, full set list when expanded.
+//  Design unified with PlanExerciseRowView (editable version).
 //
 
 import SwiftUI
@@ -17,82 +18,76 @@ struct PlanExerciseCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header (always visible)
-            Button {
-                onToggle()
-            } label: {
-                headerContent
-            }
-            .buttonStyle(.plain)
+            // Header row (always visible)
+            headerRow
 
             // Expanded content (set list)
             if isExpanded {
                 expandedContent
-                    .transition(.opacity.animation(.easeOut(duration: 1)))
+                    .transition(.opacity.animation(.easeOut(duration: 0.15)))
             }
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 12)
-        .background(AppColors.cardBackground.opacity(0.6))
-        .cornerRadius(10)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 0)
     }
 
-    // MARK: - Header
+    // MARK: - Header Row
 
-    private var headerContent: some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 4) {
-                // Exercise name + body part
-                HStack(spacing: 8) {
-                    // Body part color dot
-                    if let bodyPart = bodyPart {
-                        Circle()
-                            .fill(bodyPart.color)
-                            .frame(width: 8, height: 8)
+    private var headerRow: some View {
+        Button {
+            onToggle()
+        } label: {
+            HStack(spacing: 12) {
+                // Chevron (left side, matching PlanExerciseRowView)
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(AppColors.textMuted)
+                    .frame(width: 16)
+
+                // Exercise info
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 8) {
+                        // Body part color dot
+                        if let bodyPart = bodyPart {
+                            Circle()
+                                .fill(bodyPart.color)
+                                .frame(width: 8, height: 8)
+                        }
+
+                        Text(exercise?.localizedName ?? "不明な種目")
+                            .font(.headline)
+                            .foregroundColor(AppColors.textPrimary)
+
+                        // Body part chip
+                        if let bodyPart = bodyPart {
+                            Text(bodyPart.localizedName)
+                                .font(.caption2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(AppColors.mutedBlue.opacity(0.2))
+                                .foregroundColor(AppColors.textSecondary)
+                                .cornerRadius(4)
+                        }
                     }
 
-                    Text(exercise?.localizedName ?? "不明な種目")
+                    // Summary
+                    Text(planExercise.setsSummary)
                         .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.textPrimary)
-
-                    if let bodyPart = bodyPart {
-                        Text(bodyPart.localizedName)
-                            .font(.caption2)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(AppColors.mutedBlue.opacity(0.2))
-                            .foregroundColor(AppColors.textSecondary)
-                            .cornerRadius(4)
-                    }
+                        .foregroundColor(AppColors.textSecondary)
                 }
 
-                // Set summary
-                Text(planExercise.compactSummary)
-                    .font(.caption)
-                    .foregroundColor(AppColors.textMuted)
+                Spacer()
             }
-
-            Spacer()
-
-            // Chevron
-            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                .font(.caption)
-                .foregroundColor(AppColors.textMuted)
-                .frame(width: 20, height: 20)
+            .contentShape(Rectangle())
         }
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
     }
 
     // MARK: - Expanded Content
 
     private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Divider()
-                .background(AppColors.divider)
-                .padding(.vertical, 8)
-
-            // Set list
+            // Set list (mini card rows - read-only)
             let sets = planExercise.sortedPlannedSets
             if sets.isEmpty {
                 Text("セットが設定されていません")
@@ -100,55 +95,24 @@ struct PlanExerciseCardView: View {
                     .foregroundColor(AppColors.textMuted)
                     .padding(.vertical, 4)
             } else {
-                VStack(spacing: 6) {
-                    ForEach(Array(sets.enumerated()), id: \.element.id) { index, plannedSet in
-                        setRow(index: index + 1, set: plannedSet)
+                ForEach(Array(sets.enumerated()), id: \.element.id) { index, plannedSet in
+                    PlannedSetDisplayRow(
+                        plannedSet: plannedSet,
+                        setIndex: index + 1
+                    )
+
+                    // Thin separator line (not after last row)
+                    if index < sets.count - 1 {
+                        Color.white.opacity(0.08)
+                            .frame(height: 1)
+                            .padding(.leading, 56)
+                            .padding(.trailing, 16)
+                            .padding(.vertical, 4)
                     }
                 }
             }
         }
-    }
-
-    // MARK: - Set Row
-
-    private func setRow(index: Int, set: PlannedSet) -> some View {
-        HStack(spacing: 12) {
-            // Set number
-            Text("Set \(index)")
-                .font(.caption)
-                .foregroundColor(AppColors.textMuted)
-                .frame(width: 44, alignment: .leading)
-
-            // Weight
-            HStack(spacing: 2) {
-                Text(set.weightString)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(set.targetWeight != nil ? AppColors.textPrimary : AppColors.textMuted)
-                Text("kg")
-                    .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
-            }
-            .frame(width: 60, alignment: .trailing)
-
-            Text("×")
-                .font(.caption)
-                .foregroundColor(AppColors.textMuted)
-
-            // Reps
-            HStack(spacing: 2) {
-                Text(set.repsString)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(set.targetReps != nil ? AppColors.textPrimary : AppColors.textMuted)
-                Text("reps")
-                    .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
-            }
-
-            Spacer()
-        }
-        .padding(.vertical, 2)
+        .padding(.top, 10)
     }
 }
 
@@ -176,6 +140,6 @@ struct PlanExerciseCardView: View {
         )
     }
     .padding()
-    .background(AppColors.background)
+    .background(AppColors.cardBackground)
     .preferredColorScheme(.dark)
 }

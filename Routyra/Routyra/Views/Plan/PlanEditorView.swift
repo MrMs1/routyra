@@ -16,13 +16,13 @@ enum PlanEditorDestination: Hashable {
 
 struct PlanEditorView: View {
     @Bindable var plan: WorkoutPlan
-    let isNewPlan: Bool
-    let onSave: () -> Void
-    let onDiscard: () -> Void
 
     @Environment(\.modelContext) private var modelContext
-    @State private var showDiscardConfirmation: Bool = false
-    @State private var isDirty: Bool = false
+    @Environment(\.editMode) private var editMode
+
+    // Sheet states
+    @State private var showEditPlanSheet: Bool = false
+    @State private var editingDay: PlanDay? = nil
 
     // For day display and reordering
     @State private var days: [PlanDay] = []
@@ -32,22 +32,21 @@ struct PlanEditorView: View {
     @State private var exercisesMap: [UUID: Exercise] = [:]
     @State private var bodyPartsMap: [UUID: BodyPart] = [:]
 
+    /// Whether we're in reorder mode (EditMode active)
+    private var isReordering: Bool {
+        editMode?.wrappedValue == .active
+    }
+
     var body: some View {
         List {
-            // Plan info section
-            Section {
-                TextField("プラン名", text: $plan.name)
-                    .font(.body)
-                    .foregroundColor(AppColors.textPrimary)
-
-                TextField("メモ (任意)", text: Binding(
-                    get: { plan.note ?? "" },
-                    set: { plan.note = $0.isEmpty ? nil : $0 }
-                ))
-                .font(.body)
-                .foregroundColor(AppColors.textPrimary)
-            } header: {
-                Text("プラン情報")
+            // Compact memo section (only shown if memo exists)
+            if let note = plan.note, !note.isEmpty {
+                Section {
+                    memoCard
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
             }
 
             // Days section
@@ -57,16 +56,25 @@ struct PlanEditorView: View {
                         day: day,
                         exercises: exercisesMap,
                         bodyParts: bodyPartsMap,
-                        isExpanded: expandedDayIds.contains(day.id),
+                        isExpanded: isReordering ? false : expandedDayIds.contains(day.id),
                         editDestination: PlanEditorDestination.dayEditor(dayId: day.id),
                         onToggleExpand: {
-                            toggleDayExpansion(day.id)
+                            // Disable expansion during reorder mode
+                            if !isReordering {
+                                toggleDayExpansion(day.id)
+                            }
                         }
                     )
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .contextMenu {
+                        Button {
+                            editingDay = day
+                        } label: {
+                            Label("名前を変更", systemImage: "pencil")
+                        }
+
                         Button {
                             duplicateDay(day)
                         } label: {
@@ -86,24 +94,29 @@ struct PlanEditorView: View {
                             Label("削除", systemImage: "trash")
                         }
                     }
+                    .swipeActions(edge: .leading) {
+                        Button {
+                            editingDay = day
+                        } label: {
+                            Label("名前を変更", systemImage: "pencil")
+                        }
+                        .tint(AppColors.accentBlue)
+                    }
                 }
                 .onMove(perform: moveDays)
 
-                // Add day button
-                Button {
-                    addDay()
-                } label: {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Dayを追加")
+                // Add day button (hidden during reorder mode)
+                if !isReordering {
+                    Button {
+                        addDay()
+                    } label: {
+                        ActionCardButton(title: "Dayを追加", showChevron: false)
                     }
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.accentBlue)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
             } header: {
                 HStack {
                     Text("Days")
@@ -111,8 +124,14 @@ struct PlanEditorView: View {
                     Text("\(days.count)日間")
                         .font(.caption)
                         .foregroundColor(AppColors.textSecondary)
-                    EditButton()
-                        .font(.subheadline)
+                    Button {
+                        withAnimation {
+                            editMode?.wrappedValue = editMode?.wrappedValue == .active ? .inactive : .active
+                        }
+                    } label: {
+                        Text(editMode?.wrappedValue == .active ? "完了" : "並び替え")
+                            .font(.subheadline)
+                    }
                 }
             }
         }
@@ -121,20 +140,14 @@ struct PlanEditorView: View {
         .background(AppColors.background)
         .navigationTitle(plan.name.isEmpty ? "新規プラン" : plan.name)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("キャンセル") {
-                    handleCancel()
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showEditPlanSheet = true
+                } label: {
+                    Image(systemName: "pencil")
                 }
-            }
-
-            ToolbarItem(placement: .confirmationAction) {
-                Button("保存") {
-                    onSave()
-                }
-                .disabled(plan.name.trimmed.isEmpty)
             }
         }
         .navigationDestination(for: PlanEditorDestination.self) { destination in
@@ -142,9 +155,9 @@ struct PlanEditorView: View {
             case .dayEditor(let dayId):
                 if let day = findDay(byId: dayId) {
                     PlanDayEditorView(day: day) {
-                        isDirty = true
                         syncDays()
                         loadLookupData()
+                        saveChanges()
                     }
                 }
             }
@@ -154,26 +167,63 @@ struct PlanEditorView: View {
             ensureAtLeastOneDay()
             syncDays()
         }
-        .alert("変更を破棄", isPresented: $showDiscardConfirmation) {
-            Button("破棄", role: .destructive) {
-                onDiscard()
-            }
-            Button("編集を続ける", role: .cancel) {}
-        } message: {
-            Text("保存されていない変更があります。破棄しますか？")
+        .sheet(isPresented: $showEditPlanSheet) {
+            EditPlanSheetView(
+                currentName: plan.name,
+                currentNote: plan.note,
+                onSave: { name, note in
+                    plan.name = name
+                    plan.note = note
+                    saveChanges()
+                }
+            )
+            .presentationDetents([.medium])
         }
-        .onChange(of: plan.name) { _, _ in isDirty = true }
-        .onChange(of: plan.note) { _, _ in isDirty = true }
+        .sheet(item: $editingDay) { day in
+            EditDaySheetView(
+                dayIndex: day.dayIndex,
+                currentTitle: day.name,
+                onSave: { newTitle in
+                    day.name = newTitle
+                    syncDays()
+                    saveChanges()
+                }
+            )
+            .presentationDetents([.medium])
+        }
+    }
+
+    // MARK: - Compact Memo Card
+
+    private var memoCard: some View {
+        Button {
+            showEditPlanSheet = true
+        } label: {
+            HStack {
+                Text(plan.note ?? "")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.textSecondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                Spacer()
+
+                Image(systemName: "pencil")
+                    .font(.caption)
+                    .foregroundColor(AppColors.textMuted)
+            }
+            .padding()
+            .background(AppColors.cardBackground)
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Actions
 
-    private func handleCancel() {
-        if isDirty || isNewPlan {
-            showDiscardConfirmation = true
-        } else {
-            onDiscard()
-        }
+    private func saveChanges() {
+        plan.touch()
+        try? modelContext.save()
     }
 
     private func toggleDayExpansion(_ id: UUID) {
@@ -187,7 +237,7 @@ struct PlanEditorView: View {
     private func addDay() {
         _ = plan.createDay()
         syncDays()
-        isDirty = true
+        saveChanges()
     }
 
     private func deleteDay(_ day: PlanDay) {
@@ -196,7 +246,7 @@ struct PlanEditorView: View {
         plan.reindexDays()
         expandedDayIds.remove(day.id)
         syncDays()
-        isDirty = true
+        saveChanges()
     }
 
     private func duplicateDay(_ day: PlanDay) {
@@ -209,7 +259,7 @@ struct PlanEditorView: View {
         }
         modelContext.insert(copy)
         syncDays()
-        isDirty = true
+        saveChanges()
     }
 
     private func moveDays(from source: IndexSet, to destination: Int) {
@@ -220,8 +270,7 @@ struct PlanEditorView: View {
             day.dayIndex = index + 1
         }
 
-        try? modelContext.save()
-        isDirty = true
+        saveChanges()
     }
 
     private func findDay(byId id: UUID) -> PlanDay? {
@@ -261,7 +310,7 @@ struct PlanEditorView: View {
 
 #Preview {
     NavigationStack {
-        let plan = WorkoutPlan(profileId: UUID(), name: "Push Pull Legs")
+        let plan = WorkoutPlan(profileId: UUID(), name: "Push Pull Legs", note: "週3回のトレーニングプラン")
         let day1 = PlanDay(dayIndex: 1, name: "Push")
         let day2 = PlanDay(dayIndex: 2, name: "Pull")
         let day3 = PlanDay(dayIndex: 3, name: "Legs")
@@ -269,23 +318,18 @@ struct PlanEditorView: View {
         plan.addDay(day2)
         plan.addDay(day3)
 
-        return PlanEditorView(
-            plan: plan,
-            isNewPlan: false,
-            onSave: {},
-            onDiscard: {}
-        )
-        .modelContainer(for: [
-            WorkoutPlan.self,
-            PlanDay.self,
-            PlanExercise.self,
-            PlannedSet.self,
-            Exercise.self,
-            BodyPart.self,
-            BodyPartTranslation.self,
-            ExerciseTranslation.self,
-            LocalProfile.self
-        ], inMemory: true)
+        return PlanEditorView(plan: plan)
+            .modelContainer(for: [
+                WorkoutPlan.self,
+                PlanDay.self,
+                PlanExercise.self,
+                PlannedSet.self,
+                Exercise.self,
+                BodyPart.self,
+                BodyPartTranslation.self,
+                ExerciseTranslation.self,
+                LocalProfile.self
+            ], inMemory: true)
     }
     .preferredColorScheme(.dark)
 }

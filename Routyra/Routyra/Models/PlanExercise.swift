@@ -62,21 +62,65 @@ final class PlanExercise {
         plannedSets.isEmpty ? plannedSetCount : plannedSets.count
     }
 
-    /// Summary string for display (e.g., "3セット" or "60kg×10 / 60kg×10 / 60kg×10").
+    /// Summary string for display (e.g., "60kg / 10回 / 3セット").
     var setsSummary: String {
         if plannedSets.isEmpty {
             return "セット未設定"
         }
 
         let sorted = sortedPlannedSets
+        let setCount = sorted.count
+
         // Check if all sets have the same weight and reps
         if sorted.count > 1,
            let first = sorted.first,
            sorted.allSatisfy({ $0.targetWeight == first.targetWeight && $0.targetReps == first.targetReps }) {
-            return "\(first.summary) × \(sorted.count)セット"
+            // Format: "60kg / 10回 / 3セット"
+            let weight = first.targetWeight.map { w in
+                w.truncatingRemainder(dividingBy: 1) == 0
+                    ? "\(Int(w))kg"
+                    : String(format: "%.1fkg", w)
+            } ?? "—kg"
+            let reps = first.targetReps.map { "\($0)回" } ?? "—回"
+            return "\(weight) / \(reps) / \(setCount)セット"
         }
 
-        return sorted.map { $0.summary }.joined(separator: " / ")
+        // Different sets - show count and range
+        let weights = sorted.compactMap(\.targetWeight)
+        let reps = sorted.compactMap(\.targetReps)
+
+        var parts: [String] = []
+
+        if !weights.isEmpty {
+            let minWeight = weights.min()!
+            let maxWeight = weights.max()!
+            let formatWeight: (Double) -> String = { w in
+                w.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(w))" : String(format: "%.1f", w)
+            }
+            if minWeight == maxWeight {
+                parts.append("\(formatWeight(minWeight))kg")
+            } else {
+                parts.append("\(formatWeight(minWeight))–\(formatWeight(maxWeight))kg")
+            }
+        } else {
+            parts.append("—kg")
+        }
+
+        if !reps.isEmpty {
+            let minReps = reps.min()!
+            let maxReps = reps.max()!
+            if minReps == maxReps {
+                parts.append("\(minReps)回")
+            } else {
+                parts.append("\(minReps)–\(maxReps)回")
+            }
+        } else {
+            parts.append("—回")
+        }
+
+        parts.append("\(setCount)セット")
+
+        return parts.joined(separator: " / ")
     }
 
     /// Compact summary for Plan view (e.g., "3 sets • 8–10 reps • 75–80kg").

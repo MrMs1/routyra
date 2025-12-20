@@ -64,8 +64,22 @@ final class PlannedSet {
         return "-"
     }
 
-    /// Summary string for display.
+    /// Formatted reps string with unit.
+    var repsStringWithUnit: String {
+        if let r = targetReps {
+            return "\(r)回"
+        }
+        return "—回"
+    }
+
+    /// Summary string for display (e.g., "60kg / 10回").
     var summary: String {
-        "\(weightString) × \(repsString)"
+        let weight = targetWeight.map { w in
+            w.truncatingRemainder(dividingBy: 1) == 0
+                ? "\(Int(w))kg"
+                : String(format: "%.1fkg", w)
+        } ?? "—kg"
+        let reps = targetReps.map { "\($0)回" } ?? "—回"
+        return "\(weight) / \(reps)"
     }
 }

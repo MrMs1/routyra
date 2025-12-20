@@ -103,10 +103,6 @@ struct PlanDayCardView<Destination: Hashable>: View {
 
     private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Divider()
-                .background(AppColors.divider)
-                .padding(.horizontal, 12)
-
             let sortedExercises = day.sortedExercises
 
             if sortedExercises.isEmpty {

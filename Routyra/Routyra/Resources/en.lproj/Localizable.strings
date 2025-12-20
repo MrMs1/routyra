@@ -1,0 +1,41 @@
+/*
+  Localizable.strings (English)
+  Routyra
+*/
+
+// MARK: - Common
+"cancel" = "Cancel";
+"delete" = "Delete";
+"create" = "Create";
+"none" = "None";
+"active" = "Active";
+"not_set" = "Not Set";
+
+// MARK: - Workout Plans Screen
+"workout_plans" = "Workout Plans";
+"execution_mode" = "Execution Mode";
+"single_plan" = "Single Plan";
+"cycle" = "Cycle";
+"active_plan" = "Active Plan";
+"select_active_plan" = "Select Active Plan";
+"no_active_cycle" = "No active cycle";
+"no_plans_in_cycle" = "No plans in cycle";
+"edit_cycles" = "Edit Cycles";
+"plans" = "Plans";
+"add_plan" = "Add Plan";
+"add_plan_subtitle" = "Create a new workout plan";
+"no_plans" = "No plans";
+"create_plan_hint" = "Create a plan from the card above";
+"new_plan" = "New Plan";
+"plan_name" = "Plan Name";
+"enter_plan_name" = "Enter a plan name";
+
+// MARK: - Plan Card
+"days_unit" = " days";
+"exercises_unit" = " exercises";
+
+// MARK: - Delete Plan
+"delete_plan" = "Delete Plan";
+"delete_plan_confirm" = "Delete \"%@\"? This cannot be undone.";
+"delete_active_plan" = "Delete Active Plan";
+"delete_active_plan_warning" = "This plan is currently active. Deleting it will leave you with no active plan.";

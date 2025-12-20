@@ -2,17 +2,34 @@
 //  WorkoutExercisePickerView.swift
 //  Routyra
 //
-//  Exercise picker for adding exercises to a workout (free mode).
-//  Shows existing exercises grouped by body part with search and filter.
+//  Exercise picker for adding/changing exercises in a workout.
+//  Card-based UI with body part filtering and search.
+//  Uses shared components from ExercisePickerComponents.
 //
 
 import SwiftUI
 import SwiftData
 
+/// Mode for the exercise picker - either adding a new exercise or changing an existing one
+enum ExercisePickerMode {
+    case add
+    case change(currentExerciseId: UUID)
+
+    var navigationTitle: String {
+        switch self {
+        case .add:
+            return "種目を追加"
+        case .change:
+            return "種目を変更"
+        }
+    }
+}
+
 struct WorkoutExercisePickerView: View {
     let profile: LocalProfile
     let exercises: [UUID: Exercise]
     let bodyParts: [UUID: BodyPart]
+    var mode: ExercisePickerMode = .add
     let onSelect: (Exercise) -> Void
 
     @Environment(\.modelContext) private var modelContext
@@ -38,85 +55,60 @@ struct WorkoutExercisePickerView: View {
             }
         }
 
-        return result
+        return result.sorted { $0.localizedName < $1.localizedName }
     }
 
-    private var groupedExercises: [(BodyPart?, [Exercise])] {
-        let grouped = Dictionary(grouping: filteredExercises) { $0.bodyPartId }
-        return allBodyParts.compactMap { bodyPart in
-            if let exercises = grouped[bodyPart.id], !exercises.isEmpty {
-                return (bodyPart, exercises)
-            }
-            return nil
-        } + (grouped[nil] != nil ? [(nil, grouped[nil]!)] : [])
+    /// Returns the current exercise ID if in change mode
+    private var currentExerciseId: UUID? {
+        if case .change(let id) = mode {
+            return id
+        }
+        return nil
     }
 
     var body: some View {
         VStack(spacing: 0) {
+            // Search bar
+            ExercisePickerSearchBar(text: $searchText)
+
             // Body part filter
             bodyPartFilterBar
 
-            // Exercise list
-            List {
-                // Create new option
-                Section {
+            // Exercise cards
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    // Create new exercise card
                     NavigationLink(value: ExercisePickerDestination.newExercise) {
-                        HStack {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundColor(AppColors.accentBlue)
-                            Text("新しい種目を作成")
-                                .foregroundColor(AppColors.accentBlue)
-                        }
+                        CreateExerciseCard()
                     }
-                }
+                    .buttonStyle(.plain)
 
-                // Existing exercises
-                ForEach(groupedExercises, id: \.0?.id) { (bodyPart, exercises) in
-                    Section {
-                        ForEach(exercises, id: \.id) { exercise in
-                            Button {
+                    // Exercise cards
+                    ForEach(filteredExercises, id: \.id) { exercise in
+                        let bodyPart = exercise.bodyPartId.flatMap { id in
+                            allBodyParts.first { $0.id == id }
+                        }
+                        let isCurrentSelection = currentExerciseId == exercise.id
+
+                        ExerciseCardRow(
+                            exerciseName: exercise.localizedName,
+                            bodyPartName: bodyPart?.localizedName,
+                            bodyPartColor: bodyPart?.color,
+                            isCustom: exercise.scope == .user,
+                            isSelected: isCurrentSelection,
+                            onTap: {
                                 onSelect(exercise)
-                            } label: {
-                                HStack {
-                                    Text(exercise.localizedName)
-                                        .foregroundColor(AppColors.textPrimary)
-
-                                    Spacer()
-
-                                    if exercise.scope == .user {
-                                        Text("カスタム")
-                                            .font(.caption)
-                                            .foregroundColor(AppColors.textMuted)
-                                    }
-                                }
                             }
-                        }
-                    } header: {
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(bodyPart?.color ?? Color.gray)
-                                .frame(width: 10, height: 10)
-
-                            Text(bodyPart?.localizedName ?? "その他")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.textSecondary)
-                                .textCase(nil)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 16)
-                        .background(AppColors.background)
-                        .listRowInsets(EdgeInsets())
+                        )
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
             .background(AppColors.background)
-            .searchable(text: $searchText, prompt: "種目を検索")
         }
-        .navigationTitle("種目を追加")
+        .background(AppColors.background)
+        .navigationTitle(mode.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: ExercisePickerDestination.self) { destination in
             switch destination {
@@ -140,28 +132,31 @@ struct WorkoutExercisePickerView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 // All filter
-                FilterChipView(
+                ExerciseFilterChip(
                     title: "すべて",
                     isSelected: selectedBodyPartId == nil
                 ) {
-                    selectedBodyPartId = nil
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedBodyPartId = nil
+                    }
                 }
 
                 // Body part filters
                 ForEach(allBodyParts, id: \.id) { bodyPart in
-                    FilterChipView(
+                    ExerciseFilterChip(
                         title: bodyPart.localizedName,
                         color: bodyPart.color,
                         isSelected: selectedBodyPartId == bodyPart.id
                     ) {
-                        selectedBodyPartId = bodyPart.id
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedBodyPartId = bodyPart.id
+                        }
                     }
                 }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
-        .background(AppColors.cardBackground)
     }
 
     // MARK: - Data Loading
@@ -176,39 +171,6 @@ struct WorkoutExercisePickerView: View {
             profileId: profile.id,
             modelContext: modelContext
         )
-    }
-}
-
-// MARK: - Filter Chip View
-
-private struct FilterChipView: View {
-    let title: String
-    var color: Color? = nil
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button {
-            onTap()
-        } label: {
-            HStack(spacing: 6) {
-                if let color = color {
-                    Circle()
-                        .fill(color)
-                        .frame(width: 8, height: 8)
-                }
-
-                Text(title)
-                    .font(.caption)
-                    .fontWeight(isSelected ? .semibold : .regular)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(isSelected ? AppColors.accentBlue : AppColors.background)
-            .foregroundColor(isSelected ? .white : AppColors.textSecondary)
-            .cornerRadius(16)
-        }
-        .buttonStyle(.plain)
     }
 }
 

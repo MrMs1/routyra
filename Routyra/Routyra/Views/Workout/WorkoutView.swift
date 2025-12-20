@@ -10,6 +10,7 @@ import SwiftData
 enum WorkoutDestination: Hashable {
     case exercisePicker
     case setEditor(exercise: Exercise)
+    case exerciseChanger(entryId: UUID, currentExerciseId: UUID)
 }
 
 struct WorkoutView: View {
@@ -26,8 +27,6 @@ struct WorkoutView: View {
     @State private var snackBarUndoAction: (() -> Void)?
     @State private var currentWeight: Double = 60
     @State private var currentReps: Int = 8
-    @State private var showExercisePicker: Bool = false
-    @State private var entryToChange: WorkoutExerciseEntry?
     @State private var profile: LocalProfile?
     @State private var navigationPath = NavigationPath()
 
@@ -155,7 +154,7 @@ struct WorkoutView: View {
                                             }
                                         },
                                         onLogSet: {
-                                            logSet(for: entry, scrollProxy: proxy)
+                                            return logSet(for: entry, scrollProxy: proxy)
                                         },
                                         onAddSet: {
                                             addSet(to: entry)
@@ -167,8 +166,12 @@ struct WorkoutView: View {
                                             deleteCompletedSet(set, from: entry)
                                         },
                                         onChangeExercise: {
-                                            entryToChange = entry
-                                            showExercisePicker = true
+                                            navigationPath.append(
+                                                WorkoutDestination.exerciseChanger(
+                                                    entryId: entry.id,
+                                                    currentExerciseId: entry.exerciseId
+                                                )
+                                            )
                                         }
                                     )
                                     .id(entry.id)
@@ -187,6 +190,11 @@ struct WorkoutView: View {
                                             navigateToRoutines = true
                                         }
                                     )
+                                } else {
+                                    // Add exercise card at bottom of list
+                                    AddExerciseCard {
+                                        navigationPath.append(WorkoutDestination.exercisePicker)
+                                    }
                                 }
                             }
                             .padding(.horizontal)
@@ -196,29 +204,6 @@ struct WorkoutView: View {
                     }
 
                     Spacer(minLength: 0)
-                }
-
-                // Floating add button (when entries exist)
-                if !sortedEntries.isEmpty {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            Button {
-                                navigationPath.append(WorkoutDestination.exercisePicker)
-                            } label: {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 22, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .frame(width: 56, height: 56)
-                                    .background(AppColors.accentBlue)
-                                    .clipShape(Circle())
-                                    .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                            }
-                            .padding(.trailing, 20)
-                            .padding(.bottom, 140)
-                        }
-                    }
                 }
 
                 VStack(spacing: 0) {
@@ -278,6 +263,20 @@ struct WorkoutView: View {
                             navigationPath.removeLast()
                         }
                     )
+
+                case .exerciseChanger(let entryId, let currentExerciseId):
+                    if let profile = profile {
+                        WorkoutExercisePickerView(
+                            profile: profile,
+                            exercises: exercisesDict,
+                            bodyParts: bodyPartsDict,
+                            mode: .change(currentExerciseId: currentExerciseId),
+                            onSelect: { exercise in
+                                changeExercise(entryId: entryId, to: exercise)
+                                navigationPath.removeLast()
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -297,23 +296,6 @@ struct WorkoutView: View {
             } else {
                 expandedEntryId = nil
             }
-        }
-        .sheet(isPresented: $showExercisePicker) {
-            ExercisePickerSheet(
-                currentName: entryToChange.flatMap { getExerciseName(for: $0.exerciseId) } ?? "",
-                onSelect: { newName in
-                    if let entry = entryToChange,
-                       let exercise = exercises.first(where: { $0.name == newName }) {
-                        entry.exerciseId = exercise.id
-                    }
-                    showExercisePicker = false
-                },
-                onCancel: {
-                    showExercisePicker = false
-                }
-            )
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
         }
     }
 
@@ -381,11 +363,19 @@ struct WorkoutView: View {
 
     private func loadActiveCycle() {
         guard let profile = profile else { return }
-        activeCycle = CycleService.getActiveCycle(profileId: profile.id, modelContext: modelContext)
 
-        if let cycle = activeCycle {
-            cycleStateInfo = CycleService.getCurrentStateInfo(for: cycle, modelContext: modelContext)
+        // Only load cycle if in cycle mode
+        if profile.executionMode == .cycle {
+            activeCycle = CycleService.getActiveCycle(profileId: profile.id, modelContext: modelContext)
+
+            if let cycle = activeCycle {
+                cycleStateInfo = CycleService.getCurrentStateInfo(for: cycle, modelContext: modelContext)
+            } else {
+                cycleStateInfo = nil
+            }
         } else {
+            // In single mode, clear cycle state
+            activeCycle = nil
             cycleStateInfo = nil
         }
     }
@@ -416,22 +406,43 @@ struct WorkoutView: View {
 
         let workoutDate = todayWorkoutDate
 
-        // Check if we need to auto-advance the cycle
-        checkAndAutoAdvanceCycle(workoutDate: workoutDate)
+        // Branch based on execution mode
+        switch profile.executionMode {
+        case .cycle:
+            // Check if we need to auto-advance the cycle
+            checkAndAutoAdvanceCycle(workoutDate: workoutDate)
 
-        // First check if we should setup from active cycle
-        if let cycle = activeCycle,
-           let (plan, planDay) = CycleService.getCurrentPlanDay(for: cycle, modelContext: modelContext) {
-            setupWorkoutFromCycle(plan: plan, planDay: planDay, workoutDate: workoutDate)
-            return
+            // Setup from active cycle
+            if let cycle = activeCycle,
+               let (plan, planDay) = CycleService.getCurrentPlanDay(for: cycle, modelContext: modelContext) {
+                setupWorkoutFromCycle(plan: plan, planDay: planDay, workoutDate: workoutDate)
+                return
+            }
+
+        case .single:
+            // Setup from active plan in single mode
+            if let activePlanId = profile.activePlanId {
+                setupWorkoutFromSinglePlan(planId: activePlanId, workoutDate: workoutDate)
+                return
+            }
         }
 
-        // Fall back to existing logic - create empty workout day if none exists
+        // Fall back - create empty workout day if none exists
         let todayWorkout = workoutDays.first { DateUtilities.isSameDay($0.date, workoutDate) }
         if todayWorkout == nil {
             let workoutDay = WorkoutDay(profileId: profile.id, date: workoutDate)
             modelContext.insert(workoutDay)
         }
+    }
+
+    private func setupWorkoutFromSinglePlan(planId: UUID, workoutDate: Date) {
+        guard let profile = profile else { return }
+
+        // Use PlanService to setup today's workout (it handles plan lookup internally)
+        _ = PlanService.setupTodayWorkout(
+            profile: profile,
+            modelContext: modelContext
+        )
     }
 
     /// Checks if the cycle should be auto-advanced based on the last workout date
@@ -478,6 +489,12 @@ struct WorkoutView: View {
         if workoutDay.entries.isEmpty {
             PlanService.expandPlanToWorkout(planDay: planDay, workoutDay: workoutDay)
         }
+    }
+
+    /// Changes the exercise for a given entry
+    private func changeExercise(entryId: UUID, to exercise: Exercise) {
+        guard let entry = sortedEntries.first(where: { $0.id == entryId }) else { return }
+        entry.exerciseId = exercise.id
     }
 
     /// Adds a selected exercise to the current workout with specified sets
@@ -531,47 +548,19 @@ struct WorkoutView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             expandedEntryId = entry.id
         }
-
-        showSnackBar(
-            message: "\(exercise.localizedName)を追加しました（\(sets.count)セット）",
-            undoAction: {
-                workoutDay.removeEntry(entry)
-            }
-        )
     }
 
     private func addSet(to entry: WorkoutExerciseEntry) {
-        let newSet = entry.createSet(weight: Decimal(currentWeight), reps: currentReps, isCompleted: false)
-
-        showSnackBar(
-            message: "Set added: \(formatWeight(currentWeight)) kg × \(currentReps)",
-            undoAction: {
-                newSet.softDelete()
-            }
-        )
+        _ = entry.createSet(weight: Decimal(currentWeight), reps: currentReps, isCompleted: false)
     }
 
-    private func logSet(for entry: WorkoutExerciseEntry, scrollProxy: ScrollViewProxy) {
-        guard let nextSet = entry.sortedSets.first(where: { !$0.isCompleted }) else { return }
-
-        let previousWeight = nextSet.weight
-        let previousReps = nextSet.reps
-        let wasCompleted = nextSet.isCompleted
+    @discardableResult
+    private func logSet(for entry: WorkoutExerciseEntry, scrollProxy: ScrollViewProxy) -> Bool {
+        guard let nextSet = entry.sortedSets.first(where: { !$0.isCompleted }) else { return false }
 
         nextSet.weight = Decimal(currentWeight)
         nextSet.reps = currentReps
         nextSet.complete()
-
-        showSnackBar(
-            message: "Set logged: \(formatWeight(currentWeight)) kg × \(currentReps)",
-            undoAction: {
-                nextSet.weight = previousWeight
-                nextSet.reps = previousReps
-                if !wasCompleted {
-                    nextSet.uncomplete()
-                }
-            }
-        )
 
         // Check if all sets for this entry are now completed
         let allSetsCompleted = entry.sortedSets.allSatisfy { $0.isCompleted }
@@ -587,6 +576,8 @@ struct WorkoutView: View {
                 }
             }
         }
+
+        return true
     }
 
     private func removePlannedSet(_ set: WorkoutSet, from entry: WorkoutExerciseEntry) {
@@ -674,99 +665,28 @@ struct EmptyWorkoutView: View {
     }
 }
 
-// MARK: - Exercise Picker Sheet
+// MARK: - Add Exercise Card
 
-struct ExercisePickerSheet: View {
-    let currentName: String
-    let onSelect: (String) -> Void
-    let onCancel: () -> Void
-
-    @State private var searchText = ""
-
-    private let commonExercises = [
-        "Bench Press",
-        "Incline Bench Press",
-        "Dumbbell Press",
-        "Squat",
-        "Front Squat",
-        "Leg Press",
-        "Deadlift",
-        "Romanian Deadlift",
-        "Barbell Row",
-        "Lat Pulldown",
-        "Pull Up",
-        "Chin Up",
-        "Overhead Press",
-        "Dumbbell Shoulder Press",
-        "Lateral Raise",
-        "Bicep Curl",
-        "Tricep Extension",
-        "Cable Fly",
-        "Leg Curl",
-        "Leg Extension",
-        "Calf Raise",
-        "Plank",
-        "Hip Thrust"
-    ]
-
-    private var filteredExercises: [String] {
-        if searchText.isEmpty {
-            return commonExercises
-        }
-        return commonExercises.filter { $0.localizedCaseInsensitiveContains(searchText) }
-    }
+/// Card-style button for adding a new exercise, displayed at the bottom of the exercise list.
+struct AddExerciseCard: View {
+    let onTap: () -> Void
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    TextField("Search or enter custom name", text: $searchText)
-                        .textFieldStyle(.plain)
-
-                    if !searchText.isEmpty && !commonExercises.contains(where: { $0.localizedCaseInsensitiveCompare(searchText) == .orderedSame }) {
-                        Button(action: {
-                            onSelect(searchText)
-                        }) {
-                            HStack {
-                                Text("Use \"\(searchText)\"")
-                                    .foregroundColor(AppColors.accentBlue)
-                                Spacer()
-                                Image(systemName: "plus.circle.fill")
-                                    .foregroundColor(AppColors.accentBlue)
-                            }
-                        }
-                    }
-                }
-
-                Section("Common Exercises") {
-                    ForEach(filteredExercises, id: \.self) { name in
-                        Button(action: {
-                            onSelect(name)
-                        }) {
-                            HStack {
-                                Text(name)
-                                    .foregroundColor(AppColors.textPrimary)
-                                Spacer()
-                                if name == currentName {
-                                    Image(systemName: "checkmark")
-                                        .foregroundColor(AppColors.accentBlue)
-                                }
-                            }
-                        }
-                    }
-                }
+        Button(action: onTap) {
+            HStack(spacing: 8) {
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .medium))
+                Text("種目を追加")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
             }
-            .navigationTitle("Change Exercise")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        onCancel()
-                    }
-                }
-            }
+            .foregroundColor(AppColors.textSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(AppColors.cardBackground)
+            .cornerRadius(12)
         }
-        .preferredColorScheme(.dark)
+        .buttonStyle(.plain)
     }
 }
 

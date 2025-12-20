@@ -1,0 +1,41 @@
+/*
+  Localizable.strings (Japanese)
+  Routyra
+*/
+
+// MARK: - Common
+"cancel" = "キャンセル";
+"delete" = "削除";
+"create" = "作成";
+"none" = "なし";
+"active" = "アクティブ";
+"not_set" = "未設定";
+
+// MARK: - Workout Plans Screen
+"workout_plans" = "ワークアウトプラン";
+"execution_mode" = "実行方法";
+"single_plan" = "単体プラン";
+"cycle" = "サイクル";
+"active_plan" = "有効なプラン";
+"select_active_plan" = "有効なプランを選択";
+"no_active_cycle" = "アクティブなサイクルがありません";
+"no_plans_in_cycle" = "プランがありません";
+"edit_cycles" = "サイクルを編集";
+"plans" = "プラン一覧";
+"add_plan" = "プランを追加";
+"add_plan_subtitle" = "新しいワークアウトプランを作成";
+"no_plans" = "プランがありません";
+"create_plan_hint" = "上のカードからプランを作成しましょう";
+"new_plan" = "新しいプラン";
+"plan_name" = "プラン名";
+"enter_plan_name" = "プラン名を入力してください";
+
+// MARK: - Plan Card
+"days_unit" = "日";
+"exercises_unit" = "種目";
+
+// MARK: - Delete Plan
+"delete_plan" = "プランを削除";
+"delete_plan_confirm" = "「%@」を削除しますか？この操作は取り消せません。";
+"delete_active_plan" = "有効なプランを削除";
+"delete_active_plan_warning" = "このプランは現在有効に設定されています。削除すると有効なプランがなくなります。";

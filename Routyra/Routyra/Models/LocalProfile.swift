@@ -21,6 +21,9 @@ final class LocalProfile {
     /// Using UUID reference instead of relationship to avoid circular complexity.
     var activePlanId: UUID?
 
+    /// The execution mode for workouts (single plan or cycle).
+    var executionMode: ExecutionMode
+
     /// The hour at which the workout day transitions to the next day.
     /// Default is 3 (3:00 AM). Range: 0-23.
     /// For example, if set to 3, workouts after midnight but before 3am
@@ -33,6 +36,7 @@ final class LocalProfile {
         self.id = UUID()
         self.createdAt = Date()
         self.activePlanId = nil
+        self.executionMode = .single
         self.dayTransitionHour = 3
     }
 

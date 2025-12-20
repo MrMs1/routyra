@@ -13,13 +13,14 @@ struct ExerciseEntryCardView: View {
     @Binding var currentWeight: Double
     @Binding var currentReps: Int
     let onTap: () -> Void
-    let onLogSet: () -> Void
+    let onLogSet: () -> Bool
     let onAddSet: () -> Void
     let onRemovePlannedSet: (WorkoutSet) -> Void
     let onDeleteSet: (WorkoutSet) -> Void
     let onChangeExercise: () -> Void
 
     @State private var selectedSetIndex: Int?
+    @State private var logSuccessPulse: Bool = false
 
     private var activeSetIndex: Int? {
         sortedSets.firstIndex { !$0.isCompleted }
@@ -36,6 +37,16 @@ struct ExerciseEntryCardView: View {
 
     private var allSetsCompleted: Bool {
         !sortedSets.isEmpty && sortedSets.allSatisfy { $0.isCompleted }
+    }
+
+    /// Returns true if any set has been completed (used to restrict exercise change)
+    private var hasCompletedSets: Bool {
+        sortedSets.contains { $0.isCompleted }
+    }
+
+    /// Can change exercise only when no sets have been completed yet
+    private var canChangeExercise: Bool {
+        !hasCompletedSets
     }
 
     var body: some View {
@@ -66,7 +77,12 @@ struct ExerciseEntryCardView: View {
         VStack(alignment: .leading, spacing: 16) {
             // Header with exercise name and delete button (always same size)
             HStack {
-                Button(action: onChangeExercise) {
+                Button(action: {
+                    // Only allow change when no completed sets exist
+                    if canChangeExercise {
+                        onChangeExercise()
+                    }
+                }) {
                     HStack(spacing: 8) {
                         // Body part color dot
                         if let color = bodyPartColor {
@@ -80,9 +96,17 @@ struct ExerciseEntryCardView: View {
                             .fontWeight(.semibold)
                             .foregroundColor(AppColors.textPrimary)
 
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(AppColors.textMuted)
+                        // Show "変更" label and chevron only when exercise can be changed
+                        // (i.e., no completed sets exist)
+                        if canChangeExercise {
+                            Text("変更")
+                                .font(.caption)
+                                .foregroundColor(AppColors.textSecondary)
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(AppColors.textMuted)
+                        }
                     }
                 }
                 .buttonStyle(.plain)
@@ -90,7 +114,7 @@ struct ExerciseEntryCardView: View {
                 Spacer()
 
                 Button(action: {
-                    if let set = selectedSet, set.isCompleted {
+                    if let set = selectedSet {
                         onDeleteSet(set)
                         selectedSetIndex = nil
                     }
@@ -100,8 +124,8 @@ struct ExerciseEntryCardView: View {
                         .foregroundColor(AppColors.textMuted)
                         .padding(8)
                 }
-                .opacity(selectedSet?.isCompleted == true ? 1 : 0)
-                .disabled(selectedSet?.isCompleted != true)
+                .opacity(selectedSet != nil ? 1 : 0)
+                .disabled(selectedSet == nil)
             }
             .padding(.top, 16)
             .padding(.horizontal, 16)
@@ -112,18 +136,22 @@ struct ExerciseEntryCardView: View {
                     activeSetIndex: activeSetIndex,
                     selectedSetIndex: $selectedSetIndex,
                     onCompletedSetTap: handleCompletedSetTap,
-                    onFutureSetLongPress: handleFutureSetLongPress
+                    onFutureSetLongPress: handleFutureSetLongPress,
+                    pulse: logSuccessPulse
                 )
                 .padding(.leading, 16)
 
                 VStack(spacing: 16) {
                     WeightRepsInputView(
                         weight: $currentWeight,
-                        reps: $currentReps
+                        reps: $currentReps,
+                        pulse: logSuccessPulse
                     )
 
-                    if allSetsCompleted && selectedSetIndex == nil {
+                    // Show "Add Set" when all sets completed OR viewing a completed set
+                    if allSetsCompleted || selectedSet?.isCompleted == true {
                         Button(action: {
+                            selectedSetIndex = nil
                             onAddSet()
                         }) {
                             Text("+ Add Set")
@@ -138,7 +166,18 @@ struct ExerciseEntryCardView: View {
                     } else {
                         Button(action: {
                             selectedSetIndex = nil
-                            onLogSet()
+                            let success = onLogSet()
+                            if success {
+                                // Trigger success animation
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    logSuccessPulse = true
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    withAnimation(.easeInOut(duration: 0.1)) {
+                                        logSuccessPulse = false
+                                    }
+                                }
+                            }
                         }) {
                             Text("+ Log Set")
                                 .font(.headline)
@@ -149,6 +188,7 @@ struct ExerciseEntryCardView: View {
                                 .background(AppColors.accentBlue)
                                 .cornerRadius(10)
                         }
+                        .sensoryFeedback(.success, trigger: logSuccessPulse)
                     }
 
                     Button(action: {}) {
@@ -221,11 +261,47 @@ struct ExerciseEntryCardView: View {
     }
 }
 
+// MARK: - Value With Unit View
+
+/// Displays a numeric value with a unit label, properly aligned at baseline.
+/// Used for weight (kg) and reps display in workout cards.
+struct ValueWithUnitView: View {
+    let value: String
+    let unit: String
+    let valueFont: Font
+    let valueFontSize: CGFloat
+    let unitFontSize: CGFloat
+    var valueColor: Color = AppColors.textPrimary
+    var unitColor: Color = AppColors.textSecondary
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(value)
+                .font(valueFont)
+                .foregroundColor(valueColor)
+
+            Text(unit)
+                .font(.system(size: unitFontSize, weight: .medium, design: .rounded))
+                .foregroundColor(unitColor)
+                .baselineOffset(baselineOffsetForUnit)
+        }
+    }
+
+    /// Calculate baseline offset to visually align the unit with the number
+    /// Smaller unit fonts need a slight upward offset to look aligned
+    private var baselineOffsetForUnit: CGFloat {
+        // Offset proportional to the size difference
+        let sizeDiff = valueFontSize - unitFontSize
+        return sizeDiff * 0.08
+    }
+}
+
 // MARK: - Weight/Reps Input View with editable appearance
 
 struct WeightRepsInputView: View {
     @Binding var weight: Double
     @Binding var reps: Int
+    var pulse: Bool = false
 
     @State private var weightText = ""
     @State private var repsText = ""
@@ -234,6 +310,11 @@ struct WeightRepsInputView: View {
 
     @FocusState private var weightFieldFocused: Bool
     @FocusState private var repsFieldFocused: Bool
+
+    // Font sizes
+    private let weightFontSize: CGFloat = 32
+    private let repsFontSize: CGFloat = 38
+    private let unitFontSize: CGFloat = 14
 
     private func formatWeight(_ weight: Double) -> String {
         if weight.truncatingRemainder(dividingBy: 1) == 0 {
@@ -244,82 +325,99 @@ struct WeightRepsInputView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Weight input
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                if isEditingWeight {
-                    TextField("", text: $weightText)
-                        .keyboardType(.decimalPad)
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundColor(AppColors.textPrimary)
-                        .frame(width: 70)
-                        .multilineTextAlignment(.trailing)
-                        .focused($weightFieldFocused)
-                        .onChange(of: weightFieldFocused) { _, focused in
-                            if !focused {
-                                if let value = Double(weightText) {
-                                    weight = value
-                                }
-                                isEditingWeight = false
-                            }
-                        }
-                        .onAppear {
-                            weightText = formatWeight(weight)
-                            weightFieldFocused = true
-                        }
-                } else {
-                    Text(formatWeight(weight))
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundColor(AppColors.textPrimary)
+            // Weight input group
+            weightInputGroup
+                .onTapGesture {
+                    isEditingWeight = true
                 }
 
-                Text("kg")
-                    .font(.system(size: 13))
-                    .foregroundColor(AppColors.textMuted)
-            }
-            .onTapGesture {
-                isEditingWeight = true
-            }
-
+            // Separator
             Text("×")
-                .font(.system(size: 14))
+                .font(.system(size: 16, weight: .medium, design: .rounded))
                 .foregroundColor(AppColors.textMuted)
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10)
 
-            // Reps input
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                if isEditingReps {
-                    TextField("", text: $repsText)
-                        .keyboardType(.numberPad)
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(AppColors.textPrimary)
-                        .frame(width: 50)
-                        .multilineTextAlignment(.leading)
-                        .focused($repsFieldFocused)
-                        .onChange(of: repsFieldFocused) { _, focused in
-                            if !focused {
-                                if let value = Int(repsText) {
-                                    reps = value
-                                }
-                                isEditingReps = false
-                            }
-                        }
-                        .onAppear {
-                            repsText = "\(reps)"
-                            repsFieldFocused = true
-                        }
-                } else {
-                    Text("\(reps)")
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(AppColors.textPrimary)
+            // Reps input group
+            repsInputGroup
+                .onTapGesture {
+                    isEditingReps = true
                 }
+        }
+        .scaleEffect(pulse ? 1.05 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: pulse)
+    }
 
-                Text("reps")
-                    .font(.system(size: 13))
-                    .foregroundColor(AppColors.textMuted)
+    // MARK: - Weight Input
+
+    private var weightInputGroup: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            if isEditingWeight {
+                TextField("", text: $weightText)
+                    .keyboardType(.decimalPad)
+                    .font(.system(size: weightFontSize, weight: .semibold, design: .rounded))
+                    .foregroundColor(AppColors.textPrimary)
+                    .frame(width: 70)
+                    .multilineTextAlignment(.trailing)
+                    .focused($weightFieldFocused)
+                    .onChange(of: weightFieldFocused) { _, focused in
+                        if !focused {
+                            if let value = Double(weightText) {
+                                weight = value
+                            }
+                            isEditingWeight = false
+                        }
+                    }
+                    .onAppear {
+                        weightText = formatWeight(weight)
+                        weightFieldFocused = true
+                    }
+            } else {
+                Text(formatWeight(weight))
+                    .font(.system(size: weightFontSize, weight: .semibold, design: .rounded))
+                    .foregroundColor(AppColors.textPrimary)
             }
-            .onTapGesture {
-                isEditingReps = true
+
+            Text("kg")
+                .font(.system(size: unitFontSize, weight: .medium, design: .rounded))
+                .foregroundColor(AppColors.textSecondary)
+                .baselineOffset((weightFontSize - unitFontSize) * 0.08)
+        }
+    }
+
+    // MARK: - Reps Input
+
+    private var repsInputGroup: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            if isEditingReps {
+                TextField("", text: $repsText)
+                    .keyboardType(.numberPad)
+                    .font(.system(size: repsFontSize, weight: .bold, design: .rounded))
+                    .foregroundColor(AppColors.textPrimary)
+                    .frame(width: 55)
+                    .multilineTextAlignment(.leading)
+                    .focused($repsFieldFocused)
+                    .onChange(of: repsFieldFocused) { _, focused in
+                        if !focused {
+                            if let value = Int(repsText) {
+                                reps = value
+                            }
+                            isEditingReps = false
+                        }
+                    }
+                    .onAppear {
+                        repsText = "\(reps)"
+                        repsFieldFocused = true
+                    }
+            } else {
+                Text("\(reps)")
+                    .font(.system(size: repsFontSize, weight: .bold, design: .rounded))
+                    .foregroundColor(AppColors.textPrimary)
             }
+
+            Text("reps")
+                .font(.system(size: unitFontSize, weight: .medium, design: .rounded))
+                .foregroundColor(AppColors.textSecondary)
+                .baselineOffset((repsFontSize - unitFontSize) * 0.08)
         }
     }
 }
@@ -332,6 +430,7 @@ struct SetDotsView: View {
     @Binding var selectedSetIndex: Int?
     let onCompletedSetTap: (Int) -> Void
     let onFutureSetLongPress: (Int) -> Void
+    var pulse: Bool = false
 
     private let dotSize: CGFloat = 26
     private let dotSpacing: CGFloat = 8
@@ -365,44 +464,35 @@ struct SetDotsView: View {
                     .frame(width: lineWidth)
                     .frame(height: lineHeight)
                     .offset(y: dotSize / 2)
+                    .opacity(pulse ? 1.0 : 0.8)
+                    .scaleEffect(x: pulse ? 1.5 : 1.0, y: 1.0)
                     .animation(.easeOut(duration: 0.3), value: lineSegmentCount)
+                    .animation(.easeInOut(duration: 0.15), value: pulse)
             }
 
             // Dots
             VStack(spacing: dotSpacing) {
                 ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
-                    let isActive = activeSetIndex == index && selectedSetIndex == nil
-                    let isSelected = selectedSetIndex == index
-
-                    ZStack {
-                        if isActive || isSelected {
-                            // Background circle to cover the progress line
-                            Circle()
-                                .fill(AppColors.cardBackground)
-                                .frame(width: dotSize, height: dotSize)
-
-                            Circle()
-                                .stroke(isSelected ? AppColors.accentBlue : AppColors.textSecondary, lineWidth: 1.5)
-                                .frame(width: dotSize, height: dotSize)
-
-                            Text("\(index + 1)")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(isSelected ? AppColors.accentBlue : AppColors.textPrimary)
-                        } else {
-                            Circle()
-                                .fill(set.isCompleted ? AppColors.dotFilled : AppColors.dotEmpty)
-                                .frame(width: 10, height: 10)
-                        }
-                    }
-                    .frame(width: dotSize, height: dotSize)
+                    SetDotView(
+                        index: index,
+                        set: set,
+                        isActive: activeSetIndex == index && selectedSetIndex == nil,
+                        isSelected: selectedSetIndex == index,
+                        dotSize: dotSize
+                    )
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if set.isCompleted {
+                        if selectedSetIndex == index {
+                            // Tap on selected set clears selection
+                            selectedSetIndex = nil
+                        } else if set.isCompleted {
+                            // Tap on completed set selects it
                             onCompletedSetTap(index)
                         } else if index == activeSetIndex {
-                            // Tap on active set clears selection
-                            selectedSetIndex = nil
+                            // Tap on active set (first incomplete) selects it
+                            selectedSetIndex = index
                         }
+                        // Tap on future incomplete sets (beyond active) does nothing
                     }
                     .onLongPressGesture(minimumDuration: 0.3) {
                         if !set.isCompleted && index != activeSetIndex {
@@ -412,6 +502,42 @@ struct SetDotsView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Set Dot View
+
+/// Individual dot representing a set in the progress indicator.
+/// Extracted as a separate view to ensure proper state updates.
+private struct SetDotView: View {
+    let index: Int
+    let set: WorkoutSet
+    let isActive: Bool
+    let isSelected: Bool
+    let dotSize: CGFloat
+
+    var body: some View {
+        ZStack {
+            if isActive || isSelected {
+                // Background circle to cover the progress line
+                Circle()
+                    .fill(AppColors.cardBackground)
+                    .frame(width: dotSize, height: dotSize)
+
+                Circle()
+                    .stroke(isSelected ? AppColors.accentBlue : AppColors.textSecondary, lineWidth: 1.5)
+                    .frame(width: dotSize, height: dotSize)
+
+                Text("\(index + 1)")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(isSelected ? AppColors.accentBlue : AppColors.textPrimary)
+            } else {
+                Circle()
+                    .fill(set.isCompleted ? AppColors.dotFilled : AppColors.dotEmpty)
+                    .frame(width: 10, height: 10)
+            }
+        }
+        .frame(width: dotSize, height: dotSize)
     }
 }
 
@@ -435,7 +561,7 @@ struct SetDotsView: View {
         currentWeight: .constant(60),
         currentReps: .constant(8),
         onTap: {},
-        onLogSet: {},
+        onLogSet: { true },
         onAddSet: {},
         onRemovePlannedSet: { _ in },
         onDeleteSet: { _ in },

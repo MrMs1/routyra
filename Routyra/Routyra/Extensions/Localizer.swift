@@ -17,13 +17,22 @@ enum Localizer {
     /// Returns the current device language code.
     /// Falls back to "en" if the device language is not supported.
     nonisolated static var currentLanguageCode: String {
-        // Get device language code
+        // First check preferred languages (most reliable for app language)
+        for preferred in Locale.preferredLanguages {
+            // Extract language code (e.g., "ja-JP" -> "ja", "en-US" -> "en")
+            let code = String(preferred.prefix(2))
+            if supportedLanguages.contains(code) {
+                return code
+            }
+        }
+
+        // Fallback to Locale.current
         if let languageCode = Locale.current.language.languageCode?.identifier {
-            // Check if this language is supported
             if supportedLanguages.contains(languageCode) {
                 return languageCode
             }
         }
+
         return defaultLanguageCode
     }
 

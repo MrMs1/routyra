@@ -13,6 +13,7 @@ struct CycleEditorView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.editMode) private var editMode
 
     @State private var showPlanPicker: Bool = false
     @State private var items: [PlanCycleItem] = []
@@ -110,7 +111,13 @@ struct CycleEditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                EditButton()
+                Button {
+                    withAnimation {
+                        editMode?.wrappedValue = editMode?.wrappedValue == .active ? .inactive : .active
+                    }
+                } label: {
+                    Text(editMode?.wrappedValue == .active ? "完了" : "並び替え")
+                }
             }
         }
         .sheet(isPresented: $showPlanPicker) {

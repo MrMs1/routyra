@@ -8,6 +8,16 @@
 
 import Foundation
 
+// MARK: - Execution Mode
+
+/// Defines how the user executes their workout routine.
+enum ExecutionMode: String, Codable, CaseIterable {
+    /// Single plan mode: user selects one active plan.
+    case single
+    /// Cycle mode: user rotates through multiple plans in a cycle.
+    case cycle
+}
+
 // MARK: - Exercise Scope
 
 /// Defines whether an exercise is a global preset or user-created.
