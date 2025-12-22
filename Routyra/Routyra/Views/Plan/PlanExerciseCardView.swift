@@ -54,7 +54,7 @@ struct PlanExerciseCardView: View {
                                 .frame(width: 8, height: 8)
                         }
 
-                        Text(exercise?.localizedName ?? "不明な種目")
+                        Text(exercise?.localizedName ?? L10n.tr("unknown_exercise"))
                             .font(.headline)
                             .foregroundColor(AppColors.textPrimary)
 
@@ -90,7 +90,7 @@ struct PlanExerciseCardView: View {
             // Set list (mini card rows - read-only)
             let sets = planExercise.sortedPlannedSets
             if sets.isEmpty {
-                Text("セットが設定されていません")
+                Text("no_sets_configured")
                     .font(.caption)
                     .foregroundColor(AppColors.textMuted)
                     .padding(.vertical, 4)

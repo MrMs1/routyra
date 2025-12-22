@@ -12,12 +12,12 @@ struct HistoryView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 16) {
-                Text("History")
+                Text("history")
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .foregroundColor(AppColors.textPrimary)
 
-                Text("Weekly and monthly workout history")
+                Text("history_subtitle")
                     .font(.subheadline)
                     .foregroundColor(AppColors.textSecondary)
             }

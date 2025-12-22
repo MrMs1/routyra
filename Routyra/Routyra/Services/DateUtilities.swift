@@ -159,7 +159,7 @@ enum DateUtilities {
     /// - Returns: Formatted date string.
     nonisolated static func formatShort(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "EEE, MMM d"
+        formatter.setLocalizedDateFormatFromTemplate("EEE MMM d")
         return formatter.string(from: date)
     }
 

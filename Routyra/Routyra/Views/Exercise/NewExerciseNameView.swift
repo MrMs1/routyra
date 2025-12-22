@@ -30,7 +30,7 @@ struct NewExerciseNameView: View {
     var body: some View {
         Form {
             Section {
-                TextField("エクササイズ名", text: $exerciseName)
+                TextField("exercise_name_placeholder", text: $exerciseName)
                     .focused($isNameFieldFocused)
                     .textInputAutocapitalization(.words)
                     .submitLabel(.done)
@@ -40,9 +40,9 @@ struct NewExerciseNameView: View {
                         }
                     }
             } header: {
-                Text("エクササイズ名を入力")
+                Text("exercise_name_section_title")
             } footer: {
-                Text("部位: \(bodyPart.name)")
+                Text(L10n.tr("exercise_body_part_label", bodyPart.localizedName))
                     .foregroundColor(AppColors.textMuted)
             }
 
@@ -57,11 +57,11 @@ struct NewExerciseNameView: View {
                 }
             }
         }
-        .navigationTitle("新しいエクササイズ")
+        .navigationTitle("exercise_new_title")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("保存") {
+                Button("save") {
                     saveExercise()
                 }
                 .disabled(isSaveDisabled)
@@ -70,10 +70,10 @@ struct NewExerciseNameView: View {
         .onAppear {
             isNameFieldFocused = true
         }
-        .alert("エラー", isPresented: $isShowingError) {
-            Button("OK", role: .cancel) { }
+        .alert("error_title", isPresented: $isShowingError) {
+            Button("ok", role: .cancel) { }
         } message: {
-            Text(errorMessage ?? "不明なエラーが発生しました")
+            Text(errorMessage ?? L10n.tr("error_unknown"))
         }
     }
 
@@ -103,7 +103,7 @@ struct NewExerciseNameView: View {
             }
         } catch {
             // Unexpected error
-            errorMessage = "保存に失敗しました: \(error.localizedDescription)"
+            errorMessage = L10n.tr("exercise_save_failed", error.localizedDescription)
             isShowingError = true
         }
 

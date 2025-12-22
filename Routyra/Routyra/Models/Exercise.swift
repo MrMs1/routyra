@@ -163,7 +163,7 @@ final class Exercise {
         }
 
         // 5. Last resort: code
-        return code ?? "Unknown"
+        return code ?? L10n.tr("unknown")
     }
 
     // MARK: - Translation Management

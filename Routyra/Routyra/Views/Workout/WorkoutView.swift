@@ -34,6 +34,11 @@ struct WorkoutView: View {
     @State private var activeCycle: PlanCycle?
     @State private var cycleStateInfo: (cycleName: String, planName: String, dayInfo: String)?
 
+    // Day change support
+    @State private var showDayChangeDialog = false
+    @State private var pendingDayChange: Int? = nil
+    @State private var skipCurrentDay = false
+
     private var transitionHour: Int {
         profile?.dayTransitionHour ?? 3
     }
@@ -42,16 +47,38 @@ struct WorkoutView: View {
         DateUtilities.todayWorkoutDate(transitionHour: transitionHour)
     }
 
+    private var selectedWorkoutDate: Date {
+        DateUtilities.startOfDay(selectedDate)
+    }
+
     private var isViewingToday: Bool {
-        DateUtilities.isSameWorkoutDay(selectedDate, Date(), transitionHour: transitionHour)
+        DateUtilities.isSameDay(selectedWorkoutDate, todayWorkoutDate)
     }
 
     private var selectedWorkoutDay: WorkoutDay? {
-        workoutDays.first { DateUtilities.isSameWorkoutDay($0.date, selectedDate, transitionHour: transitionHour) }
+        workoutDays.first { DateUtilities.isSameDay($0.date, selectedWorkoutDate) }
     }
 
     private var sortedEntries: [WorkoutExerciseEntry] {
         selectedWorkoutDay?.sortedEntries ?? []
+    }
+
+    /// Whether to show empty state (selected date's entries are empty)
+    private var shouldShowEmptyState: Bool {
+        sortedEntries.isEmpty
+    }
+
+    /// Most recent workout day with entries (excluding today), used for "copy previous" feature
+    private var lastWorkoutDay: WorkoutDay? {
+        let today = todayWorkoutDate
+        return workoutDays.first { workoutDay in
+            !DateUtilities.isSameDay(workoutDay.date, today) && !workoutDay.sortedEntries.isEmpty
+        }
+    }
+
+    /// Whether "copy previous workout" option should be shown
+    private var canCopyPreviousWorkout: Bool {
+        lastWorkoutDay != nil
     }
 
     private var currentWeekStart: Date? {
@@ -97,143 +124,281 @@ struct WorkoutView: View {
         Dictionary(uniqueKeysWithValues: bodyParts.map { ($0.id, $0) })
     }
 
+    /// Whether day context view should be shown (plan or cycle is active, regardless of date)
+    private var shouldShowDayContext: Bool {
+        guard let profile = profile else { return false }
+
+        switch profile.executionMode {
+        case .single:
+            return profile.activePlanId != nil
+        case .cycle:
+            return activeCycle != nil
+        }
+    }
+
+    /// Current day info for DayContextView (unified for both modes)
+    /// Calculates based on:
+    /// 1. If selectedWorkoutDay exists with routineDayId - resolve from that
+    /// 2. If no WorkoutDay exists - calculate preview from progress + date difference
+    private var currentDayContextInfo: (dayIndex: Int, totalDays: Int, dayName: String?, planId: UUID?)? {
+        guard let profile = profile else { return nil }
+
+        switch profile.executionMode {
+        case .single:
+            return getSinglePlanDayInfo()
+        case .cycle:
+            return getCycleDayInfo()
+        }
+    }
+
+    /// Gets day info for single plan mode
+    private func getSinglePlanDayInfo() -> (dayIndex: Int, totalDays: Int, dayName: String?, planId: UUID?)? {
+        guard let profile = profile,
+              profile.executionMode == .single,
+              let planId = profile.activePlanId else {
+            return nil
+        }
+
+        // If selected date has a WorkoutDay with routineDayId, resolve from it
+        if let workoutDay = selectedWorkoutDay,
+           let routineDayId = workoutDay.routineDayId,
+           workoutDay.routinePresetId == planId {
+            if let info = PlanService.getDayInfo(
+                planDayId: routineDayId,
+                planId: planId,
+                modelContext: modelContext
+            ) {
+                return (info.dayIndex, info.totalDays, info.dayName, planId)
+            }
+        }
+
+        // No WorkoutDay or couldn't resolve - calculate preview
+        if let info = PlanService.getPreviewDayInfo(
+            profile: profile,
+            targetDate: selectedWorkoutDate,
+            todayDate: todayWorkoutDate,
+            modelContext: modelContext
+        ) {
+            return (info.dayIndex, info.totalDays, info.dayName, info.planId)
+        }
+
+        return nil
+    }
+
+    /// Gets day info for cycle mode
+    private func getCycleDayInfo() -> (dayIndex: Int, totalDays: Int, dayName: String?, planId: UUID?)? {
+        guard let cycle = activeCycle else { return nil }
+
+        // If selected date has a WorkoutDay with routineDayId, resolve from it
+        if let workoutDay = selectedWorkoutDay,
+           let routineDayId = workoutDay.routineDayId {
+            if let info = CycleService.getDayInfo(
+                planDayId: routineDayId,
+                cycle: cycle,
+                modelContext: modelContext
+            ) {
+                // Get current plan ID for day change
+                let planId = workoutDay.routinePresetId
+                return (info.dayIndex, info.totalDays, info.dayName, planId)
+            }
+        }
+
+        // No WorkoutDay or couldn't resolve - calculate preview
+        if let info = CycleService.getPreviewDayInfo(
+            cycle: cycle,
+            targetDate: selectedWorkoutDate,
+            todayDate: todayWorkoutDate,
+            modelContext: modelContext
+        ) {
+            // Get current plan ID from cycle progress
+            let items = cycle.sortedItems
+            let planId = cycle.progress.flatMap { progress in
+                progress.currentItemIndex < items.count ? items[progress.currentItemIndex].planId : nil
+            }
+            return (info.dayIndex, info.totalDays, info.dayName, planId)
+        }
+
+        return nil
+    }
+
+    /// Whether day can be changed (only when completed sets == 0 and plan has > 1 day)
+    private var canChangeDay: Bool {
+        // Can't change if only 1 day in the plan
+        guard let dayInfo = currentDayContextInfo, dayInfo.totalDays > 1 else {
+            return false
+        }
+
+        // Can change if no workout exists yet
+        guard let workoutDay = selectedWorkoutDay else { return true }
+
+        // Can't change if already started (has completed sets)
+        return workoutDay.totalCompletedSets == 0
+    }
+
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            ZStack(alignment: .bottom) {
-                AppColors.background
-                    .ignoresSafeArea()
+            VStack(spacing: 0) {
+                WorkoutHeaderView(
+                    date: selectedDate,
+                    streakCount: 12,
+                    isViewingToday: isViewingToday,
+                    onDateTap: handleDateTap
+                )
 
-                VStack(spacing: 0) {
-                    WorkoutHeaderView(
-                        date: selectedDate,
-                        streakCount: 12,
-                        isViewingToday: isViewingToday,
-                        onDateTap: handleDateTap
+                // Day context (when plan or cycle is active - shows for any selected date)
+                if shouldShowDayContext, let dayInfo = currentDayContextInfo {
+                    DayContextView(
+                        currentDayIndex: dayInfo.dayIndex,
+                        totalDays: dayInfo.totalDays,
+                        dayName: dayInfo.dayName,
+                        canChangeDay: canChangeDay,
+                        onPrevious: {
+                            let prevDay = dayInfo.dayIndex > 1 ? dayInfo.dayIndex - 1 : dayInfo.totalDays
+                            requestDayChange(to: prevDay)
+                        },
+                        onNext: {
+                            let nextDay = dayInfo.dayIndex < dayInfo.totalDays ? dayInfo.dayIndex + 1 : 1
+                            requestDayChange(to: nextDay)
+                        },
+                        onTapPlanLabel: {
+                            // Navigate to Plans tab when plan label is tapped
+                            navigateToRoutines = true
+                        }
                     )
+                }
 
-                    // Cycle context (when active cycle exists and viewing today)
-                    if isViewingToday, let info = cycleStateInfo {
-                        CycleContextView(
-                            cycleName: info.cycleName,
-                            planName: info.planName,
-                            dayInfo: info.dayInfo,
-                            onComplete: {
-                                completeAndAdvanceCycle()
-                            }
-                        )
-                    }
-
-                    WeeklyActivityStripView(
-                        dayProgress: weeklyProgress,
-                        selectedDayIndex: selectedDayIndex,
-                        onDayTap: selectDay
+                // Cycle context (when active cycle exists and viewing today) - shows cycle/plan name + complete button
+                if isViewingToday, let info = cycleStateInfo {
+                    CycleContextView(
+                        cycleName: info.cycleName,
+                        planName: info.planName,
+                        dayInfo: info.dayInfo,
+                        onComplete: {
+                            completeAndAdvanceCycle()
+                        }
                     )
+                }
 
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: 8) {
-                                ForEach(Array(sortedEntries.enumerated()), id: \.element.id) { index, entry in
-                                    let isExpanded = expandedEntryId == entry.id
-                                    let exerciseName = getExerciseName(for: entry.exerciseId)
-                                    let bodyPartColor = getBodyPartColor(for: entry.exerciseId)
+                WeeklyActivityStripView(
+                    dayProgress: weeklyProgress,
+                    selectedDayIndex: selectedDayIndex,
+                    onDayTap: selectDay
+                )
 
-                                    ExerciseEntryCardView(
-                                        entry: entry,
-                                        exerciseName: exerciseName,
-                                        bodyPartColor: bodyPartColor,
-                                        isExpanded: isExpanded,
-                                        currentWeight: $currentWeight,
-                                        currentReps: $currentReps,
-                                        onTap: {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                expandedEntryId = isExpanded ? nil : entry.id
-                                            }
-                                            // Update weight/reps to next incomplete set's values
-                                            if !isExpanded {
-                                                updateCurrentWeightReps(for: entry)
-                                            }
-                                        },
-                                        onLogSet: {
-                                            return logSet(for: entry, scrollProxy: proxy)
-                                        },
-                                        onAddSet: {
-                                            addSet(to: entry)
-                                        },
-                                        onRemovePlannedSet: { set in
-                                            removePlannedSet(set, from: entry)
-                                        },
-                                        onDeleteSet: { set in
-                                            deleteCompletedSet(set, from: entry)
-                                        },
-                                        onChangeExercise: {
-                                            navigationPath.append(
-                                                WorkoutDestination.exerciseChanger(
-                                                    entryId: entry.id,
-                                                    currentExerciseId: entry.exerciseId
-                                                )
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 8) {
+                            ForEach(Array(sortedEntries.enumerated()), id: \.element.id) { index, entry in
+                                let isExpanded = expandedEntryId == entry.id
+                                let exerciseName = getExerciseName(for: entry.exerciseId)
+                                let bodyPartColor = getBodyPartColor(for: entry.exerciseId)
+
+                                ExerciseEntryCardView(
+                                    entry: entry,
+                                    exerciseName: exerciseName,
+                                    bodyPartColor: bodyPartColor,
+                                    isExpanded: isExpanded,
+                                    currentWeight: $currentWeight,
+                                    currentReps: $currentReps,
+                                    onTap: {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            expandedEntryId = isExpanded ? nil : entry.id
+                                        }
+                                        // Update weight/reps to next incomplete set's values
+                                        if !isExpanded {
+                                            updateCurrentWeightReps(for: entry)
+                                        }
+                                    },
+                                    onLogSet: {
+                                        return logSet(for: entry, scrollProxy: proxy)
+                                    },
+                                    onAddSet: {
+                                        addSet(to: entry)
+                                    },
+                                    onRemovePlannedSet: { set in
+                                        removePlannedSet(set, from: entry)
+                                    },
+                                    onDeleteSet: { set in
+                                        deleteCompletedSet(set, from: entry)
+                                    },
+                                    onDeleteEntry: {
+                                        deleteEntry(entry)
+                                    },
+                                    onChangeExercise: {
+                                        navigationPath.append(
+                                            WorkoutDestination.exerciseChanger(
+                                                entryId: entry.id,
+                                                currentExerciseId: entry.exerciseId
                                             )
-                                        }
-                                    )
-                                    .id(entry.id)
-
-                                    if shouldShowAd(afterIndex: index) {
-                                        AdPlaceholderView()
+                                        )
                                     }
-                                }
+                                )
+                                .id(entry.id)
 
-                                if sortedEntries.isEmpty {
-                                    EmptyWorkoutView(
-                                        onAddExercise: {
-                                            navigationPath.append(WorkoutDestination.exercisePicker)
-                                        },
-                                        onCreatePlan: {
-                                            navigateToRoutines = true
-                                        }
-                                    )
-                                } else {
-                                    // Add exercise card at bottom of list
-                                    AddExerciseCard {
+                                if shouldShowAd(afterIndex: index) {
+                                    AdPlaceholderView()
+                                }
+                            }
+
+                            if shouldShowEmptyState {
+                                EmptyStateView(
+                                    isToday: isViewingToday,
+                                    showCopyOption: canCopyPreviousWorkout,
+                                    onCreatePlan: {
+                                        navigateToRoutines = true
+                                    },
+                                    onCopyPrevious: {
+                                        copyPreviousWorkout()
+                                    },
+                                    onAddExercise: {
                                         navigationPath.append(WorkoutDestination.exercisePicker)
                                     }
+                                )
+                            } else {
+                                // Add exercise card at bottom of list (only when entries exist)
+                                AddExerciseCard {
+                                    navigationPath.append(WorkoutDestination.exercisePicker)
                                 }
                             }
-                            .padding(.horizontal)
-                            .padding(.bottom, UIScreen.main.bounds.height * 0.6)
                         }
-                        .scrollDismissesKeyboard(.interactively)
+                        .padding(.horizontal)
                     }
-
-                    Spacer(minLength: 0)
-                }
-
-                VStack(spacing: 0) {
-                    if let message = snackBarMessage {
-                        SnackBarView(
-                            message: message,
-                            onUndo: {
-                                snackBarUndoAction?()
-                                dismissSnackBar()
-                            },
-                            onAdjustWeight: { delta in
-                                currentWeight += delta
-                            },
-                            onAdjustReps: { delta in
-                                currentReps += delta
-                            },
-                            onDismiss: {
-                                dismissSnackBar()
+                    .id(selectedWorkoutDate) // Force fresh render when date changes to prevent flicker
+                    .scrollDismissesKeyboard(.interactively)
+                    .safeAreaInset(edge: .bottom) {
+                        VStack(spacing: 0) {
+                            if let message = snackBarMessage {
+                                SnackBarView(
+                                    message: message,
+                                    onUndo: {
+                                        snackBarUndoAction?()
+                                        dismissSnackBar()
+                                    },
+                                    onAdjustWeight: { delta in
+                                        currentWeight += delta
+                                    },
+                                    onAdjustReps: { delta in
+                                        currentReps += delta
+                                    },
+                                    onDismiss: {
+                                        dismissSnackBar()
+                                    }
+                                )
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
                             }
-                        )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
 
-                    BottomStatusBarView(
-                        sets: selectedWorkoutDay?.totalCompletedSets ?? 0,
-                        exercises: selectedWorkoutDay?.totalExercisesWithSets ?? 0,
-                        volume: Double(truncating: (selectedWorkoutDay?.totalVolume ?? 0) as NSNumber)
-                    )
+                            if !sortedEntries.isEmpty {
+                                BottomStatusBarView(
+                                    sets: selectedWorkoutDay?.totalCompletedSets ?? 0,
+                                    exercises: selectedWorkoutDay?.totalExercisesWithSets ?? 0,
+                                    volume: Double(truncating: (selectedWorkoutDay?.totalVolume ?? 0) as NSNumber)
+                                )
+                            }
+                        }
+                    }
                 }
             }
+            .background(AppColors.background)
             .navigationBarHidden(true)
             .navigationDestination(for: WorkoutDestination.self) { destination in
                 switch destination {
@@ -297,10 +462,44 @@ struct WorkoutView: View {
                 expandedEntryId = nil
             }
         }
+        .overlay {
+            // Day change confirmation dialog (custom overlay instead of sheet for better control)
+            if showDayChangeDialog, let newDay = pendingDayChange {
+                ZStack {
+                    Color.black.opacity(0.5)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showDayChangeDialog = false
+                                pendingDayChange = nil
+                            }
+                        }
+
+                    DayChangeDialogView(
+                        targetDayIndex: newDay,
+                        onConfirm: { skipAndAdvance in
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showDayChangeDialog = false
+                            }
+                            executeDayChange(to: newDay, skipAndAdvance: skipAndAdvance)
+                            pendingDayChange = nil
+                        },
+                        onCancel: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showDayChangeDialog = false
+                                pendingDayChange = nil
+                            }
+                        }
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+                .animation(.easeInOut(duration: 0.2), value: showDayChangeDialog)
+            }
+        }
     }
 
     private func getExerciseName(for exerciseId: UUID) -> String {
-        exercises.first { $0.id == exerciseId }?.localizedName ?? "Unknown Exercise"
+        exercises.first { $0.id == exerciseId }?.localizedName ?? L10n.tr("workout_unknown_exercise")
     }
 
     private func getBodyPartColor(for exerciseId: UUID) -> Color? {
@@ -325,11 +524,10 @@ struct WorkoutView: View {
     }
 
     private func handleDateTap() {
-        if isViewingToday {
-            navigateToHistory = true
-        } else {
+        // Always return to today's workout
+        if !isViewingToday {
             withAnimation(.easeInOut(duration: 0.2)) {
-                selectedDate = Date()
+                selectedDate = todayWorkoutDate
             }
         }
     }
@@ -380,6 +578,184 @@ struct WorkoutView: View {
         }
     }
 
+    // MARK: - Day Change
+
+    private func requestDayChange(to newDayIndex: Int) {
+        guard canChangeDay else { return }
+        pendingDayChange = newDayIndex
+        skipCurrentDay = false
+        showDayChangeDialog = true
+    }
+
+    private func executeDayChange(to newDayIndex: Int, skipAndAdvance: Bool) {
+        guard let profile = profile else { return }
+
+        // Get or create WorkoutDay for the selected date
+        var workoutDay = selectedWorkoutDay
+        if workoutDay == nil {
+            // Create a new WorkoutDay for day change
+            workoutDay = createWorkoutDayForDayChange(newDayIndex: newDayIndex)
+        }
+
+        guard let workoutDay = workoutDay else { return }
+
+        // Store previous state for undo
+        let previousRoutineDayId = workoutDay.routineDayId
+        let previousEntries = workoutDay.entries.map { entry -> (exerciseId: UUID, orderIndex: Int, sets: [(weight: Decimal, reps: Int, isCompleted: Bool)]) in
+            let sets = entry.sortedSets.map { ($0.weight, $0.reps, $0.isCompleted) }
+            return (entry.exerciseId, entry.orderIndex, sets)
+        }
+
+        var success = false
+
+        switch profile.executionMode {
+        case .single:
+            if let planId = profile.activePlanId {
+                success = PlanService.changeDay(
+                    profile: profile,
+                    workoutDay: workoutDay,
+                    planId: planId,
+                    to: newDayIndex,
+                    skipAndAdvance: skipAndAdvance,
+                    modelContext: modelContext
+                )
+            }
+        case .cycle:
+            if let cycle = activeCycle {
+                success = CycleService.changeDay(
+                    cycle: cycle,
+                    workoutDay: workoutDay,
+                    to: newDayIndex,
+                    skipAndAdvance: skipAndAdvance,
+                    modelContext: modelContext
+                )
+            }
+        }
+
+        if success {
+            // Reload cycle info (day info is computed dynamically)
+            loadActiveCycle()
+
+            // Expand the first entry if exists
+            if let first = sortedEntries.first {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    expandedEntryId = first.id
+                }
+            }
+
+            // Show feedback with undo
+            showSnackBar(
+                message: L10n.tr("day_changed_success", newDayIndex),
+                undoAction: { [weak workoutDay] in
+                    self.undoDayChange(
+                        workoutDay: workoutDay,
+                        previousRoutineDayId: previousRoutineDayId,
+                        previousEntries: previousEntries,
+                        skipAndAdvance: skipAndAdvance,
+                        previousDayIndex: currentDayContextInfo?.dayIndex ?? 1
+                    )
+                }
+            )
+        }
+    }
+
+    /// Creates a new WorkoutDay for the selected date when changing days
+    private func createWorkoutDayForDayChange(newDayIndex: Int) -> WorkoutDay? {
+        guard let profile = profile,
+              let dayInfo = currentDayContextInfo,
+              let planId = dayInfo.planId else {
+            return nil
+        }
+
+        // Get the plan and new day
+        guard let plan = PlanService.getPlan(id: planId, modelContext: modelContext),
+              let newPlanDay = plan.day(at: newDayIndex) else {
+            return nil
+        }
+
+        // Create new workout day
+        let workoutDay = WorkoutDay(profileId: profile.id, date: selectedWorkoutDate)
+        workoutDay.mode = .routine
+        workoutDay.routinePresetId = planId
+        workoutDay.routineDayId = newPlanDay.id
+        modelContext.insert(workoutDay)
+
+        return workoutDay
+    }
+
+    /// Undoes a day change
+    private func undoDayChange(
+        workoutDay: WorkoutDay?,
+        previousRoutineDayId: UUID?,
+        previousEntries: [(exerciseId: UUID, orderIndex: Int, sets: [(weight: Decimal, reps: Int, isCompleted: Bool)])],
+        skipAndAdvance: Bool,
+        previousDayIndex: Int
+    ) {
+        guard let workoutDay = workoutDay,
+              let profile = profile else { return }
+
+        // Restore routineDayId
+        workoutDay.routineDayId = previousRoutineDayId
+
+        // Clear current entries
+        for entry in workoutDay.entries {
+            modelContext.delete(entry)
+        }
+        workoutDay.entries.removeAll()
+
+        // Restore previous entries
+        for prevEntry in previousEntries {
+            let entry = WorkoutExerciseEntry(
+                exerciseId: prevEntry.exerciseId,
+                orderIndex: prevEntry.orderIndex,
+                source: .routine,
+                plannedSetCount: prevEntry.sets.count
+            )
+
+            for (index, setData) in prevEntry.sets.enumerated() {
+                let set = WorkoutSet(
+                    setIndex: index + 1,
+                    weight: setData.weight,
+                    reps: setData.reps,
+                    isCompleted: setData.isCompleted
+                )
+                entry.addSet(set)
+            }
+
+            workoutDay.addEntry(entry)
+        }
+
+        // Revert progress pointer if skipAndAdvance was true
+        if skipAndAdvance {
+            switch profile.executionMode {
+            case .single:
+                if let planId = profile.activePlanId {
+                    let progress = PlanService.getOrCreateProgress(
+                        profileId: profile.id,
+                        planId: planId,
+                        modelContext: modelContext
+                    )
+                    progress.currentDayIndex = previousDayIndex
+                }
+            case .cycle:
+                if let cycle = activeCycle,
+                   let progress = cycle.progress {
+                    progress.currentDayIndex = previousDayIndex - 1 // Convert to 0-indexed
+                }
+            }
+        }
+
+        // Reload cycle state (day info is computed dynamically)
+        loadActiveCycle()
+
+        // Expand first entry
+        if let first = sortedEntries.first {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                expandedEntryId = first.id
+            }
+        }
+    }
+
     private func completeAndAdvanceCycle() {
         guard let cycle = activeCycle else { return }
 
@@ -394,7 +770,7 @@ struct WorkoutView: View {
 
         // Show feedback
         showSnackBar(
-            message: "次のワークアウトに進みました",
+            message: L10n.tr("workout_advanced_to_next"),
             undoAction: {
                 // Note: undo would require storing previous state, simplified here
             }
@@ -470,9 +846,21 @@ struct WorkoutView: View {
         // Check if workout already exists for today's workout date
         if let existingWorkout = workoutDays.first(where: { DateUtilities.isSameDay($0.date, workoutDate) }) {
             // If it's already set up for this plan day, do nothing
-            if existingWorkout.routineDayId == planDay.id {
+            if existingWorkout.routineDayId == planDay.id && existingWorkout.routinePresetId == plan.id {
                 return
             }
+
+            // If the workout is empty and not linked to any plan, set it up for the cycle
+            if existingWorkout.entries.isEmpty && existingWorkout.routinePresetId == nil {
+                existingWorkout.mode = .routine
+                existingWorkout.routinePresetId = plan.id
+                existingWorkout.routineDayId = planDay.id
+                PlanService.expandPlanToWorkout(planDay: planDay, workoutDay: existingWorkout)
+                return
+            }
+
+            // Otherwise, keep existing workout (has entries or linked to different plan)
+            return
         }
 
         // Create new workout day in plan mode
@@ -502,7 +890,7 @@ struct WorkoutView: View {
         guard let profile = profile else { return }
         guard !sets.isEmpty else { return }
 
-        let workoutDate = DateUtilities.workoutDate(for: selectedDate, transitionHour: transitionHour)
+        let workoutDate = selectedWorkoutDate
 
         // Create workout day if needed
         var workoutDay = selectedWorkoutDay
@@ -554,6 +942,61 @@ struct WorkoutView: View {
         _ = entry.createSet(weight: Decimal(currentWeight), reps: currentReps, isCompleted: false)
     }
 
+    /// Copies exercises from the most recent workout to today
+    private func copyPreviousWorkout() {
+        guard let profile = profile,
+              let previousDay = lastWorkoutDay else { return }
+
+        let workoutDate = selectedWorkoutDate
+
+        // Get or create today's workout
+        var workoutDay = selectedWorkoutDay
+        if workoutDay == nil {
+            let newWorkoutDay = WorkoutDay(profileId: profile.id, date: workoutDate)
+            modelContext.insert(newWorkoutDay)
+            workoutDay = newWorkoutDay
+        }
+
+        guard let workoutDay = workoutDay else { return }
+
+        // Copy each entry from previous workout
+        let previousEntries = previousDay.sortedEntries
+        for (index, previousEntry) in previousEntries.enumerated() {
+            let newEntry = WorkoutExerciseEntry(
+                exerciseId: previousEntry.exerciseId,
+                orderIndex: index,
+                source: .free,
+                plannedSetCount: previousEntry.activeSets.count
+            )
+
+            // Copy sets (as incomplete)
+            for previousSet in previousEntry.sortedSets {
+                let newSet = WorkoutSet(
+                    setIndex: previousSet.setIndex,
+                    weight: previousSet.weight,
+                    reps: previousSet.reps,
+                    isCompleted: false
+                )
+                newEntry.addSet(newSet)
+            }
+
+            workoutDay.addEntry(newEntry)
+        }
+
+        // Expand the first entry
+        if let firstEntry = workoutDay.sortedEntries.first {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                expandedEntryId = firstEntry.id
+            }
+
+            // Update current weight/reps from first set
+            if let firstSet = firstEntry.sortedSets.first {
+                currentWeight = firstSet.weightDouble
+                currentReps = firstSet.reps
+            }
+        }
+    }
+
     @discardableResult
     private func logSet(for entry: WorkoutExerciseEntry, scrollProxy: ScrollViewProxy) -> Bool {
         guard let nextSet = entry.sortedSets.first(where: { !$0.isCompleted }) else { return false }
@@ -581,28 +1024,31 @@ struct WorkoutView: View {
     }
 
     private func removePlannedSet(_ set: WorkoutSet, from entry: WorkoutExerciseEntry) {
+        guard entry.sortedSets.count > 1 else { return }
         set.softDelete()
-
-        showSnackBar(
-            message: "Planned set removed",
-            undoAction: {
-                set.restore()
-            }
-        )
     }
 
     private func deleteCompletedSet(_ set: WorkoutSet, from entry: WorkoutExerciseEntry) {
-        let deletedWeight = set.weightDouble
-        let deletedReps = set.reps
-
+        guard entry.sortedSets.count > 1 else { return }
         set.softDelete()
+    }
 
-        showSnackBar(
-            message: "Set deleted: \(formatWeight(deletedWeight)) kg × \(deletedReps)",
-            undoAction: {
-                set.restore()
+    /// Deletes an entire exercise entry from the workout
+    private func deleteEntry(_ entry: WorkoutExerciseEntry) {
+        // Clear expanded state if this entry was expanded
+        if expandedEntryId == entry.id {
+            expandedEntryId = nil
+        }
+
+        // Delete the entry
+        modelContext.delete(entry)
+
+        // Expand the next available entry
+        if let nextEntry = sortedEntries.first(where: { $0.id != entry.id }) {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                expandedEntryId = nextEntry.id
             }
-        )
+        }
     }
 
     private func showSnackBar(message: String, undoAction: @escaping () -> Void) {
@@ -633,35 +1079,146 @@ struct WorkoutView: View {
     }
 }
 
-struct EmptyWorkoutView: View {
-    let onAddExercise: () -> Void
+// MARK: - Empty State View
+
+/// Empty state shown when selected date's exercises are empty.
+/// Presents value proposition and action cards (2-3 depending on previous workout existence).
+struct EmptyStateView: View {
+    let isToday: Bool
+    let showCopyOption: Bool
     let onCreatePlan: () -> Void
+    let onCopyPrevious: () -> Void
+    let onAddExercise: () -> Void
+
+    private var headlineKey: String {
+        isToday ? "empty_state_headline" : "empty_state_headline_other"
+    }
+
+    private var descriptionKey: String {
+        isToday ? "empty_state_description" : "empty_state_description_other"
+    }
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text("種目がありません")
-                .font(.headline)
-                .foregroundColor(AppColors.textSecondary)
-
-            Button(action: onAddExercise) {
-                Text("種目を追加")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+        VStack(spacing: 24) {
+            // Value proposition message
+            VStack(spacing: 8) {
+                Text(L10n.tr(headlineKey))
+                    .font(.title3)
+                    .fontWeight(.semibold)
                     .foregroundColor(AppColors.textPrimary)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(AppColors.accentBlue)
-                    .cornerRadius(10)
-            }
+                    .multilineTextAlignment(.center)
 
-            Button(action: onCreatePlan) {
-                Text("またはワークアウトプランを作成する")
-                    .font(.caption)
-                    .foregroundColor(AppColors.accentBlue)
+                Text(L10n.tr(descriptionKey))
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 8)
+
+            // Action cards
+            VStack(spacing: 12) {
+                // Card A: Create Plan (Primary) - Always shown
+                PlanActionCard(
+                    badgeText: L10n.tr("empty_state_recommended"),
+                    title: L10n.tr("empty_state_create_plan_title"),
+                    subtitle: L10n.tr("empty_state_create_plan_subtitle"),
+                    buttonText: L10n.tr("empty_state_create_plan_button"),
+                    isPrimary: true,
+                    action: onCreatePlan
+                )
+
+                // Card C: Copy Previous (Conditional) - Between A and B
+                if showCopyOption {
+                    PlanActionCard(
+                        badgeText: nil,
+                        title: L10n.tr("empty_state_copy_title"),
+                        subtitle: L10n.tr("empty_state_copy_subtitle"),
+                        buttonText: L10n.tr("empty_state_copy_button"),
+                        isPrimary: false,
+                        action: onCopyPrevious
+                    )
+                }
+
+                // Card B: Add Exercise (Secondary) - Always shown
+                PlanActionCard(
+                    badgeText: nil,
+                    title: L10n.tr("empty_state_manual_title"),
+                    subtitle: L10n.tr("empty_state_manual_subtitle"),
+                    buttonText: L10n.tr("empty_state_manual_button"),
+                    isPrimary: false,
+                    action: onAddExercise
+                )
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
+        .padding(.vertical, 40)
+    }
+}
+
+// MARK: - Plan Action Card
+
+/// Tappable card with title, subtitle, and button for empty state actions.
+struct PlanActionCard: View {
+    let badgeText: String?
+    let title: String
+    let subtitle: String
+    let buttonText: String
+    let isPrimary: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 12) {
+                // Badge (optional)
+                if let badge = badgeText {
+                    Text(badge)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.accentBlue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppColors.accentBlue.opacity(0.15))
+                        .cornerRadius(4)
+                }
+
+                // Title and subtitle
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundColor(AppColors.textPrimary)
+
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.textSecondary)
+                }
+
+                // Button
+                HStack {
+                    Spacer()
+                    Text(buttonText)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(isPrimary ? AppColors.textPrimary : AppColors.accentBlue)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(
+                            isPrimary
+                                ? AppColors.accentBlue
+                                : Color.clear
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(isPrimary ? Color.clear : AppColors.accentBlue.opacity(0.5), lineWidth: 1)
+                        )
+                        .cornerRadius(8)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppColors.cardBackground)
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -676,11 +1233,11 @@ struct AddExerciseCard: View {
             HStack(spacing: 8) {
                 Image(systemName: "plus")
                     .font(.system(size: 14, weight: .medium))
-                Text("種目を追加")
+                Text("add_exercise")
                     .font(.subheadline)
                     .fontWeight(.medium)
             }
-            .foregroundColor(AppColors.textSecondary)
+            .foregroundColor(Color.white.opacity(0.60))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(AppColors.cardBackground)

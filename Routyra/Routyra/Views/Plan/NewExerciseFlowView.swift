@@ -46,7 +46,7 @@ struct NewExerciseFlowView: View {
                             Spacer()
 
                             if bodyPart.scope == .user {
-                                Text("カスタム")
+                                Text("exercise_custom_badge")
                                     .font(.caption)
                                     .foregroundColor(AppColors.textMuted)
                             }
@@ -54,11 +54,11 @@ struct NewExerciseFlowView: View {
                     }
                 }
             } header: {
-                Text("部位を選択")
+                Text("body_part_select_title")
             }
         }
-        .searchable(text: $searchText, prompt: "部位を検索")
-        .navigationTitle("新しい種目を作成")
+        .searchable(text: $searchText, prompt: "body_part_search_placeholder")
+        .navigationTitle("exercise_create_new")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: NewExerciseFlowDestination.self) { destination in
             switch destination {
@@ -109,7 +109,7 @@ struct NewExerciseNameInputView: View {
         Form {
             Section {
                 HStack {
-                    Text("部位")
+                    Text("body_part")
                         .foregroundColor(AppColors.textSecondary)
                     Spacer()
                     Text(bodyPart.localizedName)
@@ -118,7 +118,7 @@ struct NewExerciseNameInputView: View {
             }
 
             Section {
-                TextField("種目名を入力", text: $exerciseName)
+                TextField("exercise_name_placeholder", text: $exerciseName)
                     .focused($isNameFocused)
                     .foregroundColor(AppColors.textPrimary)
                     .autocorrectionDisabled()
@@ -129,18 +129,18 @@ struct NewExerciseNameInputView: View {
                         .foregroundColor(.red)
                 }
             } header: {
-                Text("種目名")
+                Text("exercise_name")
             } footer: {
-                Text("例: ダンベルフライ、ケーブルクロス")
+                Text("exercise_name_example")
                     .font(.caption)
                     .foregroundColor(AppColors.textMuted)
             }
         }
-        .navigationTitle("種目名を入力")
+        .navigationTitle("exercise_name_section_title")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("作成") {
+                Button("create") {
                     createExercise()
                 }
                 .disabled(!canSave)
@@ -168,7 +168,7 @@ struct NewExerciseNameInputView: View {
             errorMessage = error.errorDescription
             isSaving = false
         } catch {
-            errorMessage = "作成に失敗しました"
+            errorMessage = L10n.tr("exercise_create_failed")
             isSaving = false
         }
     }

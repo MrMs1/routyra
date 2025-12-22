@@ -22,17 +22,17 @@ struct CycleEditorView: View {
         List {
             // Cycle info section
             Section {
-                TextField("サイクル名", text: $cycle.name)
+                TextField("cycle_name_placeholder", text: $cycle.name)
                     .foregroundColor(AppColors.textPrimary)
             } header: {
-                Text("サイクル情報")
+                Text("cycle_info_section")
             }
 
             // Current progress section (if active)
             if cycle.isActive, let progress = cycle.progress {
                 Section {
                     HStack {
-                        Text("現在のプラン")
+                        Text("cycle_current_plan")
                             .foregroundColor(AppColors.textSecondary)
                         Spacer()
                         Text("\(progress.currentItemIndex + 1) / \(items.count)")
@@ -40,10 +40,10 @@ struct CycleEditorView: View {
                     }
 
                     HStack {
-                        Text("現在のDay")
+                        Text("cycle_current_day")
                             .foregroundColor(AppColors.textSecondary)
                         Spacer()
-                        Text("Day \(progress.currentDayIndex + 1)")
+                        Text(L10n.tr("day_label", progress.currentDayIndex + 1))
                             .foregroundColor(AppColors.textPrimary)
                     }
 
@@ -52,12 +52,12 @@ struct CycleEditorView: View {
                     } label: {
                         HStack {
                             Image(systemName: "arrow.counterclockwise")
-                            Text("進捗をリセット")
+                            Text("cycle_reset_progress")
                         }
                         .foregroundColor(.orange)
                     }
                 } header: {
-                    Text("進捗状況")
+                    Text("cycle_progress_section")
                 }
             }
 
@@ -65,11 +65,11 @@ struct CycleEditorView: View {
             Section {
                 if items.isEmpty {
                     VStack(spacing: 8) {
-                        Text("プランがありません")
+                        Text("cycle_no_plans")
                             .font(.subheadline)
                             .foregroundColor(AppColors.textSecondary)
 
-                        Text("プランを追加してサイクルを構成してください")
+                        Text("cycle_add_plans_help")
                             .font(.caption)
                             .foregroundColor(AppColors.textMuted)
                     }
@@ -88,16 +88,16 @@ struct CycleEditorView: View {
                 } label: {
                     HStack {
                         Image(systemName: "plus.circle.fill")
-                        Text("プランを追加")
+                        Text("cycle_add_plan")
                     }
                     .foregroundColor(AppColors.accentBlue)
                 }
             } header: {
                 HStack {
-                    Text("プラン")
+                    Text("cycle_plans_section")
                     Spacer()
                     if !items.isEmpty {
-                        Text("\(items.count)プラン")
+                        Text(L10n.tr("cycle_plan_count", items.count))
                             .font(.caption)
                             .foregroundColor(AppColors.textSecondary)
                     }
@@ -107,7 +107,7 @@ struct CycleEditorView: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(AppColors.background)
-        .navigationTitle(cycle.name.isEmpty ? "サイクル編集" : cycle.name)
+        .navigationTitle(cycle.name.isEmpty ? L10n.tr("cycle_edit_title") : cycle.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -116,7 +116,7 @@ struct CycleEditorView: View {
                         editMode?.wrappedValue = editMode?.wrappedValue == .active ? .inactive : .active
                     }
                 } label: {
-                    Text(editMode?.wrappedValue == .active ? "完了" : "並び替え")
+                    Text(editMode?.wrappedValue == .active ? L10n.tr("done") : L10n.tr("reorder"))
                 }
             }
         }
@@ -165,11 +165,11 @@ private struct CycleItemRowView: View {
                     .foregroundColor(AppColors.textPrimary)
 
                 if let plan = item.plan {
-                    Text("\(plan.dayCount)日間 / \(plan.totalExerciseCount)種目")
+                    Text(L10n.tr("plan_summary_days_exercises", plan.dayCount, plan.totalExerciseCount))
                         .font(.caption)
                         .foregroundColor(AppColors.textSecondary)
                 } else {
-                    Text("プランが見つかりません")
+                    Text("plan_not_found")
                         .font(.caption)
                         .foregroundColor(.red)
                 }

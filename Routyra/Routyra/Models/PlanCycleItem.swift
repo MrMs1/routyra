@@ -49,12 +49,12 @@ final class PlanCycleItem {
 
     /// Display name from the referenced plan (requires plan to be loaded).
     var displayName: String {
-        plan?.name ?? "Unknown Plan"
+        plan?.name ?? L10n.tr("unknown_plan")
     }
 
     /// Summary of the plan (requires plan to be loaded).
     var summary: String {
         guard let plan = plan else { return "" }
-        return "\(plan.dayCount)日間 / \(plan.totalExerciseCount)種目"
+        return L10n.tr("plan_summary_days_exercises", plan.dayCount, plan.totalExerciseCount)
     }
 }

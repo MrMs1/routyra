@@ -69,7 +69,7 @@ struct PlanDayEditorView: View {
                             Button(role: .destructive) {
                                 deleteExercise(planExercise)
                             } label: {
-                                Label("削除", systemImage: "trash")
+                                Label("delete", systemImage: "trash")
                             }
                         }
                     }
@@ -83,16 +83,16 @@ struct PlanDayEditorView: View {
                     }
                     .opacity(0)
 
-                    ActionCardButton(title: "種目を追加")
+                    ActionCardButton(title: L10n.tr("add_exercise"))
                 }
                 .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             } header: {
                 HStack {
-                    Text("種目")
+                    Text("exercises")
                     Spacer()
-                    Text("\(exercises.count)種目")
+                    Text("\(exercises.count)\(L10n.tr("exercises_unit"))")
                         .font(.caption)
                         .foregroundColor(AppColors.textSecondary)
                     Button {
@@ -100,7 +100,7 @@ struct PlanDayEditorView: View {
                             editMode?.wrappedValue = editMode?.wrappedValue == .active ? .inactive : .active
                         }
                     } label: {
-                        Text(editMode?.wrappedValue == .active ? "完了" : "並び替え")
+                        Text(editMode?.wrappedValue == .active ? L10n.tr("done") : L10n.tr("reorder"))
                             .font(.subheadline)
                     }
                 }
@@ -113,7 +113,7 @@ struct PlanDayEditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("編集") {
+                Button("edit") {
                     showEditDaySheet = true
                 }
             }
@@ -154,11 +154,11 @@ struct PlanDayEditorView: View {
                 .font(.system(size: 40))
                 .foregroundColor(AppColors.textMuted)
 
-            Text("種目がありません")
+            Text("no_exercises")
                 .font(.headline)
                 .foregroundColor(AppColors.textSecondary)
 
-            Text("種目を追加してトレーニング内容を設定しましょう")
+            Text("plan_day_add_exercise_hint")
                 .font(.caption)
                 .foregroundColor(AppColors.textMuted)
                 .multilineTextAlignment(.center)

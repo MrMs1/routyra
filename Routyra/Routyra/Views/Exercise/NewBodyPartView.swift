@@ -30,7 +30,7 @@ struct NewBodyPartView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("部位名", text: $bodyPartName)
+                    TextField("body_part_name_placeholder", text: $bodyPartName)
                         .focused($isNameFieldFocused)
                         .textInputAutocapitalization(.words)
                         .submitLabel(.done)
@@ -40,9 +40,9 @@ struct NewBodyPartView: View {
                             }
                         }
                 } header: {
-                    Text("部位名を入力")
+                    Text("body_part_name_section_title")
                 } footer: {
-                    Text("例: 前腕、ふくらはぎ、首")
+                    Text("body_part_name_example")
                         .foregroundColor(AppColors.textMuted)
                 }
 
@@ -57,17 +57,17 @@ struct NewBodyPartView: View {
                     }
                 }
             }
-            .navigationTitle("新しい部位")
+            .navigationTitle("body_part_new_title")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
+                    Button("cancel") {
                         dismiss()
                     }
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button("save") {
                         saveBodyPart()
                     }
                     .disabled(isSaveDisabled)
@@ -76,10 +76,10 @@ struct NewBodyPartView: View {
             .onAppear {
                 isNameFieldFocused = true
             }
-            .alert("エラー", isPresented: $isShowingError) {
-                Button("OK", role: .cancel) { }
+            .alert("error_title", isPresented: $isShowingError) {
+                Button("ok", role: .cancel) { }
             } message: {
-                Text(errorMessage ?? "不明なエラーが発生しました")
+                Text(errorMessage ?? L10n.tr("error_unknown"))
             }
         }
     }
@@ -109,7 +109,7 @@ struct NewBodyPartView: View {
             }
         } catch {
             // Unexpected error
-            errorMessage = "保存に失敗しました: \(error.localizedDescription)"
+            errorMessage = L10n.tr("body_part_save_failed", error.localizedDescription)
             isShowingError = true
         }
 

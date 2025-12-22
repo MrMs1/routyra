@@ -50,7 +50,7 @@ struct ExerciseCardRow: View {
                             if isCustom {
                                 Text("•")
                                     .foregroundColor(AppColors.textMuted)
-                                Text("カスタム")
+                                Text("exercise_custom_badge")
                                     .font(.system(size: 12, design: .rounded))
                                     .foregroundColor(AppColors.textMuted)
                             }
@@ -167,8 +167,8 @@ struct ActionCardButton: View {
 struct CreateExerciseCard: View {
     var body: some View {
         ActionCardButton(
-            title: "新しい種目を作成",
-            subtitle: "オリジナルの種目を追加"
+            title: L10n.tr("exercise_create_new"),
+            subtitle: L10n.tr("exercise_create_new_subtitle")
         )
     }
 }
@@ -178,7 +178,7 @@ struct CreateExerciseCard: View {
 /// Custom search bar for exercise picker screens.
 struct ExercisePickerSearchBar: View {
     @Binding var text: String
-    var placeholder: String = "種目を検索"
+    var placeholder: String = L10n.tr("exercise_search_placeholder")
 
     var body: some View {
         HStack(spacing: 8) {

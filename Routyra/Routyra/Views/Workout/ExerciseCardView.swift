@@ -17,10 +17,17 @@ struct ExerciseEntryCardView: View {
     let onAddSet: () -> Void
     let onRemovePlannedSet: (WorkoutSet) -> Void
     let onDeleteSet: (WorkoutSet) -> Void
+    let onDeleteEntry: () -> Void
     let onChangeExercise: () -> Void
 
     @State private var selectedSetIndex: Int?
     @State private var logSuccessPulse: Bool = false
+    @State private var hapticTrigger: Int = 0
+    @State private var showDeleteEntryConfirmation: Bool = false
+    @State private var swipeOffset: CGFloat = 0
+    @State private var isSwipeOpen: Bool = false
+
+    private let deleteButtonWidth: CGFloat = 80
 
     private var activeSetIndex: Int? {
         sortedSets.firstIndex { !$0.isCompleted }
@@ -33,6 +40,26 @@ struct ExerciseEntryCardView: View {
     private var selectedSet: WorkoutSet? {
         guard let index = selectedSetIndex, index < sortedSets.count else { return nil }
         return sortedSets[index]
+    }
+
+    /// Whether there's only one set (show entry delete instead of set delete)
+    private var hasOnlyOneSet: Bool {
+        sortedSets.count == 1
+    }
+
+    private var canDeleteSet: Bool {
+        sortedSets.count > 1
+    }
+
+    private var deletableSet: WorkoutSet? {
+        guard canDeleteSet else { return nil }
+        if let selectedSet {
+            return selectedSet
+        }
+        if let activeIndex = activeSetIndex, activeIndex < sortedSets.count {
+            return sortedSets[activeIndex]
+        }
+        return nil
     }
 
     private var allSetsCompleted: Bool {
@@ -49,28 +76,143 @@ struct ExerciseEntryCardView: View {
         !hasCompletedSets
     }
 
+    /// Whether user is currently viewing a completed set (not the active one)
+    private var isViewingCompletedSet: Bool {
+        guard let selected = selectedSetIndex,
+              let active = activeSetIndex else { return false }
+        return selected < active
+    }
+
+    private func ensureSelection() {
+        guard !sortedSets.isEmpty else {
+            selectedSetIndex = nil
+            return
+        }
+
+        if let activeIndex = activeSetIndex {
+            if selectedSetIndex != activeIndex {
+                selectedSetIndex = activeIndex
+            }
+            return
+        }
+
+        let lastIndex = max(sortedSets.count - 1, 0)
+        if selectedSetIndex == nil || (selectedSetIndex ?? 0) >= sortedSets.count {
+            selectedSetIndex = lastIndex
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if isExpanded {
-                expandedContent
-                    .transition(.opacity.animation(.easeOut(duration: 1)))
-            } else {
-                collapsedContent
-                    .transition(.opacity.animation(.easeOut(duration: 1)))
+        ZStack(alignment: .trailing) {
+            // Delete button (behind the card)
+            deleteButton
+
+            // Main card content
+            VStack(alignment: .leading, spacing: 0) {
+                if isExpanded {
+                    expandedContent
+                } else {
+                    collapsedContent
+                }
+            }
+            .background(entry.isPlannedSetsCompleted ? AppColors.cardBackgroundCompleted : AppColors.cardBackground)
+            .cornerRadius(12)
+            .offset(x: swipeOffset)
+            .gesture(swipeGesture)
+            .onTapGesture {
+                if isSwipeOpen {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        swipeOffset = 0
+                        isSwipeOpen = false
+                    }
+                } else if !isExpanded {
+                    onTap()
+                }
             }
         }
-        .background(AppColors.cardBackground)
-        .cornerRadius(12)
-        .onTapGesture {
-            if !isExpanded {
-                onTap()
+        .confirmationDialog(
+            L10n.tr("workout_delete_entry_title"),
+            isPresented: $showDeleteEntryConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.tr("delete"), role: .destructive) {
+                onDeleteEntry()
             }
+            Button(L10n.tr("cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.tr("workout_delete_entry_message", exerciseName))
         }
         .onChange(of: isExpanded) { _, newValue in
-            if !newValue {
-                selectedSetIndex = nil
+            if newValue {
+                ensureSelection()
             }
         }
+        .onAppear {
+            ensureSelection()
+        }
+        .onChange(of: sortedSets.count) { _, _ in
+            ensureSelection()
+        }
+        .onChange(of: activeSetIndex) { _, _ in
+            ensureSelection()
+        }
+    }
+
+    private var deleteButton: some View {
+        Button(action: {
+            showDeleteEntryConfirmation = true
+        }) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.red)
+
+                Image(systemName: "trash.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            .frame(width: deleteButtonWidth)
+        }
+    }
+
+    private var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: 20, coordinateSpace: .local)
+            .onChanged { value in
+                let translation = value.translation.width
+                if isSwipeOpen {
+                    // Already open, allow dragging back
+                    let newOffset = -deleteButtonWidth + translation
+                    swipeOffset = min(0, max(-deleteButtonWidth, newOffset))
+                } else {
+                    // Only allow left swipe (negative translation)
+                    if translation < 0 {
+                        swipeOffset = max(-deleteButtonWidth, translation)
+                    }
+                }
+            }
+            .onEnded { value in
+                let translation = value.translation.width
+                let velocity = value.predictedEndTranslation.width - translation
+
+                withAnimation(.easeOut(duration: 0.2)) {
+                    if isSwipeOpen {
+                        // If swiping right fast enough or past threshold, close
+                        if translation > deleteButtonWidth / 2 || velocity > 50 {
+                            swipeOffset = 0
+                            isSwipeOpen = false
+                        } else {
+                            swipeOffset = -deleteButtonWidth
+                        }
+                    } else {
+                        // If swiping left fast enough or past threshold, open
+                        if translation < -deleteButtonWidth / 2 || velocity < -50 {
+                            swipeOffset = -deleteButtonWidth
+                            isSwipeOpen = true
+                        } else {
+                            swipeOffset = 0
+                        }
+                    }
+                }
+            }
     }
 
     private var expandedContent: some View {
@@ -99,13 +241,13 @@ struct ExerciseEntryCardView: View {
                         // Show "変更" label and chevron only when exercise can be changed
                         // (i.e., no completed sets exist)
                         if canChangeExercise {
-                            Text("変更")
+                            Text("workout_change_exercise")
                                 .font(.caption)
-                                .foregroundColor(AppColors.textSecondary)
+                                .foregroundColor(Color.white.opacity(0.55))
 
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(AppColors.textMuted)
+                                .foregroundColor(Color.white.opacity(0.55))
                         }
                     }
                 }
@@ -113,19 +255,22 @@ struct ExerciseEntryCardView: View {
 
                 Spacer()
 
+                // Delete button: deletes set if multiple sets, or shows entry delete confirmation if only one set
                 Button(action: {
-                    if let set = selectedSet {
+                    if hasOnlyOneSet {
+                        showDeleteEntryConfirmation = true
+                    } else if let set = deletableSet {
                         onDeleteSet(set)
-                        selectedSetIndex = nil
+                        ensureSelection()
                     }
                 }) {
                     Image(systemName: "trash")
                         .font(.system(size: 16))
-                        .foregroundColor(AppColors.textMuted)
+                        .foregroundColor(hasOnlyOneSet ? AppColors.textMuted : AppColors.textMuted)
                         .padding(8)
                 }
-                .opacity(selectedSet != nil ? 1 : 0)
-                .disabled(selectedSet == nil)
+                .opacity(hasOnlyOneSet || deletableSet != nil ? 1 : 0)
+                .disabled(!hasOnlyOneSet && deletableSet == nil)
             }
             .padding(.top, 16)
             .padding(.horizontal, 16)
@@ -149,29 +294,63 @@ struct ExerciseEntryCardView: View {
                     )
 
                     // Show "Add Set" when all sets completed OR viewing a completed set
-                    if allSetsCompleted || selectedSet?.isCompleted == true {
+                    if allSetsCompleted {
                         Button(action: {
-                            selectedSetIndex = nil
                             onAddSet()
+                            ensureSelection()
                         }) {
-                            Text("+ Add Set")
-                                .font(.headline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.textPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(AppColors.accentBlue.opacity(0.8))
-                                .cornerRadius(10)
+                            HStack(spacing: 6) {
+                                Image(systemName: "plus")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("workout_add_set")
+                            }
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(AppColors.accentBlue.opacity(0.18))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(AppColors.accentBlue.opacity(0.45), lineWidth: 1)
+                            )
+                            .cornerRadius(10)
+                            .shadow(color: AppColors.accentBlue.opacity(0.18), radius: 6, y: 2)
+                        }
+                    } else if isViewingCompletedSet {
+                        // Viewing a completed set - button navigates to active set
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedSetIndex = activeSetIndex
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                Text("workout_go_to_current_set")
+                                Image(systemName: "arrow.right")
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(AppColors.accentBlue.opacity(0.18))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(AppColors.accentBlue.opacity(0.45), lineWidth: 1)
+                            )
+                            .cornerRadius(10)
                         }
                     } else {
                         Button(action: {
-                            selectedSetIndex = nil
                             let success = onLogSet()
                             if success {
                                 // Trigger success animation
                                 withAnimation(.easeInOut(duration: 0.15)) {
                                     logSuccessPulse = true
                                 }
+                                hapticTrigger += 1
+                                ensureSelection()
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                     withAnimation(.easeInOut(duration: 0.1)) {
                                         logSuccessPulse = false
@@ -179,26 +358,30 @@ struct ExerciseEntryCardView: View {
                                 }
                             }
                         }) {
-                            Text("+ Log Set")
-                                .font(.headline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.textPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(AppColors.accentBlue)
-                                .cornerRadius(10)
+                            HStack(spacing: 6) {
+                                Image(systemName: "checkmark")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("workout_log_set")
+                            }
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(AppColors.accentBlue)
+                            .cornerRadius(10)
                         }
-                        .sensoryFeedback(.success, trigger: logSuccessPulse)
+                        .sensoryFeedback(.success, trigger: hapticTrigger)
                     }
 
                     Button(action: {}) {
                         HStack(spacing: 6) {
-                            Text("Rest Timer")
+                            Text("workout_rest_timer")
                                 .font(.subheadline)
-                                .foregroundColor(AppColors.textSecondary)
+                                .foregroundColor(Color.white.opacity(0.52))
                             Image(systemName: "play.fill")
                                 .font(.caption)
-                                .foregroundColor(AppColors.textSecondary)
+                                .foregroundColor(Color.white.opacity(0.52))
                         }
                     }
                 }
@@ -210,14 +393,14 @@ struct ExerciseEntryCardView: View {
 
     private var subtitleText: String? {
         let completed = entry.completedSetsCount
-        let total = entry.plannedSetCount
+        let total = max(entry.plannedSetCount, entry.activeSets.count)
 
-        if entry.isPlannedSetsCompleted && total > 0 {
-            return "\(total) sets completed"
-        } else if completed > 0 {
-            return "\(completed)/\(total) sets"
+        guard total > 0 else { return nil }
+
+        if completed >= total {
+            return L10n.tr("workout_sets_completed", total)
         } else {
-            return nil
+            return L10n.tr("workout_sets_progress", completed, total)
         }
     }
 
@@ -237,9 +420,17 @@ struct ExerciseEntryCardView: View {
             }
 
             if let subtitle = subtitleText {
-                Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.textMuted)
+                HStack(spacing: 6) {
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.textMuted)
+
+                    if entry.isPlannedSetsCompleted {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(AppColors.accentBlue)
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -247,11 +438,7 @@ struct ExerciseEntryCardView: View {
     }
 
     private func handleCompletedSetTap(_ index: Int) {
-        if selectedSetIndex == index {
-            selectedSetIndex = nil
-        } else {
-            selectedSetIndex = index
-        }
+        selectedSetIndex = index
     }
 
     private func handleFutureSetLongPress(_ index: Int) {
@@ -377,7 +564,7 @@ struct WeightRepsInputView: View {
                     .foregroundColor(AppColors.textPrimary)
             }
 
-            Text("kg")
+            Text("unit_kg")
                 .font(.system(size: unitFontSize, weight: .medium, design: .rounded))
                 .foregroundColor(AppColors.textSecondary)
                 .baselineOffset((weightFontSize - unitFontSize) * 0.08)
@@ -414,7 +601,7 @@ struct WeightRepsInputView: View {
                     .foregroundColor(AppColors.textPrimary)
             }
 
-            Text("reps")
+            Text("unit_reps")
                 .font(.system(size: unitFontSize, weight: .medium, design: .rounded))
                 .foregroundColor(AppColors.textSecondary)
                 .baselineOffset((repsFontSize - unitFontSize) * 0.08)
@@ -482,20 +669,17 @@ struct SetDotsView: View {
                     )
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if selectedSetIndex == index {
-                            // Tap on selected set clears selection
-                            selectedSetIndex = nil
-                        } else if set.isCompleted {
-                            // Tap on completed set selects it
+                        if set.isCompleted {
+                            // Allow selecting completed sets anytime
                             onCompletedSetTap(index)
                         } else if index == activeSetIndex {
-                            // Tap on active set (first incomplete) selects it
+                            // Tap on active set selects it
                             selectedSetIndex = index
                         }
                         // Tap on future incomplete sets (beyond active) does nothing
                     }
                     .onLongPressGesture(minimumDuration: 0.3) {
-                        if !set.isCompleted && index != activeSetIndex {
+                        if sets.count > 1 && !set.isCompleted && index != activeSetIndex {
                             onFutureSetLongPress(index)
                         }
                     }
@@ -516,6 +700,20 @@ private struct SetDotView: View {
     let isSelected: Bool
     let dotSize: CGFloat
 
+    private var ringColor: Color {
+        if set.isCompleted {
+            return AppColors.accentBlue
+        }
+        return AppColors.textSecondary
+    }
+
+    private var numberColor: Color {
+        if set.isCompleted {
+            return AppColors.accentBlue
+        }
+        return AppColors.textPrimary
+    }
+
     var body: some View {
         ZStack {
             if isActive || isSelected {
@@ -525,12 +723,12 @@ private struct SetDotView: View {
                     .frame(width: dotSize, height: dotSize)
 
                 Circle()
-                    .stroke(isSelected ? AppColors.accentBlue : AppColors.textSecondary, lineWidth: 1.5)
+                    .stroke(ringColor, lineWidth: 1.5)
                     .frame(width: dotSize, height: dotSize)
 
                 Text("\(index + 1)")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(isSelected ? AppColors.accentBlue : AppColors.textPrimary)
+                    .foregroundColor(numberColor)
             } else {
                 Circle()
                     .fill(set.isCompleted ? AppColors.dotFilled : AppColors.dotEmpty)
@@ -565,6 +763,7 @@ private struct SetDotView: View {
         onAddSet: {},
         onRemovePlannedSet: { _ in },
         onDeleteSet: { _ in },
+        onDeleteEntry: {},
         onChangeExercise: {}
     )
     .padding()

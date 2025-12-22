@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		27C1A1F02F0E1B2C3D4E5F6A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 27C1A1F22F0E1B2C3D4E5F6A /* Assets.xcassets */; };
+		27C1A1F12F0E1B2C3D4E5F6A /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 27C1A1F52F0E1B2C3D4E5F6A /* Localizable.strings */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		179C25C02EEE9BCA00564643 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +32,9 @@
 		179C25B02EEE9BC800564643 /* Routyra.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Routyra.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		179C25BF2EEE9BCA00564643 /* RoutyraTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RoutyraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		179C25C92EEE9BCA00564643 /* RoutyraUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RoutyraUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		27C1A1F22F0E1B2C3D4E5F6A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		27C1A1F32F0E1B2C3D4E5F6A /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = Resources/en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		27C1A1F42F0E1B2C3D4E5F6A /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = Resources/ja.lproj/Localizable.strings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -75,6 +83,7 @@
 		179C25A72EEE9BC800564643 = {
 			isa = PBXGroup;
 			children = (
+				27C1A1F62F0E1B2C3D4E5F6A /* Resources */,
 				179C25B22EEE9BC800564643 /* Routyra */,
 				179C25C22EEE9BCA00564643 /* RoutyraTests */,
 				179C25CC2EEE9BCA00564643 /* RoutyraUITests */,
@@ -90,6 +99,16 @@
 				179C25C92EEE9BCA00564643 /* RoutyraUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		27C1A1F62F0E1B2C3D4E5F6A /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				27C1A1F22F0E1B2C3D4E5F6A /* Assets.xcassets */,
+				27C1A1F52F0E1B2C3D4E5F6A /* Localizable.strings */,
+			);
+			name = Resources;
+			path = Routyra;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -191,6 +210,7 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				ja,
 				Base,
 			);
 			mainGroup = 179C25A72EEE9BC800564643;
@@ -212,6 +232,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				27C1A1F02F0E1B2C3D4E5F6A /* Assets.xcassets in Resources */,
+				27C1A1F12F0E1B2C3D4E5F6A /* Localizable.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -267,6 +289,18 @@
 			targetProxy = 179C25CA2EEE9BCA00564643 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		27C1A1F52F0E1B2C3D4E5F6A /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				27C1A1F32F0E1B2C3D4E5F6A /* en */,
+				27C1A1F42F0E1B2C3D4E5F6A /* ja */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		179C25D12EEE9BCA00564643 /* Debug */ = {

@@ -40,13 +40,13 @@ struct PlanExerciseRowView: View {
             Button {
                 onDuplicate()
             } label: {
-                Label("複製", systemImage: "doc.on.doc")
+                Label("duplicate", systemImage: "doc.on.doc")
             }
 
             Button(role: .destructive) {
                 onDelete()
             } label: {
-                Label("削除", systemImage: "trash")
+                Label("delete", systemImage: "trash")
             }
         }
     }
@@ -76,7 +76,7 @@ struct PlanExerciseRowView: View {
                                     .frame(width: 8, height: 8)
                             }
 
-                            Text(exercise?.localizedName ?? "Unknown")
+                            Text(exercise?.localizedName ?? L10n.tr("unknown_exercise"))
                                 .font(.headline)
                                 .foregroundColor(AppColors.textPrimary)
 
@@ -155,7 +155,7 @@ struct PlanExerciseRowView: View {
                     .font(.system(size: 16))
                     .foregroundColor(AppColors.accentBlue)
 
-                Text("セットを追加")
+                Text("add_set")
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(AppColors.accentBlue)

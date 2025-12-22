@@ -345,6 +345,83 @@ enum CycleService {
         return false
     }
 
+    // MARK: - Day Change (Cycle Mode)
+
+    /// Changes the current workout day to a different plan day within the current cycle plan.
+    /// Only allowed when completedSets == 0.
+    ///
+    /// - Parameters:
+    ///   - cycle: The cycle.
+    ///   - workoutDay: The workout day to modify.
+    ///   - newDayIndex: The new day index (1-indexed for display, converted to 0-indexed internally).
+    ///   - skipAndAdvance: Whether to also advance the progress pointer.
+    ///   - modelContext: The SwiftData model context.
+    /// - Returns: True if change was successful.
+    @MainActor
+    @discardableResult
+    static func changeDay(
+        cycle: PlanCycle,
+        workoutDay: WorkoutDay,
+        to newDayIndex: Int,
+        skipAndAdvance: Bool,
+        modelContext: ModelContext
+    ) -> Bool {
+        // Verify no completed sets
+        guard workoutDay.totalCompletedSets == 0 else {
+            return false
+        }
+
+        guard let progress = cycle.progress else {
+            return false
+        }
+
+        // Get current plan
+        let items = cycle.sortedItems
+        guard progress.currentItemIndex < items.count else {
+            return false
+        }
+
+        let item = items[progress.currentItemIndex]
+        if item.plan == nil {
+            item.plan = PlanService.getPlan(id: item.planId, modelContext: modelContext)
+        }
+
+        guard let plan = item.plan else {
+            return false
+        }
+
+        // Convert 1-indexed to 0-indexed for internal use
+        let internalDayIndex = newDayIndex - 1
+        let sortedDays = plan.sortedDays
+        guard internalDayIndex >= 0, internalDayIndex < sortedDays.count else {
+            return false
+        }
+
+        let newPlanDay = sortedDays[internalDayIndex]
+
+        // Clear existing entries
+        for entry in workoutDay.entries {
+            modelContext.delete(entry)
+        }
+        workoutDay.entries.removeAll()
+
+        // Update the routine day ID
+        workoutDay.routineDayId = newPlanDay.id
+
+        // Expand the new plan day
+        PlanService.expandPlanToWorkout(planDay: newPlanDay, workoutDay: workoutDay)
+
+        // Update progress pointer if skip is enabled
+        if skipAndAdvance {
+            // Set to next day after the selected one (wrapping around)
+            let totalDays = plan.dayCount
+            progress.currentDayIndex = newDayIndex % totalDays // This wraps: if newDayIndex==totalDays, goes to 0
+            progress.lastAdvancedAt = Date()
+        }
+
+        return true
+    }
+
     // MARK: - Current State Helpers
 
     /// Gets the current plan day for a cycle.
@@ -398,8 +475,89 @@ enum CycleService {
         return (
             cycleName: cycle.name,
             planName: plan.name,
-            dayInfo: "Day \(currentDay) / \(totalDays)"
+            dayInfo: L10n.tr("cycle_day_progress", currentDay, totalDays)
         )
+    }
+
+    // MARK: - Day Info Resolution
+
+    /// Resolves day info from a plan day ID within a cycle.
+    /// - Parameters:
+    ///   - planDayId: The plan day ID (routineDayId from WorkoutDay).
+    ///   - cycle: The cycle.
+    ///   - modelContext: The SwiftData model context.
+    /// - Returns: Tuple of (dayIndex, totalDays, dayName) or nil if not found.
+    @MainActor
+    static func getDayInfo(
+        planDayId: UUID,
+        cycle: PlanCycle,
+        modelContext: ModelContext
+    ) -> (dayIndex: Int, totalDays: Int, dayName: String?)? {
+        // Load plans for items
+        loadPlans(for: cycle.sortedItems, modelContext: modelContext)
+
+        // Search through all plans in the cycle
+        for item in cycle.sortedItems {
+            guard let plan = item.plan else { continue }
+
+            let sortedDays = plan.sortedDays
+            if let dayIndex = sortedDays.firstIndex(where: { $0.id == planDayId }) {
+                return (dayIndex + 1, plan.dayCount, sortedDays[dayIndex].name)
+            }
+        }
+
+        return nil
+    }
+
+    /// Calculates the preview day for a future date based on current cycle progress.
+    /// - Parameters:
+    ///   - cycle: The active cycle.
+    ///   - targetDate: The target date to calculate for.
+    ///   - todayDate: Today's workout date.
+    ///   - modelContext: The SwiftData model context.
+    /// - Returns: Tuple of (dayIndex, totalDays, dayName) or nil.
+    @MainActor
+    static func getPreviewDayInfo(
+        cycle: PlanCycle,
+        targetDate: Date,
+        todayDate: Date,
+        modelContext: ModelContext
+    ) -> (dayIndex: Int, totalDays: Int, dayName: String?)? {
+        guard let progress = cycle.progress else { return nil }
+
+        let items = cycle.sortedItems
+        guard !items.isEmpty else { return nil }
+
+        loadPlans(for: items, modelContext: modelContext)
+
+        // Get current plan
+        guard progress.currentItemIndex < items.count,
+              let currentPlan = items[progress.currentItemIndex].plan else {
+            return nil
+        }
+
+        let totalDays = currentPlan.dayCount
+        guard totalDays > 0 else { return nil }
+
+        // Calculate days difference from today
+        let calendar = Calendar.current
+        let daysDiff = calendar.dateComponents([.day], from: todayDate, to: targetDate).day ?? 0
+
+        // Current day index is 0-indexed, we need to calculate the target
+        let currentDayIndex = progress.currentDayIndex // 0-indexed
+
+        // For simplicity, assume staying in current plan (preview within one plan)
+        // More complex logic would need to handle plan transitions
+        var targetDayIndex = currentDayIndex + daysDiff
+
+        // Handle wrapping
+        targetDayIndex = ((targetDayIndex % totalDays) + totalDays) % totalDays
+
+        let sortedDays = currentPlan.sortedDays
+        let dayName = targetDayIndex < sortedDays.count ? sortedDays[targetDayIndex].name : nil
+
+        // Return 1-indexed for display
+        return (targetDayIndex + 1, totalDays, dayName)
     }
 
     // MARK: - Helper Methods

@@ -31,7 +31,8 @@ final class WorkoutSet {
 
     /// Soft-delete flag for undo safety.
     /// When true, the set is hidden from UI but can be restored.
-    var isDeleted: Bool
+    /// Named isSoftDeleted to avoid collision with SwiftData's internal isDeleted property.
+    var isSoftDeleted: Bool
 
     /// Creation timestamp.
     var createdAt: Date
@@ -58,7 +59,7 @@ final class WorkoutSet {
         self.weight = weight
         self.reps = reps
         self.isCompleted = isCompleted
-        self.isDeleted = false
+        self.isSoftDeleted = false
         self.createdAt = Date()
         self.updatedAt = Date()
     }
@@ -106,13 +107,13 @@ final class WorkoutSet {
 
     /// Soft-deletes the set.
     func softDelete() {
-        self.isDeleted = true
+        self.isSoftDeleted = true
         touch()
     }
 
     /// Restores a soft-deleted set.
     func restore() {
-        self.isDeleted = false
+        self.isSoftDeleted = false
         touch()
     }
 

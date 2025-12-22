@@ -18,9 +18,9 @@ enum ExercisePickerMode {
     var navigationTitle: String {
         switch self {
         case .add:
-            return "種目を追加"
+            return L10n.tr("add_exercise")
         case .change:
-            return "種目を変更"
+            return L10n.tr("workout_change_exercise_title")
         }
     }
 }
@@ -133,7 +133,7 @@ struct WorkoutExercisePickerView: View {
             HStack(spacing: 8) {
                 // All filter
                 ExerciseFilterChip(
-                    title: "すべて",
+                    title: L10n.tr("filter_all"),
                     isSelected: selectedBodyPartId == nil
                 ) {
                     withAnimation(.easeInOut(duration: 0.2)) {

@@ -27,11 +27,12 @@ struct RoutinesView: View {
         NavigationStack(path: $navigationPath) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // Large header
-                    Text("ワークアウトプラン")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
+                    // Header
+                    Text("workout_plans")
+                        .font(.headline)
+                        .fontWeight(.semibold)
                         .foregroundColor(AppColors.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.horizontal)
                         .padding(.top, 8)
 
@@ -71,47 +72,47 @@ struct RoutinesView: View {
             .onAppear {
                 loadData()
             }
-            .alert("プランを削除", isPresented: .init(
+            .alert("delete_plan", isPresented: .init(
                 get: { planToDelete != nil && !showDeleteActiveWarning },
                 set: { if !$0 { planToDelete = nil } }
             )) {
-                Button("削除", role: .destructive) {
+                Button("delete", role: .destructive) {
                     if let plan = planToDelete {
                         deletePlan(plan)
                     }
                 }
-                Button("キャンセル", role: .cancel) {
+                Button("cancel", role: .cancel) {
                     planToDelete = nil
                 }
             } message: {
-                Text("「\(planToDelete?.name ?? "")」を削除しますか？この操作は取り消せません。")
+                Text(L10n.tr("delete_plan_confirm", planToDelete?.name ?? ""))
             }
-            .alert("有効なプランを削除", isPresented: $showDeleteActiveWarning) {
-                Button("削除", role: .destructive) {
+            .alert("delete_active_plan", isPresented: $showDeleteActiveWarning) {
+                Button("delete", role: .destructive) {
                     if let plan = planToDelete {
                         deletePlan(plan)
                     }
                     showDeleteActiveWarning = false
                 }
-                Button("キャンセル", role: .cancel) {
+                Button("cancel", role: .cancel) {
                     planToDelete = nil
                     showDeleteActiveWarning = false
                 }
             } message: {
-                Text("このプランは現在有効に設定されています。削除すると有効なプランがなくなります。")
+                Text("delete_active_plan_warning")
             }
-            .alert("新しいプラン", isPresented: $showNewPlanAlert) {
-                TextField("プラン名", text: $newPlanName)
-                Button("キャンセル", role: .cancel) {}
-                Button("作成") {
+            .alert("new_plan", isPresented: $showNewPlanAlert) {
+                TextField("plan_name", text: $newPlanName)
+                Button("cancel", role: .cancel) {}
+                Button("create") {
                     createPlan()
                 }
                 .disabled(newPlanName.trimmingCharacters(in: .whitespaces).isEmpty)
             } message: {
-                Text("プラン名を入力してください")
+                Text("enter_plan_name")
             }
             .confirmationDialog(
-                "有効なプランを選択",
+                "select_active_plan",
                 isPresented: $showActivePlanPicker,
                 titleVisibility: .visible
             ) {
@@ -120,10 +121,10 @@ struct RoutinesView: View {
                         setActivePlan(plan)
                     }
                 }
-                Button("なし") {
+                Button("none") {
                     clearActivePlan()
                 }
-                Button("キャンセル", role: .cancel) {}
+                Button("cancel", role: .cancel) {}
             }
         }
     }
@@ -132,7 +133,7 @@ struct RoutinesView: View {
 
     private var executionModeSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("実行方法")
+            Text("execution_mode")
                 .font(.subheadline)
                 .fontWeight(.medium)
                 .foregroundColor(AppColors.textSecondary)
@@ -144,8 +145,8 @@ struct RoutinesView: View {
                     try? modelContext.save()
                 }
             )) {
-                Text("単体プラン").tag(ExecutionMode.single)
-                Text("サイクル").tag(ExecutionMode.cycle)
+                Text("single_plan").tag(ExecutionMode.single)
+                Text("cycle").tag(ExecutionMode.cycle)
             }
             .pickerStyle(.segmented)
         }
@@ -162,7 +163,7 @@ struct RoutinesView: View {
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("有効なプラン")
+                    Text("active_plan")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.textPrimary)
@@ -188,7 +189,7 @@ struct RoutinesView: View {
     private var activePlanName: String {
         guard let activePlanId = profile?.activePlanId,
               let plan = plans.first(where: { $0.id == activePlanId }) else {
-            return "未設定"
+            return L10n.tr("not_set")
         }
         return plan.name
     }
@@ -200,7 +201,7 @@ struct RoutinesView: View {
             // Cycle toggle row
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("サイクル")
+                    Text("cycle")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.textPrimary)
@@ -211,7 +212,7 @@ struct RoutinesView: View {
                             .foregroundColor(AppColors.textSecondary)
                             .lineLimit(1)
                     } else {
-                        Text("アクティブなサイクルがありません")
+                        Text("no_active_cycle")
                             .font(.caption)
                             .foregroundColor(AppColors.textMuted)
                     }
@@ -236,7 +237,7 @@ struct RoutinesView: View {
             // Edit button (navigate to cycle list)
             NavigationLink(destination: CycleListView()) {
                 HStack {
-                    Text("サイクルを編集")
+                    Text("edit_cycles")
                         .font(.subheadline)
                         .foregroundColor(AppColors.accentBlue)
 
@@ -258,7 +259,7 @@ struct RoutinesView: View {
     private func cycleSummary(for cycle: PlanCycle) -> String {
         let planNames = cycle.sortedItems.compactMap { $0.plan?.name }
         if planNames.isEmpty {
-            return "プランがありません"
+            return L10n.tr("no_plans")
         }
         return planNames.joined(separator: " → ")
     }
@@ -271,7 +272,7 @@ struct RoutinesView: View {
                 .fill(AppColors.textMuted.opacity(0.3))
                 .frame(height: 1)
 
-            Text("プラン一覧")
+            Text("plans")
                 .font(.caption)
                 .foregroundColor(AppColors.textMuted)
 
@@ -290,8 +291,8 @@ struct RoutinesView: View {
             showNewPlanAlert = true
         } label: {
             ActionCardButton(
-                title: "プランを追加",
-                subtitle: "新しいワークアウトプランを作成",
+                title: L10n.tr("add_plan"),
+                subtitle: L10n.tr("add_plan_subtitle"),
                 icon: "plus",
                 showChevron: false
             )
@@ -331,11 +332,11 @@ struct RoutinesView: View {
 
     private var emptyPlansMessage: some View {
         VStack(spacing: 8) {
-            Text("プランがありません")
+            Text("no_plans")
                 .font(.subheadline)
                 .foregroundColor(AppColors.textSecondary)
 
-            Text("上のカードからプランを作成しましょう")
+            Text("create_plan_hint")
                 .font(.caption)
                 .foregroundColor(AppColors.textMuted)
         }
@@ -456,12 +457,12 @@ private struct PlanCardView: View {
             VStack(alignment: .leading, spacing: 8) {
                 // Header
                 HStack {
-                    Text(plan.name.isEmpty ? "新規プラン" : plan.name)
+                    Text(plan.name.isEmpty ? L10n.tr("new_plan") : plan.name)
                         .font(.headline)
                         .foregroundColor(AppColors.textPrimary)
 
                     if isActive {
-                        Text("アクティブ")
+                        Text("active")
                             .font(.caption)
                             .fontWeight(.medium)
                             .padding(.horizontal, 8)
@@ -480,8 +481,14 @@ private struct PlanCardView: View {
 
                 // Summary
                 HStack(spacing: 16) {
-                    Label("\(plan.dayCount)日", systemImage: "calendar")
-                    Label("\(plan.totalExerciseCount)種目", systemImage: "figure.strengthtraining.traditional")
+                    Label(
+                        "\(plan.dayCount)\(L10n.tr("days_unit"))",
+                        systemImage: "calendar"
+                    )
+                    Label(
+                        "\(plan.totalExerciseCount)\(L10n.tr("exercises_unit"))",
+                        systemImage: "figure.strengthtraining.traditional"
+                    )
                 }
                 .font(.caption)
                 .foregroundColor(AppColors.textSecondary)
@@ -503,14 +510,14 @@ private struct PlanCardView: View {
             Button(role: .destructive) {
                 onDelete()
             } label: {
-                Label("削除", systemImage: "trash")
+                Label("delete", systemImage: "trash")
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 onDelete()
             } label: {
-                Label("削除", systemImage: "trash")
+                Label("delete", systemImage: "trash")
             }
         }
     }

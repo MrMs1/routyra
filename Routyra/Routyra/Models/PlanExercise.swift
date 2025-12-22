@@ -65,7 +65,7 @@ final class PlanExercise {
     /// Summary string for display (e.g., "60kg / 10回 / 3セット").
     var setsSummary: String {
         if plannedSets.isEmpty {
-            return "セット未設定"
+            return L10n.tr("plan_sets_not_configured")
         }
 
         let sorted = sortedPlannedSets
@@ -76,13 +76,10 @@ final class PlanExercise {
            let first = sorted.first,
            sorted.allSatisfy({ $0.targetWeight == first.targetWeight && $0.targetReps == first.targetReps }) {
             // Format: "60kg / 10回 / 3セット"
-            let weight = first.targetWeight.map { w in
-                w.truncatingRemainder(dividingBy: 1) == 0
-                    ? "\(Int(w))kg"
-                    : String(format: "%.1fkg", w)
-            } ?? "—kg"
-            let reps = first.targetReps.map { "\($0)回" } ?? "—回"
-            return "\(weight) / \(reps) / \(setCount)セット"
+            let weight = first.targetWeight.map(weightString) ?? L10n.tr("weight_placeholder")
+            let reps = first.targetReps.map(repsString) ?? L10n.tr("reps_placeholder")
+            let sets = setsString(setCount)
+            return "\(weight) / \(reps) / \(sets)"
         }
 
         // Different sets - show count and range
@@ -94,31 +91,28 @@ final class PlanExercise {
         if !weights.isEmpty {
             let minWeight = weights.min()!
             let maxWeight = weights.max()!
-            let formatWeight: (Double) -> String = { w in
-                w.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(w))" : String(format: "%.1f", w)
-            }
             if minWeight == maxWeight {
-                parts.append("\(formatWeight(minWeight))kg")
+                parts.append(weightString(minWeight))
             } else {
-                parts.append("\(formatWeight(minWeight))–\(formatWeight(maxWeight))kg")
+                parts.append(weightRangeString(minWeight, maxWeight))
             }
         } else {
-            parts.append("—kg")
+            parts.append(L10n.tr("weight_placeholder"))
         }
 
         if !reps.isEmpty {
             let minReps = reps.min()!
             let maxReps = reps.max()!
             if minReps == maxReps {
-                parts.append("\(minReps)回")
+                parts.append(repsString(minReps))
             } else {
-                parts.append("\(minReps)–\(maxReps)回")
+                parts.append(repsRangeString(minReps, maxReps))
             }
         } else {
-            parts.append("—回")
+            parts.append(L10n.tr("reps_placeholder"))
         }
 
-        parts.append("\(setCount)セット")
+        parts.append(setsString(setCount))
 
         return parts.joined(separator: " / ")
     }
@@ -127,39 +121,62 @@ final class PlanExercise {
     var compactSummary: String {
         let sets = sortedPlannedSets
         guard !sets.isEmpty else {
-            return "セット未設定"
+            return L10n.tr("plan_sets_not_configured")
         }
 
         let setsCount = sets.count
         let weights = sets.compactMap(\.targetWeight)
         let reps = sets.compactMap(\.targetReps)
 
-        var parts: [String] = ["\(setsCount)セット"]
+        var parts: [String] = [setsString(setsCount)]
 
         if !reps.isEmpty {
             let minReps = reps.min()!
             let maxReps = reps.max()!
             if minReps == maxReps {
-                parts.append("\(minReps)reps")
+                parts.append(repsString(minReps))
             } else {
-                parts.append("\(minReps)–\(maxReps)reps")
+                parts.append(repsRangeString(minReps, maxReps))
             }
         }
 
         if !weights.isEmpty {
             let minWeight = weights.min()!
             let maxWeight = weights.max()!
-            let formatWeight: (Double) -> String = { w in
-                w.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(w))" : String(format: "%.1f", w)
-            }
             if minWeight == maxWeight {
-                parts.append("\(formatWeight(minWeight))kg")
+                parts.append(weightString(minWeight))
             } else {
-                parts.append("\(formatWeight(minWeight))–\(formatWeight(maxWeight))kg")
+                parts.append(weightRangeString(minWeight, maxWeight))
             }
         }
 
         return parts.joined(separator: " • ")
+    }
+
+    private func formatWeightValue(_ weight: Double) -> String {
+        weight.truncatingRemainder(dividingBy: 1) == 0
+            ? "\(Int(weight))"
+            : String(format: "%.1f", weight)
+    }
+
+    private func weightString(_ weight: Double) -> String {
+        L10n.tr("weight_with_unit", formatWeightValue(weight))
+    }
+
+    private func weightRangeString(_ min: Double, _ max: Double) -> String {
+        L10n.tr("weight_range_with_unit", formatWeightValue(min), formatWeightValue(max))
+    }
+
+    private func repsString(_ reps: Int) -> String {
+        L10n.tr("reps_with_unit", reps)
+    }
+
+    private func repsRangeString(_ min: Int, _ max: Int) -> String {
+        L10n.tr("reps_range_with_unit", min, max)
+    }
+
+    private func setsString(_ count: Int) -> String {
+        L10n.tr("sets_with_unit", count)
     }
 
     // MARK: - Methods

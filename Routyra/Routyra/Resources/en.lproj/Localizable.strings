@@ -39,3 +39,195 @@
 "delete_plan_confirm" = "Delete \"%@\"? This cannot be undone.";
 "delete_active_plan" = "Delete Active Plan";
 "delete_active_plan_warning" = "This plan is currently active. Deleting it will leave you with no active plan.";
+
+// MARK: - General
+"done" = "Done";
+"edit" = "Edit";
+"save" = "Save";
+"ok" = "OK";
+"undo" = "Undo";
+"duplicate" = "Duplicate";
+"reorder" = "Reorder";
+"add_day" = "Add Day";
+"duplicate_day" = "Duplicate Day";
+"delete_day" = "Delete Day";
+"rename_day" = "Rename Day";
+"add_exercise" = "Add Exercise";
+"no_exercises" = "No exercises";
+"unknown_exercise" = "Unknown Exercise";
+"no_sets_configured" = "No sets configured";
+"add_set" = "Add Set";
+"set_label" = "Set %d";
+"set" = "Set";
+"sets" = "Sets";
+"exercises" = "Exercises";
+"days" = "Days";
+"day_label" = "Day %d";
+"day_label_with_name" = "Day %d: %@";
+"day_edit_title" = "Edit Day %d";
+"day_title" = "Title";
+"day_title_example" = "Example: Push";
+"filter_all" = "All";
+"loading" = "Loading...";
+"error_title" = "Error";
+"error_unknown" = "An unknown error occurred.";
+"unknown" = "Unknown";
+
+// MARK: - Tabs & Titles
+"workout" = "Workout";
+"history" = "History";
+"routines" = "Plans";
+"settings" = "Settings";
+"history_subtitle" = "Weekly and monthly workout history";
+
+// MARK: - Settings
+"settings_title" = "Settings";
+"settings_workout_section" = "Workout";
+"settings_workout_footer" = "Launching the app after the set time shows the next day's workout.";
+"settings_app_info" = "App Info";
+"settings_version" = "Version";
+"settings_day_transition_time" = "Day Transition Time";
+
+// MARK: - Workout
+"workout_change_exercise" = "Change";
+"workout_change_exercise_title" = "Change Exercise";
+"workout_add_set" = "Add next set";
+"workout_log_set" = "Log this set";
+"workout_go_to_current_set" = "Go to current set";
+"workout_rest_timer" = "Rest Timer";
+"workout_sets_completed" = "%d sets completed";
+"workout_sets_progress" = "%d/%d sets";
+"workout_add_another_set" = "Add another set";
+"workout_add_to_workout" = "Add to Workout";
+"workout_add_sets_title" = "Add Sets";
+"workout_unknown_exercise" = "Unknown Exercise";
+"workout_advanced_to_next" = "Moved to next workout";
+"workout_planned_set_removed" = "Planned set removed";
+"workout_set_deleted" = "Set deleted: %@ kg × %d";
+"workout_delete_entry_title" = "Delete Exercise";
+"workout_delete_entry_message" = "Delete \"%@\" from this workout?";
+
+// MARK: - Empty State (Onboarding)
+"empty_state_headline" = "Auto-display with a plan, start recording instantly";
+"empty_state_description" = "Set up a workout plan and today's menu appears automatically—no exercise selection needed.";
+"empty_state_headline_other" = "Create a workout for this day";
+"empty_state_description_other" = "Set up a plan for auto-display, or add exercises manually to get started.";
+"empty_state_recommended" = "Recommended";
+"empty_state_create_plan_title" = "Create a Workout Plan";
+"empty_state_create_plan_subtitle" = "Set up in as little as 1 minute with templates";
+"empty_state_create_plan_button" = "Create Plan";
+"empty_state_manual_title" = "Record manually now";
+"empty_state_manual_subtitle" = "Pick exercises and start right away";
+"empty_state_manual_button" = "Add Exercise";
+"empty_state_copy_title" = "Copy previous workout";
+"empty_state_copy_subtitle" = "Start today with the same exercises as last time";
+"empty_state_copy_button" = "Copy and Start";
+
+// MARK: - Ads
+"ad_sponsored" = "Sponsored";
+"ad_placeholder_title" = "Adjustable Dumbbells";
+
+// MARK: - Bottom Status Bar
+"bottom_status_sets" = "Sets";
+"bottom_status_exercises" = "Exercises";
+"bottom_status_total_volume" = "Total Volume";
+"bottom_status_total_volume_value" = "%@ kg";
+
+// MARK: - Exercise & Body Part
+"exercise_custom_badge" = "Custom";
+"exercise_create_new" = "Create New Exercise";
+"exercise_create_new_subtitle" = "Add a custom exercise";
+"exercise_search_placeholder" = "Search exercises";
+"exercise_name_placeholder" = "Exercise name";
+"exercise_name_section_title" = "Exercise name";
+"exercise_body_part_label" = "Body part: %@";
+"exercise_new_title" = "New Exercise";
+"exercise_save_failed" = "Failed to save: %@";
+"exercise_error_empty_name" = "Please enter an exercise name";
+"exercise_error_duplicate" = "\"%@\" is already registered";
+"exercise_name" = "Exercise name";
+"exercise_name_example" = "Example: Dumbbell fly, Cable crossover";
+"exercise_create_failed" = "Failed to create exercise";
+"body_part_name_placeholder" = "Body part name";
+"body_part_name_section_title" = "Body part name";
+"body_part_name_example" = "Example: Forearms, calves, neck";
+"body_part_new_title" = "New Body Part";
+"body_part_save_failed" = "Failed to save: %@";
+"body_part_error_empty_name" = "Please enter a body part name";
+"body_part_error_duplicate" = "\"%@\" is already registered";
+"body_part_search_placeholder" = "Search body parts";
+"body_part_select_title" = "Select Body Part";
+"body_part" = "Body part";
+
+// MARK: - Cycle
+"cycle_empty_title" = "No cycles";
+"cycle_empty_description" = "Create a cycle to rotate multiple plans.";
+"cycle_list_title" = "Cycles";
+"cycle_navigation_title" = "Cycle";
+"cycle_new_title" = "New Cycle";
+"cycle_name_placeholder" = "Cycle name";
+"cycle_name_required" = "Please enter a cycle name";
+"cycle_plan_count" = "%d plans";
+"cycle_info_section" = "Cycle Info";
+"cycle_current_plan" = "Current plan";
+"cycle_current_day" = "Current day";
+"cycle_reset_progress" = "Reset progress";
+"cycle_progress_section" = "Progress";
+"cycle_no_plans" = "No plans";
+"cycle_add_plans_help" = "Add plans to build a cycle";
+"cycle_add_plan" = "Add Plan";
+"cycle_plans_section" = "Plans";
+"cycle_edit_title" = "Edit Cycle";
+"plan_not_found" = "Plan not found";
+"cycle_day_progress" = "Day %d / %d";
+
+// MARK: - Plans
+"plan_available_section" = "Available Plans";
+"plan_add_title" = "Add Plan";
+"plan_search_placeholder" = "Search plans";
+"plan_already_added" = "Added";
+"plan_empty_title" = "No plans";
+"plan_create_first" = "Create a plan first";
+"plan_summary_days_exercises" = "%d days / %d exercises";
+"plan_name_example" = "Example: Push/Pull";
+"plan_note_example" = "Example: 3x/week training plan";
+"edit_plan" = "Edit Plan";
+"plan_info" = "Plan Info";
+"plan_set_name" = "Set plan name";
+"no_memo" = "No memo";
+"memo" = "Memo";
+"memo_optional" = "Memo (optional)";
+"discard_changes" = "Discard Changes";
+"discard_changes_message" = "You have unsaved changes. Discard them?";
+"discard" = "Discard";
+"continue_editing" = "Continue Editing";
+"plan_sets_not_configured" = "Sets not configured";
+"plan_day_summary" = "%d exercises / %d sets";
+"plan_day_add_exercise_hint" = "Add exercises to set up this day";
+"plan_day_add_from_edit" = "Add from Edit button";
+"plan_add_to_day" = "Add to %@";
+"unknown_plan" = "Unknown Plan";
+"plans_count" = "Plan";
+"activate" = "Activate";
+"deactivate" = "Deactivate";
+
+// MARK: - Units & Formats
+"unit_kg" = "kg";
+"unit_reps" = "reps";
+"weight_with_unit" = "%@ kg";
+"weight_range_with_unit" = "%@–%@ kg";
+"weight_placeholder" = "— kg";
+"reps_with_unit" = "%d reps";
+"reps_range_with_unit" = "%d–%d reps";
+"reps_placeholder" = "— reps";
+"sets_with_unit" = "%d sets";
+
+// MARK: - Day Context & Change
+"day_context_plan_label" = "Plan";
+"day_progress" = "Day %d / %d";
+"day_started_badge" = "Started";
+"day_change_title" = "Change Day";
+"day_change_message" = "Change to Day %d. Current incomplete sets will be replaced.";
+"day_change_skip_toggle" = "Skip this day and move to next day from tomorrow";
+"day_change_confirm" = "Change";
+"day_changed_success" = "Changed to Day %d";

@@ -40,7 +40,7 @@ struct SnackBarView: View {
                 }
 
                 Button(action: onUndo) {
-                    Text("Undo")
+                    Text("undo")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundColor(AppColors.accentBlue)

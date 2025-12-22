@@ -10,87 +10,87 @@ import Foundation
 
 enum Strings {
     // MARK: - Common
-    static let cancel = "キャンセル"
-    static let delete = "削除"
-    static let create = "作成"
-    static let done = "完了"
-    static let edit = "編集"
-    static let save = "保存"
-    static let none = "なし"
-    static let active = "アクティブ"
-    static let notSet = "未設定"
+    static let cancel = L10n.tr("cancel")
+    static let delete = L10n.tr("delete")
+    static let create = L10n.tr("create")
+    static let done = L10n.tr("done")
+    static let edit = L10n.tr("edit")
+    static let save = L10n.tr("save")
+    static let none = L10n.tr("none")
+    static let active = L10n.tr("active")
+    static let notSet = L10n.tr("not_set")
 
     // MARK: - Workout Plans Screen
-    static let workoutPlans = "ワークアウトプラン"
-    static let executionMode = "実行方法"
-    static let singlePlan = "単体プラン"
-    static let cycle = "サイクル"
-    static let activePlan = "有効なプラン"
-    static let selectActivePlan = "有効なプランを選択"
-    static let noActiveCycle = "アクティブなサイクルがありません"
-    static let noPlansInCycle = "プランがありません"
-    static let editCycles = "サイクルを編集"
-    static let plansList = "プラン一覧"
-    static let addPlan = "プランを追加"
-    static let addPlanSubtitle = "新しいワークアウトプランを作成"
-    static let noPlans = "プランがありません"
-    static let createPlanHint = "上のカードからプランを作成しましょう"
-    static let newPlan = "新しいプラン"
-    static let planName = "プラン名"
-    static let enterPlanName = "プラン名を入力してください"
+    static let workoutPlans = L10n.tr("workout_plans")
+    static let executionMode = L10n.tr("execution_mode")
+    static let singlePlan = L10n.tr("single_plan")
+    static let cycle = L10n.tr("cycle")
+    static let activePlan = L10n.tr("active_plan")
+    static let selectActivePlan = L10n.tr("select_active_plan")
+    static let noActiveCycle = L10n.tr("no_active_cycle")
+    static let noPlansInCycle = L10n.tr("no_plans_in_cycle")
+    static let editCycles = L10n.tr("edit_cycles")
+    static let plansList = L10n.tr("plans")
+    static let addPlan = L10n.tr("add_plan")
+    static let addPlanSubtitle = L10n.tr("add_plan_subtitle")
+    static let noPlans = L10n.tr("no_plans")
+    static let createPlanHint = L10n.tr("create_plan_hint")
+    static let newPlan = L10n.tr("new_plan")
+    static let planName = L10n.tr("plan_name")
+    static let enterPlanName = L10n.tr("enter_plan_name")
 
     // MARK: - Plan Card
-    static let daysUnit = "日"
-    static let exercisesUnit = "種目"
+    static let daysUnit = L10n.tr("days_unit")
+    static let exercisesUnit = L10n.tr("exercises_unit")
 
     // MARK: - Delete Plan
-    static let deletePlan = "プランを削除"
+    static let deletePlan = L10n.tr("delete_plan")
     static func deletePlanConfirm(_ name: String) -> String {
-        "「\(name)」を削除しますか？この操作は取り消せません。"
+        L10n.tr("delete_plan_confirm", name)
     }
-    static let deleteActivePlan = "有効なプランを削除"
-    static let deleteActivePlanWarning = "このプランは現在有効に設定されています。削除すると有効なプランがなくなります。"
+    static let deleteActivePlan = L10n.tr("delete_active_plan")
+    static let deleteActivePlanWarning = L10n.tr("delete_active_plan_warning")
 
     // MARK: - Cycle
-    static let newCycle = "新しいサイクル"
-    static let cycleName = "サイクル名"
-    static let enterCycleName = "サイクル名を入力してください"
-    static let noCycles = "サイクルがありません"
-    static let cycleDescription = "複数のプランを順番に回すサイクルを作成できます"
-    static let cycleList = "サイクル一覧"
-    static let plansCount = "プラン"
-    static let deactivate = "アクティブを解除"
-    static let activate = "アクティブに設定"
+    static let newCycle = L10n.tr("cycle_new_title")
+    static let cycleName = L10n.tr("cycle_name_placeholder")
+    static let enterCycleName = L10n.tr("cycle_name_required")
+    static let noCycles = L10n.tr("cycle_empty_title")
+    static let cycleDescription = L10n.tr("cycle_empty_description")
+    static let cycleList = L10n.tr("cycle_list_title")
+    static let plansCount = L10n.tr("plans_count")
+    static let deactivate = L10n.tr("deactivate")
+    static let activate = L10n.tr("activate")
 
     // MARK: - Days
-    static let days = "Days"
-    static let addDay = "Dayを追加"
-    static let reorder = "並び替え"
-    static let duplicateDay = "Dayを複製"
-    static let deleteDay = "Dayを削除"
-    static let renameDay = "名前を変更"
+    static let days = L10n.tr("days")
+    static let addDay = L10n.tr("add_day")
+    static let reorder = L10n.tr("reorder")
+    static let duplicateDay = L10n.tr("duplicate_day")
+    static let deleteDay = L10n.tr("delete_day")
+    static let renameDay = L10n.tr("rename_day")
 
     // MARK: - Plan Editor
-    static let planInfo = "プラン情報"
-    static let setPlanName = "プラン名を設定"
-    static let noMemo = "メモなし"
-    static let memo = "メモ"
-    static let memoOptional = "メモ（任意）"
-    static let discardChanges = "変更を破棄"
-    static let discardChangesMessage = "保存されていない変更があります。破棄しますか？"
-    static let discard = "破棄"
-    static let continueEditing = "編集を続ける"
-    static let editPlan = "プランを編集"
+    static let planInfo = L10n.tr("plan_info")
+    static let setPlanName = L10n.tr("plan_set_name")
+    static let noMemo = L10n.tr("no_memo")
+    static let memo = L10n.tr("memo")
+    static let memoOptional = L10n.tr("memo_optional")
+    static let discardChanges = L10n.tr("discard_changes")
+    static let discardChangesMessage = L10n.tr("discard_changes_message")
+    static let discard = L10n.tr("discard")
+    static let continueEditing = L10n.tr("continue_editing")
+    static let editPlan = L10n.tr("edit_plan")
 
     // MARK: - Exercises
-    static let addExercise = "種目を追加"
-    static let noExercises = "種目がありません"
-    static let unknownExercise = "不明な種目"
-    static let noSetsConfigured = "セットが設定されていません"
+    static let addExercise = L10n.tr("add_exercise")
+    static let noExercises = L10n.tr("no_exercises")
+    static let unknownExercise = L10n.tr("unknown_exercise")
+    static let noSetsConfigured = L10n.tr("no_sets_configured")
 
     // MARK: - Sets
-    static let set = "セット"
-    static let sets = "セット"
-    static let reps = "回"
-    static let kg = "kg"
+    static let set = L10n.tr("set")
+    static let sets = L10n.tr("sets")
+    static let reps = L10n.tr("unit_reps")
+    static let kg = L10n.tr("unit_kg")
 }

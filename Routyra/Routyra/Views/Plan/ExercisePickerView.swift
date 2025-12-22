@@ -87,7 +87,7 @@ struct ExercisePickerView: View {
             .background(AppColors.background)
         }
         .background(AppColors.background)
-        .navigationTitle("\(dayTitle)に追加")
+        .navigationTitle(L10n.tr("plan_add_to_day", dayTitle))
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: ExercisePickerDestination.self) { destination in
             switch destination {
@@ -112,7 +112,7 @@ struct ExercisePickerView: View {
             HStack(spacing: 8) {
                 // All filter
                 ExerciseFilterChip(
-                    title: "すべて",
+                    title: L10n.tr("filter_all"),
                     isSelected: selectedBodyPartId == nil
                 ) {
                     withAnimation(.easeInOut(duration: 0.2)) {

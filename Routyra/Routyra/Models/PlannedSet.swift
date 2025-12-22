@@ -49,11 +49,9 @@ final class PlannedSet {
     /// Formatted weight string.
     var weightString: String {
         if let w = targetWeight {
-            return w.truncatingRemainder(dividingBy: 1) == 0
-                ? "\(Int(w))kg"
-                : String(format: "%.1fkg", w)
+            return weightStringWithUnit(w)
         }
-        return "-"
+        return L10n.tr("weight_placeholder")
     }
 
     /// Formatted reps string.
@@ -61,25 +59,29 @@ final class PlannedSet {
         if let r = targetReps {
             return "\(r)"
         }
-        return "-"
+        return "—"
     }
 
     /// Formatted reps string with unit.
     var repsStringWithUnit: String {
         if let r = targetReps {
-            return "\(r)回"
+            return L10n.tr("reps_with_unit", r)
         }
-        return "—回"
+        return L10n.tr("reps_placeholder")
     }
 
     /// Summary string for display (e.g., "60kg / 10回").
     var summary: String {
-        let weight = targetWeight.map { w in
-            w.truncatingRemainder(dividingBy: 1) == 0
-                ? "\(Int(w))kg"
-                : String(format: "%.1fkg", w)
-        } ?? "—kg"
-        let reps = targetReps.map { "\($0)回" } ?? "—回"
+        let weight = targetWeight.map(weightStringWithUnit) ?? L10n.tr("weight_placeholder")
+        let reps = targetReps.map { L10n.tr("reps_with_unit", $0) }
+            ?? L10n.tr("reps_placeholder")
         return "\(weight) / \(reps)"
+    }
+
+    private func weightStringWithUnit(_ weight: Double) -> String {
+        let formatted = weight.truncatingRemainder(dividingBy: 1) == 0
+            ? "\(Int(weight))"
+            : String(format: "%.1f", weight)
+        return L10n.tr("weight_with_unit", formatted)
     }
 }

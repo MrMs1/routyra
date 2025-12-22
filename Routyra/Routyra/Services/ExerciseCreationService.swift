@@ -20,9 +20,9 @@ enum ExerciseCreationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .emptyName:
-            return "エクササイズ名を入力してください"
+            return L10n.tr("exercise_error_empty_name")
         case .duplicateExercise(_, let name):
-            return "「\(name)」は既に登録されています"
+            return L10n.tr("exercise_error_duplicate", name)
         }
     }
 }

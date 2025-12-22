@@ -39,3 +39,195 @@
 "delete_plan_confirm" = "「%@」を削除しますか？この操作は取り消せません。";
 "delete_active_plan" = "有効なプランを削除";
 "delete_active_plan_warning" = "このプランは現在有効に設定されています。削除すると有効なプランがなくなります。";
+
+// MARK: - General
+"done" = "完了";
+"edit" = "編集";
+"save" = "保存";
+"ok" = "OK";
+"undo" = "元に戻す";
+"duplicate" = "複製";
+"reorder" = "並び替え";
+"add_day" = "Dayを追加";
+"duplicate_day" = "Dayを複製";
+"delete_day" = "Dayを削除";
+"rename_day" = "名前を変更";
+"add_exercise" = "種目を追加";
+"no_exercises" = "種目がありません";
+"unknown_exercise" = "不明な種目";
+"no_sets_configured" = "セットが設定されていません";
+"add_set" = "セットを追加";
+"set_label" = "セット %d";
+"set" = "セット";
+"sets" = "セット";
+"exercises" = "種目";
+"days" = "Days";
+"day_label" = "Day %d";
+"day_label_with_name" = "Day %d: %@";
+"day_edit_title" = "Day %d を編集";
+"day_title" = "タイトル";
+"day_title_example" = "例: Push";
+"filter_all" = "すべて";
+"loading" = "読み込み中...";
+"error_title" = "エラー";
+"error_unknown" = "不明なエラーが発生しました";
+"unknown" = "不明";
+
+// MARK: - Tabs & Titles
+"workout" = "ワークアウト";
+"history" = "履歴";
+"routines" = "プラン";
+"settings" = "設定";
+"history_subtitle" = "週間・月間のワークアウト履歴";
+
+// MARK: - Settings
+"settings_title" = "設定";
+"settings_workout_section" = "ワークアウト";
+"settings_workout_footer" = "設定した時刻以降にアプリを起動すると、次の日のワークアウトメニューが表示されます。";
+"settings_app_info" = "アプリ情報";
+"settings_version" = "バージョン";
+"settings_day_transition_time" = "日付切り替え時刻";
+
+// MARK: - Workout
+"workout_change_exercise" = "変更";
+"workout_change_exercise_title" = "種目を変更";
+"workout_add_set" = "次のセットを追加";
+"workout_log_set" = "このセットを記録";
+"workout_go_to_current_set" = "最新セットへ";
+"workout_rest_timer" = "レストタイマー";
+"workout_sets_completed" = "%dセット完了";
+"workout_sets_progress" = "%d/%dセット";
+"workout_add_another_set" = "もう1セット";
+"workout_add_to_workout" = "ワークアウトに追加";
+"workout_add_sets_title" = "セットを追加";
+"workout_unknown_exercise" = "不明な種目";
+"workout_advanced_to_next" = "次のワークアウトに進みました";
+"workout_planned_set_removed" = "予定セットを削除しました";
+"workout_set_deleted" = "セットを削除: %@kg × %d回";
+"workout_delete_entry_title" = "種目を削除";
+"workout_delete_entry_message" = "「%@」をこのワークアウトから削除しますか？";
+
+// MARK: - Empty State (Onboarding)
+"empty_state_headline" = "プランで自動表示、すぐ記録";
+"empty_state_description" = "ワークアウトプランを設定すると、毎回種目選択しなくても今日のメニューが表示されます。";
+"empty_state_headline_other" = "この日のワークアウトを作成";
+"empty_state_description_other" = "プランを作ると自動で表示できます。手動でも追加して始められます。";
+"empty_state_recommended" = "おすすめ";
+"empty_state_create_plan_title" = "ワークアウトプランを作成";
+"empty_state_create_plan_subtitle" = "テンプレから最短1分で設定";
+"empty_state_create_plan_button" = "プランを作成";
+"empty_state_manual_title" = "今すぐ手動で記録";
+"empty_state_manual_subtitle" = "種目を選んでこのまま始める";
+"empty_state_manual_button" = "種目を追加";
+"empty_state_copy_title" = "前回のワークアウトをコピー";
+"empty_state_copy_subtitle" = "前回と同じ種目で今日を開始";
+"empty_state_copy_button" = "コピーして始める";
+
+// MARK: - Ads
+"ad_sponsored" = "広告";
+"ad_placeholder_title" = "調整式ダンベル";
+
+// MARK: - Bottom Status Bar
+"bottom_status_sets" = "セット";
+"bottom_status_exercises" = "種目";
+"bottom_status_total_volume" = "総ボリューム";
+"bottom_status_total_volume_value" = "%@ kg";
+
+// MARK: - Exercise & Body Part
+"exercise_custom_badge" = "カスタム";
+"exercise_create_new" = "新しい種目を作成";
+"exercise_create_new_subtitle" = "オリジナルの種目を追加";
+"exercise_search_placeholder" = "種目を検索";
+"exercise_name_placeholder" = "エクササイズ名";
+"exercise_name_section_title" = "エクササイズ名を入力";
+"exercise_body_part_label" = "部位: %@";
+"exercise_new_title" = "新しいエクササイズ";
+"exercise_save_failed" = "保存に失敗しました: %@";
+"exercise_error_empty_name" = "エクササイズ名を入力してください";
+"exercise_error_duplicate" = "「%@」は既に登録されています";
+"exercise_name" = "種目名";
+"exercise_name_example" = "例: ダンベルフライ、ケーブルクロス";
+"exercise_create_failed" = "作成に失敗しました";
+"body_part_name_placeholder" = "部位名";
+"body_part_name_section_title" = "部位名を入力";
+"body_part_name_example" = "例: 前腕、ふくらはぎ、首";
+"body_part_new_title" = "新しい部位";
+"body_part_save_failed" = "保存に失敗しました: %@";
+"body_part_error_empty_name" = "部位名を入力してください";
+"body_part_error_duplicate" = "「%@」は既に登録されています";
+"body_part_search_placeholder" = "部位を検索";
+"body_part_select_title" = "部位を選択";
+"body_part" = "部位";
+
+// MARK: - Cycle
+"cycle_empty_title" = "サイクルがありません";
+"cycle_empty_description" = "複数のプランを順番に回すサイクルを作成できます";
+"cycle_list_title" = "サイクル一覧";
+"cycle_navigation_title" = "サイクル";
+"cycle_new_title" = "新しいサイクル";
+"cycle_name_placeholder" = "サイクル名";
+"cycle_name_required" = "サイクル名を入力してください";
+"cycle_plan_count" = "%dプラン";
+"cycle_info_section" = "サイクル情報";
+"cycle_current_plan" = "現在のプラン";
+"cycle_current_day" = "現在のDay";
+"cycle_reset_progress" = "進捗をリセット";
+"cycle_progress_section" = "進捗状況";
+"cycle_no_plans" = "プランがありません";
+"cycle_add_plans_help" = "プランを追加してサイクルを構成してください";
+"cycle_add_plan" = "プランを追加";
+"cycle_plans_section" = "プラン";
+"cycle_edit_title" = "サイクル編集";
+"plan_not_found" = "プランが見つかりません";
+"cycle_day_progress" = "Day %d / %d";
+
+// MARK: - Plans
+"plan_available_section" = "利用可能なプラン";
+"plan_add_title" = "プランを追加";
+"plan_search_placeholder" = "プランを検索";
+"plan_already_added" = "追加済み";
+"plan_empty_title" = "プランがありません";
+"plan_create_first" = "先にプランを作成してください";
+"plan_summary_days_exercises" = "%d日間 / %d種目";
+"plan_name_example" = "例: Push/Pull";
+"plan_note_example" = "例: 週3回のトレーニングプラン";
+"edit_plan" = "プランを編集";
+"plan_info" = "プラン情報";
+"plan_set_name" = "プラン名を設定";
+"no_memo" = "メモなし";
+"memo" = "メモ";
+"memo_optional" = "メモ（任意）";
+"discard_changes" = "変更を破棄";
+"discard_changes_message" = "保存されていない変更があります。破棄しますか？";
+"discard" = "破棄";
+"continue_editing" = "編集を続ける";
+"plan_sets_not_configured" = "セット未設定";
+"plan_day_summary" = "%d種目 / %dセット";
+"plan_day_add_exercise_hint" = "種目を追加してトレーニング内容を設定しましょう";
+"plan_day_add_from_edit" = "編集ボタンから追加";
+"plan_add_to_day" = "%@に追加";
+"unknown_plan" = "不明なプラン";
+"plans_count" = "プラン";
+"activate" = "アクティブに設定";
+"deactivate" = "アクティブを解除";
+
+// MARK: - Units & Formats
+"unit_kg" = "kg";
+"unit_reps" = "回";
+"weight_with_unit" = "%@kg";
+"weight_range_with_unit" = "%@–%@kg";
+"weight_placeholder" = "—kg";
+"reps_with_unit" = "%d回";
+"reps_range_with_unit" = "%d–%d回";
+"reps_placeholder" = "—回";
+"sets_with_unit" = "%dセット";
+
+// MARK: - Day Context & Change
+"day_context_plan_label" = "プラン";
+"day_progress" = "Day %d / %d";
+"day_started_badge" = "開始済み";
+"day_change_title" = "Dayを変更";
+"day_change_message" = "Day %d に変更します。現在の未完了セットは置き換えられます。";
+"day_change_skip_toggle" = "このDayをスキップして、明日から次のDayに進める";
+"day_change_confirm" = "変更する";
+"day_changed_success" = "Day %d に変更しました";

@@ -8,7 +8,7 @@ import SwiftUI
 struct AdPlaceholderView: View {
     var body: some View {
         HStack {
-            Text("Sponsored")
+            Text("ad_sponsored")
                 .font(.caption2)
                 .foregroundColor(AppColors.textMuted)
                 .padding(.horizontal, 8)
@@ -20,7 +20,7 @@ struct AdPlaceholderView: View {
                 .fill(AppColors.divider)
                 .frame(width: 1, height: 16)
 
-            Text("Adjustable Dumbbells")
+            Text("ad_placeholder_title")
                 .font(.subheadline)
                 .foregroundColor(AppColors.textSecondary)
 

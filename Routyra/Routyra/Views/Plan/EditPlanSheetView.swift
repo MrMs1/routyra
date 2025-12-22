@@ -28,33 +28,33 @@ struct EditPlanSheetView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("例: Push/Pull", text: $draftName)
+                    TextField("plan_name_example", text: $draftName)
                         .focused($focusedField, equals: .name)
                 } header: {
-                    Text("プラン名")
+                    Text("plan_name")
                 }
 
                 Section {
-                    TextField("例: 週3回のトレーニングプラン", text: $draftNote, axis: .vertical)
+                    TextField("plan_note_example", text: $draftNote, axis: .vertical)
                         .lineLimit(3...6)
                         .focused($focusedField, equals: .note)
                 } header: {
-                    Text("メモ（任意）")
+                    Text("memo_optional")
                 }
             }
             .scrollContentBackground(.hidden)
             .background(AppColors.background)
-            .navigationTitle("プランを編集")
+            .navigationTitle("edit_plan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
+                    Button("cancel") {
                         dismiss()
                     }
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完了") {
+                    Button("done") {
                         saveAndDismiss()
                     }
                     .fontWeight(.semibold)

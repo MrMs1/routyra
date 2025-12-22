@@ -11,6 +11,8 @@ enum AppColors {
     static let cardBackgroundCompleted = Color(hex: "141416")
     static let accentBlue = Color(hex: "0A84FF")
     static let mutedBlue = Color(hex: "2C5282")
+    static let weekendSaturday = Color(hex: "64D2FF")
+    static let weekendSunday = Color(hex: "FF453A")
     static let textPrimary = Color.white
     static let textSecondary = Color(hex: "8E8E93")
     static let textMuted = Color(hex: "636366")

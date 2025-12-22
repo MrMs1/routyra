@@ -48,11 +48,11 @@ struct CyclePlanPickerView: View {
                                 .font(.system(size: 40))
                                 .foregroundColor(AppColors.textMuted)
 
-                            Text("プランがありません")
+                            Text("plan_empty_title")
                                 .font(.headline)
                                 .foregroundColor(AppColors.textSecondary)
 
-                            Text("先にプランを作成してください")
+                            Text("plan_create_first")
                                 .font(.caption)
                                 .foregroundColor(AppColors.textMuted)
                         }
@@ -72,19 +72,19 @@ struct CyclePlanPickerView: View {
                             )
                         }
                     } header: {
-                        Text("利用可能なプラン")
+                        Text("plan_available_section")
                     }
                 }
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(AppColors.background)
-            .navigationTitle("プランを追加")
+            .navigationTitle("plan_add_title")
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "プランを検索")
+            .searchable(text: $searchText, prompt: "plan_search_placeholder")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
+                    Button("cancel") {
                         dismiss()
                     }
                 }
@@ -122,7 +122,7 @@ private struct PlanRowView: View {
                         .fontWeight(.medium)
                         .foregroundColor(isAlreadyAdded ? AppColors.textMuted : AppColors.textPrimary)
 
-                    Text("\(plan.dayCount)日間 / \(plan.totalExerciseCount)種目")
+                    Text(L10n.tr("plan_summary_days_exercises", plan.dayCount, plan.totalExerciseCount))
                         .font(.caption)
                         .foregroundColor(AppColors.textSecondary)
                 }
@@ -130,7 +130,7 @@ private struct PlanRowView: View {
                 Spacer()
 
                 if isAlreadyAdded {
-                    Text("追加済み")
+                    Text("plan_already_added")
                         .font(.caption)
                         .foregroundColor(AppColors.textMuted)
                 } else {

@@ -14,23 +14,36 @@ enum Localizer {
     /// Default language code when device language is not supported.
     nonisolated static let defaultLanguageCode = "en"
 
+    private nonisolated static func normalizedLanguageCode(from identifier: String) -> String? {
+        let locale = Locale(identifier: identifier)
+        if let code = locale.language.languageCode?.identifier {
+            return code
+        }
+        return identifier.split(separator: "-").first.map(String.init)
+    }
+
     /// Returns the current device language code.
     /// Falls back to "en" if the device language is not supported.
     nonisolated static var currentLanguageCode: String {
-        // First check preferred languages (most reliable for app language)
+        // First check the app's preferred localizations.
+        if let preferredLocalization = Bundle.main.preferredLocalizations.first,
+           let code = normalizedLanguageCode(from: preferredLocalization),
+           supportedLanguages.contains(code) {
+            return code
+        }
+
+        // Then check preferred languages (most reliable for device language order).
         for preferred in Locale.preferredLanguages {
-            // Extract language code (e.g., "ja-JP" -> "ja", "en-US" -> "en")
-            let code = String(preferred.prefix(2))
-            if supportedLanguages.contains(code) {
+            if let code = normalizedLanguageCode(from: preferred),
+               supportedLanguages.contains(code) {
                 return code
             }
         }
 
         // Fallback to Locale.current
-        if let languageCode = Locale.current.language.languageCode?.identifier {
-            if supportedLanguages.contains(languageCode) {
-                return languageCode
-            }
+        if let languageCode = Locale.current.language.languageCode?.identifier,
+           supportedLanguages.contains(languageCode) {
+            return languageCode
         }
 
         return defaultLanguageCode

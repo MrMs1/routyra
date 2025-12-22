@@ -53,7 +53,7 @@ struct CycleContextView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark.circle.fill")
-                        Text("完了")
+                        Text("done")
                     }
                     .font(.caption)
                     .fontWeight(.semibold)

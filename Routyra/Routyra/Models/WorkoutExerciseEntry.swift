@@ -63,9 +63,9 @@ final class WorkoutExerciseEntry {
 
     // MARK: - Computed Properties
 
-    /// Non-deleted sets.
+    /// Non-deleted sets (excludes soft-deleted sets).
     var activeSets: [WorkoutSet] {
-        sets.filter { !$0.isDeleted }
+        sets.filter { !$0.isSoftDeleted }
     }
 
     /// Sets sorted by index.
@@ -85,11 +85,11 @@ final class WorkoutExerciseEntry {
             .reduce(Decimal.zero) { $0 + $1.volume }
     }
 
-    /// Whether all planned sets are completed.
-    /// True if completedSetsCount >= plannedSetCount (and plannedSetCount > 0).
+    /// Whether all active sets are completed.
+    /// True only if there are sets and all of them are completed.
     var isPlannedSetsCompleted: Bool {
-        guard plannedSetCount > 0 else { return true }
-        return completedSetsCount >= plannedSetCount
+        guard !activeSets.isEmpty else { return false }
+        return activeSets.allSatisfy { $0.isCompleted }
     }
 
     /// Whether this entry has any completed sets.

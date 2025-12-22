@@ -20,9 +20,9 @@ enum BodyPartCreationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .emptyName:
-            return "部位名を入力してください"
+            return L10n.tr("body_part_error_empty_name")
         case .duplicateBodyPart(let name):
-            return "「\(name)」は既に登録されています"
+            return L10n.tr("body_part_error_duplicate", name)
         }
     }
 }

@@ -32,11 +32,11 @@ struct CycleListView: View {
                                 .font(.system(size: 40))
                                 .foregroundColor(AppColors.textMuted)
 
-                            Text("サイクルがありません")
+                            Text("cycle_empty_title")
                                 .font(.headline)
                                 .foregroundColor(AppColors.textSecondary)
 
-                            Text("複数のプランを順番に回すサイクルを作成できます")
+                            Text("cycle_empty_description")
                                 .font(.caption)
                                 .foregroundColor(AppColors.textMuted)
                                 .multilineTextAlignment(.center)
@@ -65,14 +65,14 @@ struct CycleListView: View {
                         }
                         .onDelete(perform: deleteCycles)
                     } header: {
-                        Text("サイクル一覧")
+                        Text("cycle_list_title")
                     }
                 }
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(AppColors.background)
-            .navigationTitle("サイクル")
+            .navigationTitle("cycle_navigation_title")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -83,15 +83,15 @@ struct CycleListView: View {
                     }
                 }
             }
-            .alert("新しいサイクル", isPresented: $showNewCycleAlert) {
-                TextField("サイクル名", text: $newCycleName)
-                Button("キャンセル", role: .cancel) {}
-                Button("作成") {
+            .alert("cycle_new_title", isPresented: $showNewCycleAlert) {
+                TextField("cycle_name_placeholder", text: $newCycleName)
+                Button("cancel", role: .cancel) {}
+                Button("create") {
                     createCycle()
                 }
                 .disabled(newCycleName.trimmingCharacters(in: .whitespaces).isEmpty)
             } message: {
-                Text("サイクル名を入力してください")
+                Text("cycle_name_required")
             }
             .navigationDestination(item: $selectedCycle) { cycle in
                 CycleEditorView(cycle: cycle)
@@ -147,7 +147,7 @@ private struct CycleRowView: View {
                         .foregroundColor(AppColors.textPrimary)
 
                     if isActive {
-                        Text("アクティブ")
+                        Text("active")
                             .font(.caption2)
                             .fontWeight(.semibold)
                             .padding(.horizontal, 6)
@@ -158,7 +158,7 @@ private struct CycleRowView: View {
                     }
                 }
 
-                Text("\(cycle.planCount)プラン")
+                Text(L10n.tr("cycle_plan_count", cycle.planCount))
                     .font(.caption)
                     .foregroundColor(AppColors.textSecondary)
             }

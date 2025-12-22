@@ -34,7 +34,7 @@ struct AddExerciseFlowRoot: View {
                         navigationPath.append(NavigationDestination.exerciseName)
                     }
                 } else {
-                    ProgressView("読み込み中...")
+                    ProgressView("loading")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
@@ -55,7 +55,7 @@ struct AddExerciseFlowRoot: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
+                    Button("cancel") {
                         onCancel?()
                         dismiss()
                     }

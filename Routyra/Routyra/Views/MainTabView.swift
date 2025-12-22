@@ -15,28 +15,28 @@ struct MainTabView: View {
             WorkoutView(navigateToHistory: $navigateToHistory, navigateToRoutines: $navigateToRoutines)
                 .tabItem {
                     Image(systemName: "figure.strengthtraining.traditional")
-                    Text("Workout")
+                    Text("workout")
                 }
                 .tag(0)
 
             HistoryView()
                 .tabItem {
                     Image(systemName: "calendar")
-                    Text("History")
+                    Text("history")
                 }
                 .tag(1)
 
             RoutinesView()
                 .tabItem {
                     Image(systemName: "list.bullet.rectangle")
-                    Text("Routines")
+                    Text("routines")
                 }
                 .tag(2)
 
             SettingsView()
                 .tabItem {
                     Image(systemName: "gearshape")
-                    Text("Settings")
+                    Text("settings")
                 }
                 .tag(3)
         }

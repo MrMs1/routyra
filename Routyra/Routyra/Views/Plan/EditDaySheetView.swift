@@ -22,25 +22,25 @@ struct EditDaySheetView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("例: Push", text: $draftTitle)
+                    TextField("day_title_example", text: $draftTitle)
                         .focused($isTitleFocused)
                 } header: {
-                    Text("タイトル")
+                    Text("day_title")
                 }
             }
             .scrollContentBackground(.hidden)
             .background(AppColors.background)
-            .navigationTitle("Day \(dayIndex) を編集")
+            .navigationTitle(L10n.tr("day_edit_title", dayIndex))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
+                    Button("cancel") {
                         dismiss()
                     }
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完了") {
+                    Button("done") {
                         saveAndDismiss()
                     }
                     .fontWeight(.semibold)

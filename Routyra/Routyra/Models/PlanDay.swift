@@ -52,15 +52,15 @@ final class PlanDay {
         if let name = name, !name.isEmpty {
             return name
         }
-        return "Day \(dayIndex)"
+        return L10n.tr("day_label", dayIndex)
     }
 
     /// Full title including day number and name.
     var fullTitle: String {
         if let name = name, !name.isEmpty {
-            return "Day \(dayIndex): \(name)"
+            return L10n.tr("day_label_with_name", dayIndex, name)
         }
-        return "Day \(dayIndex)"
+        return L10n.tr("day_label", dayIndex)
     }
 
     /// Exercises sorted by order index.
@@ -80,7 +80,7 @@ final class PlanDay {
 
     /// Summary string for collapsed view (e.g., "3種目 / 9セット").
     var summary: String {
-        "\(exerciseCount)種目 / \(totalPlannedSets)セット"
+        L10n.tr("plan_day_summary", exerciseCount, totalPlannedSets)
     }
 
     // MARK: - Methods

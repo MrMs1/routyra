@@ -13,36 +13,38 @@ struct WorkoutHeaderView: View {
 
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
-        formatter.dateFormat = "EEE, MMM d"
+        formatter.setLocalizedDateFormatFromTemplate("EEE MMM d")
         return formatter
     }
 
     var body: some View {
-        HStack {
-            Button(action: onDateTap) {
-                Text(dateFormatter.string(from: date))
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.accentBlue)
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-
-            Text("Workout")
+        ZStack {
+            Text("workout")
                 .font(.headline)
                 .fontWeight(.semibold)
                 .foregroundColor(AppColors.textPrimary)
 
-            Spacer()
+            HStack {
+                // Date display
+                Button(action: onDateTap) {
+                    Text(dateFormatter.string(from: date))
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.accentBlue)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
 
-            HStack(spacing: 4) {
-                Image(systemName: "flame.fill")
-                    .foregroundColor(AppColors.streakOrange)
-                Text("\(streakCount)")
-                    .foregroundColor(AppColors.textPrimary)
-                    .fontWeight(.medium)
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Image(systemName: "flame.fill")
+                        .foregroundColor(AppColors.streakOrange)
+                    Text("\(streakCount)")
+                        .foregroundColor(AppColors.textPrimary)
+                        .fontWeight(.medium)
+                }
+                .font(.subheadline)
             }
-            .font(.subheadline)
         }
         .padding(.horizontal)
         .padding(.vertical, 8)

@@ -38,7 +38,7 @@ struct PlannedSetCardRowView: View {
     var body: some View {
         HStack(spacing: 0) {
             // Left: Set number
-            Text("Set \(setIndex)")
+            Text(L10n.tr("set_label", setIndex))
                 .font(.caption)
                 .foregroundColor(AppColors.textMuted)
                 .frame(width: SetRowConstants.setNumberWidth, alignment: .leading)
@@ -59,7 +59,7 @@ struct PlannedSetCardRowView: View {
                 Button(role: .destructive) {
                     onDelete()
                 } label: {
-                    Label("削除", systemImage: "trash")
+                    Label("delete", systemImage: "trash")
                 }
             } label: {
                 Image(systemName: "ellipsis")
@@ -99,7 +99,7 @@ struct PlannedSetCardRowView: View {
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundColor(plannedSet.targetWeight != nil ? AppColors.textPrimary : AppColors.textMuted)
-                Text("kg")
+                Text("unit_kg")
                     .font(.caption)
                     .foregroundColor(AppColors.textSecondary)
             }
@@ -116,7 +116,7 @@ struct PlannedSetCardRowView: View {
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundColor(plannedSet.targetReps != nil ? AppColors.textPrimary : AppColors.textMuted)
-                Text("回")
+                Text("unit_reps")
                     .font(.caption)
                     .foregroundColor(AppColors.textSecondary)
             }
@@ -142,7 +142,7 @@ struct PlannedSetCardRowView: View {
                     .foregroundColor(AppColors.textPrimary)
                     .focused($focusedField, equals: .weight)
 
-                Text("kg")
+                Text("unit_kg")
                     .font(.caption)
                     .foregroundColor(AppColors.textSecondary)
             }
@@ -168,7 +168,7 @@ struct PlannedSetCardRowView: View {
                     .foregroundColor(AppColors.textPrimary)
                     .focused($focusedField, equals: .reps)
 
-                Text("回")
+                Text("unit_reps")
                     .font(.caption)
                     .foregroundColor(AppColors.textSecondary)
             }
@@ -177,7 +177,7 @@ struct PlannedSetCardRowView: View {
             Button {
                 exitEditMode()
             } label: {
-                Text("完了")
+                Text("done")
                     .font(.caption)
                     .fontWeight(.medium)
                     .foregroundColor(AppColors.accentBlue)
@@ -267,7 +267,7 @@ struct PlannedSetDisplayRow: View {
     var body: some View {
         HStack(spacing: 0) {
             // Left: Set number
-            Text("Set \(setIndex)")
+            Text(L10n.tr("set_label", setIndex))
                 .font(.caption)
                 .foregroundColor(AppColors.textMuted)
                 .frame(width: SetRowConstants.setNumberWidth, alignment: .leading)
@@ -282,7 +282,7 @@ struct PlannedSetDisplayRow: View {
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(plannedSet.targetWeight != nil ? AppColors.textPrimary : AppColors.textMuted)
-                    Text("kg")
+                    Text("unit_kg")
                         .font(.caption)
                         .foregroundColor(AppColors.textSecondary)
                 }
@@ -299,7 +299,7 @@ struct PlannedSetDisplayRow: View {
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(plannedSet.targetReps != nil ? AppColors.textPrimary : AppColors.textMuted)
-                    Text("回")
+                    Text("unit_reps")
                         .font(.caption)
                         .foregroundColor(AppColors.textSecondary)
                 }

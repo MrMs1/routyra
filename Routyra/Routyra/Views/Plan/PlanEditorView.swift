@@ -72,33 +72,33 @@ struct PlanEditorView: View {
                         Button {
                             editingDay = day
                         } label: {
-                            Label("名前を変更", systemImage: "pencil")
+                            Label("rename_day", systemImage: "pencil")
                         }
 
                         Button {
                             duplicateDay(day)
                         } label: {
-                            Label("Dayを複製", systemImage: "doc.on.doc")
+                            Label("duplicate_day", systemImage: "doc.on.doc")
                         }
 
                         Button(role: .destructive) {
                             deleteDay(day)
                         } label: {
-                            Label("Dayを削除", systemImage: "trash")
+                            Label("delete_day", systemImage: "trash")
                         }
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
                             deleteDay(day)
                         } label: {
-                            Label("削除", systemImage: "trash")
+                            Label("delete", systemImage: "trash")
                         }
                     }
                     .swipeActions(edge: .leading) {
                         Button {
                             editingDay = day
                         } label: {
-                            Label("名前を変更", systemImage: "pencil")
+                            Label("rename_day", systemImage: "pencil")
                         }
                         .tint(AppColors.accentBlue)
                     }
@@ -110,7 +110,7 @@ struct PlanEditorView: View {
                     Button {
                         addDay()
                     } label: {
-                        ActionCardButton(title: "Dayを追加", showChevron: false)
+                        ActionCardButton(title: L10n.tr("add_day"), showChevron: false)
                     }
                     .buttonStyle(.plain)
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -119,9 +119,9 @@ struct PlanEditorView: View {
                 }
             } header: {
                 HStack {
-                    Text("Days")
+                    Text("days")
                     Spacer()
-                    Text("\(days.count)日間")
+                    Text("\(days.count)\(L10n.tr("days_unit"))")
                         .font(.caption)
                         .foregroundColor(AppColors.textSecondary)
                     Button {
@@ -129,7 +129,7 @@ struct PlanEditorView: View {
                             editMode?.wrappedValue = editMode?.wrappedValue == .active ? .inactive : .active
                         }
                     } label: {
-                        Text(editMode?.wrappedValue == .active ? "完了" : "並び替え")
+                        Text(editMode?.wrappedValue == .active ? L10n.tr("done") : L10n.tr("reorder"))
                             .font(.subheadline)
                     }
                 }
@@ -138,7 +138,7 @@ struct PlanEditorView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(AppColors.background)
-        .navigationTitle(plan.name.isEmpty ? "新規プラン" : plan.name)
+        .navigationTitle(plan.name.isEmpty ? L10n.tr("new_plan") : plan.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {

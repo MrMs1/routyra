@@ -110,10 +110,10 @@ struct PlanDayCardView<Destination: Hashable>: View {
                 HStack {
                     Spacer()
                     VStack(spacing: 4) {
-                        Text("種目がありません")
+                        Text("no_exercises")
                             .font(.subheadline)
                             .foregroundColor(AppColors.textMuted)
-                        Text("編集ボタンから追加")
+                        Text("plan_day_add_from_edit")
                             .font(.caption)
                             .foregroundColor(AppColors.textMuted)
                     }

@@ -215,36 +215,107 @@ enum PlanService {
         return workoutDay.isRoutineCompleted
     }
 
+    // MARK: - Day Change (Single Plan Mode)
+
+    /// Changes the current workout day to a different plan day.
+    /// Only allowed when completedSets == 0.
+    ///
+    /// - Parameters:
+    ///   - profile: The local profile.
+    ///   - workoutDay: The workout day to modify.
+    ///   - planId: The plan ID.
+    ///   - newDayIndex: The new day index (1-indexed).
+    ///   - skipAndAdvance: Whether to also advance the progress pointer.
+    ///   - modelContext: The SwiftData model context.
+    /// - Returns: True if change was successful.
+    @MainActor
+    @discardableResult
+    static func changeDay(
+        profile: LocalProfile,
+        workoutDay: WorkoutDay,
+        planId: UUID,
+        to newDayIndex: Int,
+        skipAndAdvance: Bool,
+        modelContext: ModelContext
+    ) -> Bool {
+        // Verify no completed sets
+        guard workoutDay.totalCompletedSets == 0 else {
+            return false
+        }
+
+        // Get the plan and new day
+        guard let plan = getPlan(id: planId, modelContext: modelContext),
+              let newPlanDay = plan.day(at: newDayIndex) else {
+            return false
+        }
+
+        // Clear existing entries
+        for entry in workoutDay.entries {
+            modelContext.delete(entry)
+        }
+        workoutDay.entries.removeAll()
+
+        // Update the routine day ID
+        workoutDay.routineDayId = newPlanDay.id
+
+        // Expand the new plan day
+        expandPlanToWorkout(planDay: newPlanDay, workoutDay: workoutDay)
+
+        // Update progress pointer if skip is enabled
+        if skipAndAdvance {
+            let progress = getOrCreateProgress(
+                profileId: profile.id,
+                planId: planId,
+                modelContext: modelContext
+            )
+            // Set to next day after the selected one (wrapping around)
+            let totalDays = plan.dayCount
+            progress.currentDayIndex = (newDayIndex % totalDays) + 1
+        }
+
+        return true
+    }
+
     // MARK: - Plan Expansion to Workout
 
     /// Expands a plan day to a workout day.
-    /// Creates exercise entries from the plan day exercises.
+    /// Creates exercise entries from the plan day exercises, including planned set details.
     ///
     /// - Parameters:
     ///   - planDay: The plan day to expand.
     ///   - workoutDay: The workout day to populate.
-    ///   - createPlaceholderSets: Whether to pre-create placeholder sets (default false).
-    ///
-    /// Note: We use lazy set creation by default (createPlaceholderSets = false).
-    /// Sets are created when the user actually logs them.
-    /// If you prefer placeholder sets, pass createPlaceholderSets = true.
     static func expandPlanToWorkout(
         planDay: PlanDay,
-        workoutDay: WorkoutDay,
-        createPlaceholderSets: Bool = false
+        workoutDay: WorkoutDay
     ) {
         for exercise in planDay.sortedExercises {
+            let plannedSets = exercise.sortedPlannedSets
+            let effectiveSetCount = plannedSets.isEmpty ? exercise.plannedSetCount : plannedSets.count
+
             let entry = WorkoutExerciseEntry(
                 exerciseId: exercise.exerciseId,
                 orderIndex: exercise.orderIndex,
                 source: .routine,
-                plannedSetCount: exercise.plannedSetCount
+                plannedSetCount: effectiveSetCount
             )
 
             workoutDay.addEntry(entry)
 
-            // Optionally create placeholder sets
-            if createPlaceholderSets && exercise.plannedSetCount > 0 {
+            // Create WorkoutSet objects from planned sets
+            if !plannedSets.isEmpty {
+                for (index, plannedSet) in plannedSets.enumerated() {
+                    let weight = Decimal(plannedSet.targetWeight ?? 0)
+                    let reps = plannedSet.targetReps ?? 0
+                    let set = WorkoutSet(
+                        setIndex: index + 1,
+                        weight: weight,
+                        reps: reps,
+                        isCompleted: false
+                    )
+                    entry.addSet(set)
+                }
+            } else if effectiveSetCount > 0 {
+                // Fallback: create placeholder sets if plannedSets is empty but count > 0
                 entry.createPlaceholderSets()
             }
         }
@@ -286,6 +357,21 @@ enum PlanService {
             profileId: profile.id,
             modelContext: modelContext
         ) {
+            // If the workout is already set up for this plan day, return as is
+            if existingWorkout.routineDayId == planDay.id && existingWorkout.routinePresetId == planId {
+                return existingWorkout
+            }
+
+            // If the workout is empty (no entries) and not linked to any plan, set it up
+            if existingWorkout.entries.isEmpty && existingWorkout.routinePresetId == nil {
+                existingWorkout.mode = .routine
+                existingWorkout.routinePresetId = planId
+                existingWorkout.routineDayId = planDay.id
+                expandPlanToWorkout(planDay: planDay, workoutDay: existingWorkout)
+                return existingWorkout
+            }
+
+            // Otherwise return existing (might have manual entries)
             return existingWorkout
         }
 
@@ -303,6 +389,77 @@ enum PlanService {
         expandPlanToWorkout(planDay: planDay, workoutDay: workoutDay)
 
         return workoutDay
+    }
+
+    // MARK: - Day Info Resolution
+
+    /// Resolves day info from a plan day ID.
+    /// - Parameters:
+    ///   - planDayId: The plan day ID (routineDayId from WorkoutDay).
+    ///   - planId: The plan ID.
+    ///   - modelContext: The SwiftData model context.
+    /// - Returns: Tuple of (dayIndex, totalDays, dayName) or nil if not found.
+    @MainActor
+    static func getDayInfo(
+        planDayId: UUID,
+        planId: UUID,
+        modelContext: ModelContext
+    ) -> (dayIndex: Int, totalDays: Int, dayName: String?)? {
+        guard let plan = getPlan(id: planId, modelContext: modelContext) else {
+            return nil
+        }
+
+        let sortedDays = plan.sortedDays
+        guard let dayIndex = sortedDays.firstIndex(where: { $0.id == planDayId }) else {
+            return nil
+        }
+
+        return (dayIndex + 1, plan.dayCount, sortedDays[dayIndex].name)
+    }
+
+    /// Calculates the preview day for a future date based on current progress.
+    /// - Parameters:
+    ///   - profile: The local profile.
+    ///   - targetDate: The target date to calculate for.
+    ///   - todayDate: Today's workout date.
+    ///   - modelContext: The SwiftData model context.
+    /// - Returns: Tuple of (dayIndex, totalDays, dayName, planId) or nil.
+    @MainActor
+    static func getPreviewDayInfo(
+        profile: LocalProfile,
+        targetDate: Date,
+        todayDate: Date,
+        modelContext: ModelContext
+    ) -> (dayIndex: Int, totalDays: Int, dayName: String?, planId: UUID)? {
+        guard let planId = profile.activePlanId,
+              let plan = getPlan(id: planId, modelContext: modelContext) else {
+            return nil
+        }
+
+        let totalDays = plan.dayCount
+        guard totalDays > 0 else { return nil }
+
+        let progress = getOrCreateProgress(
+            profileId: profile.id,
+            planId: planId,
+            modelContext: modelContext
+        )
+
+        // Calculate days difference from today
+        let calendar = Calendar.current
+        let daysDiff = calendar.dateComponents([.day], from: todayDate, to: targetDate).day ?? 0
+
+        // Calculate the target day index (wrap around)
+        // currentDayIndex is 1-indexed
+        let currentDayIndex = progress.currentDayIndex
+        var targetDayIndex = currentDayIndex + daysDiff
+
+        // Handle wrapping (modular arithmetic with 1-indexed)
+        targetDayIndex = ((targetDayIndex - 1) % totalDays + totalDays) % totalDays + 1
+
+        let dayName = plan.day(at: targetDayIndex)?.name
+
+        return (targetDayIndex, totalDays, dayName, planId)
     }
 
     // MARK: - Exercise Lookup Helper

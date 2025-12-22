@@ -10,7 +10,6 @@ struct WeeklyActivityStripView: View {
     let selectedDayIndex: Int
     let onDayTap: (Int) -> Void
 
-    private let weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     private let barWidth: CGFloat = 14
     private let baseBarHeight: CGFloat = 32
     private let selectedBarHeight: CGFloat = 38
@@ -52,7 +51,21 @@ struct WeeklyActivityStripView: View {
     }
 
     private func labelColor(for index: Int) -> Color {
-        index == selectedDayIndex ? AppColors.textSecondary : AppColors.textMuted
+        if let weekendColor = weekendColor(for: index) {
+            return weekendColor
+        }
+        return AppColors.textSecondary
+    }
+
+    private func weekendColor(for index: Int) -> Color? {
+        switch index {
+        case 5:
+            return AppColors.weekendSaturday
+        case 6:
+            return AppColors.weekendSunday
+        default:
+            return nil
+        }
     }
 }
 
@@ -135,3 +148,10 @@ struct ProgressBar: View {
     .background(AppColors.background)
     .preferredColorScheme(.dark)
 }
+    private var weekdays: [String] {
+        let symbols = Calendar.current.shortStandaloneWeekdaySymbols
+        guard symbols.count == 7 else {
+            return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        }
+        return Array(symbols[1...]) + [symbols[0]]
+    }

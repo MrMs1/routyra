@@ -55,7 +55,7 @@ struct WorkoutSetEditorView: View {
                     } label: {
                         HStack {
                             Image(systemName: "plus")
-                            Text("もう1セット")
+                            Text("workout_add_another_set")
                         }
                         .font(.subheadline)
                         .foregroundColor(AppColors.textSecondary)
@@ -73,7 +73,7 @@ struct WorkoutSetEditorView: View {
                 let setsData = sets.map { (weight: $0.weight, reps: $0.reps) }
                 onConfirm(setsData)
             } label: {
-                Text("ワークアウトに追加")
+                Text("workout_add_to_workout")
                     .font(.headline)
                     .fontWeight(.semibold)
                     .foregroundColor(.white)
@@ -86,7 +86,7 @@ struct WorkoutSetEditorView: View {
             .background(AppColors.background)
         }
         .background(AppColors.background)
-        .navigationTitle("セットを追加")
+        .navigationTitle("workout_add_sets_title")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             // Start with one set
@@ -155,7 +155,7 @@ private struct SetEditorRow: View {
     var body: some View {
         HStack(spacing: 8) {
             // Set number
-            Text("Set \(index)")
+            Text(L10n.tr("set_label", index))
                 .font(.caption)
                 .fontWeight(.medium)
                 .foregroundColor(AppColors.textSecondary)
@@ -180,7 +180,7 @@ private struct SetEditorRow: View {
                     }
                 }
 
-            Text("kg")
+            Text("unit_kg")
                 .font(.caption2)
                 .foregroundColor(AppColors.textMuted)
                 .frame(width: 20)
@@ -208,7 +208,7 @@ private struct SetEditorRow: View {
                     }
                 }
 
-            Text("reps")
+            Text("unit_reps")
                 .font(.caption2)
                 .foregroundColor(AppColors.textMuted)
                 .frame(width: 28)

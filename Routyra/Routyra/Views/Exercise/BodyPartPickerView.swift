@@ -40,7 +40,7 @@ struct BodyPartPickerView: View {
                         Spacer()
 
                         if bodyPart.scope == .user {
-                            Text("カスタム")
+                            Text("exercise_custom_badge")
                                 .font(.caption)
                                 .foregroundColor(AppColors.textMuted)
                         }
@@ -52,8 +52,8 @@ struct BodyPartPickerView: View {
                 }
             }
         }
-        .searchable(text: $searchText, prompt: "部位を検索")
-        .navigationTitle("部位を選択")
+        .searchable(text: $searchText, prompt: "body_part_search_placeholder")
+        .navigationTitle("body_part_select_title")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

@@ -16,27 +16,27 @@ struct SettingsView: View {
             Section {
                 dayTransitionPicker
             } header: {
-                Text("ワークアウト")
+                Text("settings_workout_section")
             } footer: {
-                Text("設定した時刻以降にアプリを起動すると、次の日のワークアウトメニューが表示されます。")
+                Text("settings_workout_footer")
             }
 
             // App Info Section
             Section {
                 HStack {
-                    Text("バージョン")
+                    Text("settings_version")
                     Spacer()
                     Text(appVersion)
                         .foregroundColor(AppColors.textSecondary)
                 }
             } header: {
-                Text("アプリ情報")
+                Text("settings_app_info")
             }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(AppColors.background)
-        .navigationTitle("設定")
+        .navigationTitle("settings_title")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             loadProfile()
@@ -46,7 +46,7 @@ struct SettingsView: View {
     // MARK: - Day Transition Picker
 
     private var dayTransitionPicker: some View {
-        Picker("日付切り替え時刻", selection: Binding(
+        Picker("settings_day_transition_time", selection: Binding(
             get: { profile?.dayTransitionHour ?? 3 },
             set: { newValue in
                 profile?.dayTransitionHour = newValue
@@ -68,7 +68,7 @@ struct SettingsView: View {
 
     private func formatHour(_ hour: Int) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "H:00"
+        formatter.setLocalizedDateFormatFromTemplate("j:mm")
         let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: Date()) ?? Date()
         return formatter.string(from: date)
     }
