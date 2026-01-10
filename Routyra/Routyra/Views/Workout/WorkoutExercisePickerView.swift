@@ -33,15 +33,31 @@ struct WorkoutExercisePickerView: View {
     let onSelect: (Exercise) -> Void
 
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
 
     @State private var allExercises: [Exercise] = []
     @State private var allBodyParts: [BodyPart] = []
     @State private var searchText: String = ""
     @State private var selectedBodyPartId: UUID?
 
+    /// ID of the cardio body part (used to exclude cardio when needed)
+    private var cardioBodyPartId: UUID? {
+        allBodyParts.first { $0.code == "cardio" }?.id
+    }
+
+    private var includeCardioExercises: Bool {
+        if case .add = mode {
+            return true
+        }
+        return false
+    }
+
     private var filteredExercises: [Exercise] {
         var result = allExercises
+
+        // Exclude cardio exercises when not adding
+        if !includeCardioExercises, let cardioId = cardioBodyPartId {
+            result = result.filter { $0.bodyPartId != cardioId }
+        }
 
         // Filter by body part
         if let bodyPartId = selectedBodyPartId {
@@ -129,34 +145,11 @@ struct WorkoutExercisePickerView: View {
     // MARK: - Body Part Filter Bar
 
     private var bodyPartFilterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                // All filter
-                ExerciseFilterChip(
-                    title: L10n.tr("filter_all"),
-                    isSelected: selectedBodyPartId == nil
-                ) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedBodyPartId = nil
-                    }
-                }
-
-                // Body part filters
-                ForEach(allBodyParts, id: \.id) { bodyPart in
-                    ExerciseFilterChip(
-                        title: bodyPart.localizedName,
-                        color: bodyPart.color,
-                        isSelected: selectedBodyPartId == bodyPart.id
-                    ) {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedBodyPartId = bodyPart.id
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-        }
+        BodyPartFilterBar(
+            bodyParts: allBodyParts,
+            selectedBodyPartId: $selectedBodyPartId,
+            includeCardio: includeCardioExercises
+        )
     }
 
     // MARK: - Data Loading

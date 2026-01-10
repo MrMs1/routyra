@@ -8,124 +8,335 @@
 
 import SwiftUI
 import SwiftData
+import GoogleMobileAds
 
 struct RoutinesView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var profile: LocalProfile?
     @State private var plans: [WorkoutPlan] = []
+    @State private var cycles: [PlanCycle] = []
     @State private var activeCycle: PlanCycle?
     @State private var navigationPath = NavigationPath()
+    @State private var newlyCreatedPlanId: UUID?
 
-    // Alerts
+    // Ad manager
+    @StateObject private var adManager = NativeAdManager()
+
+    // Plan Guide
+    @AppStorage("hasSeenPlanGuide") private var hasSeenPlanGuide = false
+    @State private var showPlanGuide = false
+
+    // Spotlight for Add Plan button
+    @AppStorage("hasShownPlanAddSpotlight") private var hasShownPlanAddSpotlight = false
+    @State private var showSpotlight = false
+    @State private var planAddButtonFrame: CGRect = .zero
+
+    // Alerts & Sheets
     @State private var planToDelete: WorkoutPlan?
+    @State private var cycleToDelete: PlanCycle?
     @State private var showNewPlanAlert: Bool = false
     @State private var newPlanName: String = ""
+    @State private var showCycleWizard: Bool = false
     @State private var showActivePlanPicker: Bool = false
+    @State private var showCyclePicker: Bool = false
     @State private var showDeleteActiveWarning: Bool = false
+    @State private var showDeleteActiveCycleWarning: Bool = false
+    @State private var pendingPlan: WorkoutPlan?
+    @State private var pendingCycle: PlanCycle?
+
+    private var deletePlanPresented: Binding<Bool> {
+        Binding(
+            get: { planToDelete != nil && !showDeleteActiveWarning },
+            set: { if !$0 { planToDelete = nil } }
+        )
+    }
+
+    private var deleteCyclePresented: Binding<Bool> {
+        Binding(
+            get: { cycleToDelete != nil && !showDeleteActiveCycleWarning },
+            set: { if !$0 { cycleToDelete = nil } }
+        )
+    }
 
     var body: some View {
+        bodyContent
+    }
+
+    @ViewBuilder
+    private var bodyContent: some View {
         NavigationStack(path: $navigationPath) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    // Header
-                    Text("workout_plans")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-
-                    // Content
-                    LazyVStack(spacing: 12) {
-                        // Execution mode section
-                        executionModeSection
-
-                        // Mode-specific settings
-                        if profile?.executionMode == .single {
-                            activePlanSection
-                        } else {
-                            cycleSection
+            navigationStackContent
+        }
+        .overlay {
+            if showPlanGuide {
+                PlanGuideOverlayView(
+                    isPresented: $showPlanGuide,
+                    hasSeenGuide: $hasSeenPlanGuide
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+        }
+        .overlay {
+            // フレームが有効な場合のみスポットライト表示
+            if showSpotlight && planAddButtonFrame.width > 0 {
+                SpotlightOverlayView(
+                    targetFrame: planAddButtonFrame,
+                    label: L10n.tr("spotlight_create_plan_hint"),
+                    onDismiss: {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showSpotlight = false
                         }
-
-                        // Divider
-                        dividerSection
-
-                        // Add plan card
-                        addPlanCard
-
-                        // Plans list
-                        plansSection
                     }
+                )
+                .transition(.opacity)
+            }
+        }
+        .onChange(of: showPlanGuide) { _, newValue in
+            if newValue == false && !hasShownPlanAddSpotlight {
+                // Delay to allow guide overlay to disappear and frame to be captured
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    // フレームが有効な場合のみ表示・フラグ更新
+                    if planAddButtonFrame.width > 0 {
+                        showSpotlight = true
+                        hasShownPlanAddSpotlight = true
+                    }
+                }
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: showPlanGuide)
+        .animation(.easeOut(duration: 0.2), value: showSpotlight)
+    }
+
+    private var navigationStackContent: some View {
+        let base = AnyView(
+            scrollContent
+                .background(AppColors.background)
+                .navigationBarTitleDisplayMode(.inline)
+        )
+
+        let destinations = AnyView(
+            base
+                .navigationDestination(for: WorkoutPlan.self) { plan in
+                    PlanEditorView(plan: plan, allowEmptyPlan: plan.id == newlyCreatedPlanId)
+                        .onDisappear {
+                            loadData()
+                            newlyCreatedPlanId = nil
+                        }
+                }
+                .navigationDestination(for: PlanCycle.self) { cycle in
+                    CycleEditorView(cycle: cycle)
+                        .onDisappear {
+                            loadCycles()
+                            loadActiveCycle()
+                        }
+                }
+        )
+
+        let lifecycle = AnyView(
+            destinations
+                .onAppear {
+                    loadData()
+                    // Show guide on first access (hasSeenGuide is set when overlay closes)
+                    if !hasSeenPlanGuide {
+                        showPlanGuide = true
+                    }
+                    // Load ads
+                    if adManager.nativeAds.isEmpty {
+                        adManager.loadNativeAds(count: 3)
+                    }
+                }
+        )
+
+        let alerts = AnyView(
+            lifecycle
+            .alert("delete_plan", isPresented: deletePlanPresented) {
+                    Button("delete", role: .destructive) {
+                        if let plan = planToDelete {
+                            deletePlan(plan)
+                        }
+                    }
+                    Button("cancel", role: .cancel) {
+                        planToDelete = nil
+                    }
+                } message: {
+                    Text(L10n.tr("delete_plan_confirm", planToDelete?.name ?? ""))
+                }
+                .alert("delete_active_plan", isPresented: $showDeleteActiveWarning) {
+                    Button("delete", role: .destructive) {
+                        if let plan = planToDelete {
+                            deletePlan(plan)
+                        }
+                        showDeleteActiveWarning = false
+                    }
+                    Button("cancel", role: .cancel) {
+                        planToDelete = nil
+                        showDeleteActiveWarning = false
+                    }
+                } message: {
+                    Text("delete_active_plan_warning")
+                }
+            .alert("delete_cycle", isPresented: deleteCyclePresented) {
+                    Button("delete", role: .destructive) {
+                        if let cycle = cycleToDelete {
+                            deleteCycle(cycle)
+                        }
+                    }
+                    Button("cancel", role: .cancel) {
+                        cycleToDelete = nil
+                    }
+                } message: {
+                    Text(L10n.tr("delete_cycle_confirm", cycleToDelete?.name ?? ""))
+                }
+                .alert("delete_active_cycle", isPresented: $showDeleteActiveCycleWarning) {
+                    Button("delete", role: .destructive) {
+                        if let cycle = cycleToDelete {
+                            deleteCycle(cycle)
+                        }
+                        showDeleteActiveCycleWarning = false
+                    }
+                    Button("cancel", role: .cancel) {
+                        cycleToDelete = nil
+                        showDeleteActiveCycleWarning = false
+                    }
+                } message: {
+                    Text("delete_active_cycle_warning")
+                }
+                .alert("add_plan", isPresented: $showNewPlanAlert) {
+                    TextField(L10n.tr("new_plan"), text: $newPlanName)
+                    Button("cancel", role: .cancel) {}
+                    Button("create") {
+                        createPlanFromAlert()
+                    }
+                }
+        )
+
+        let sheets = AnyView(
+            alerts
+                .fullScreenCover(isPresented: $showCycleWizard) {
+                    if let profile = profile {
+                        CycleCreationWizardView(profile: profile) { cycle in
+                            loadCycles()
+                            loadActiveCycle()
+                            // Navigate to CycleEditorView after wizard completes
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                navigationPath.append(cycle)
+                            }
+                        }
+                    }
+                }
+                .sheet(isPresented: $showActivePlanPicker) {
+                    ActivePlanPickerSheet(
+                        plans: plans,
+                        activePlanId: profile?.activePlanId
+                    ) { selectedPlan in
+                        if let plan = selectedPlan {
+                            // Deactivate all cycles when selecting a single plan
+                            if let profile = profile {
+                                CycleService.deactivateAllCycles(
+                                    profileId: profile.id,
+                                    modelContext: modelContext
+                                )
+                                loadActiveCycle()
+                            }
+                            // Delay to allow picker sheet to dismiss first
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                pendingPlan = plan
+                            }
+                        } else {
+                            clearActivePlan()
+                        }
+                    }
+                }
+                .sheet(isPresented: $showCyclePicker) {
+                    if let profile = profile {
+                        ActiveCyclePickerSheet(
+                            cycles: cycles,
+                            activeCycleId: activeCycle?.id
+                        ) { selectedCycle in
+                            if let cycle = selectedCycle {
+                                // Delay to allow picker sheet to dismiss first
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    pendingCycle = cycle
+                                }
+                            } else {
+                                // None selected - deactivate all cycles
+                                CycleService.deactivateAllCycles(
+                                    profileId: profile.id,
+                                    modelContext: modelContext
+                                )
+                                profile.scheduledCycleStartDate = nil
+                                profile.scheduledCyclePlanIndex = nil
+                                profile.scheduledCycleDayIndex = nil
+                                profile.scheduledCycleId = nil
+                                loadActiveCycle()
+                                try? modelContext.save()
+                            }
+                        }
+                    }
+                }
+                .sheet(item: $pendingPlan) { plan in
+                    if let profile = profile {
+                        PlanStartPickerSheet(
+                            plan: plan,
+                            todayHasWorkoutData: checkTodayHasWorkoutData()
+                        ) { timing, startDayIndex, startDate in
+                            applyPlan(plan, timing: timing, startDayIndex: startDayIndex, startDate: startDate)
+                            pendingPlan = nil
+                        }
+                    }
+                }
+                .sheet(item: $pendingCycle) { cycle in
+                    CycleStartPickerSheet(
+                        cycle: cycle,
+                        todayHasWorkoutData: checkTodayHasWorkoutData()
+                    ) { timing, planIndex, dayIndex, startDate in
+                        applyCycle(cycle, timing: timing, planIndex: planIndex, dayIndex: dayIndex, startDate: startDate)
+                        pendingCycle = nil
+                    }
+                }
+        )
+
+        return sheets
+    }
+
+    private var scrollContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Header with guide button
+                Text("workout_plans")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.textPrimary)
+                    .background(alignment: .trailing) {
+                        Button {
+                            showPlanGuide = true
+                        } label: {
+                            Image(systemName: "questionmark.circle")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppColors.textSecondary)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .alignmentGuide(.trailing) { d in d[.leading] - 2 }
+                    }
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal)
+                    .padding(.top, 8)
+
+                // Content
+                LazyVStack(spacing: 12) {
+                    // Execution mode section
+                    executionModeSection
+
+                    // Current operation section (unified)
+                    currentOperationSection
+
+                    // Library section (unified)
+                    librarySection
                 }
-                .padding(.bottom, 20)
+                .padding(.horizontal)
             }
-            .background(AppColors.background)
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: WorkoutPlan.self) { plan in
-                PlanEditorView(plan: plan)
-                    .onDisappear {
-                        loadData()
-                    }
-            }
-            .onAppear {
-                loadData()
-            }
-            .alert("delete_plan", isPresented: .init(
-                get: { planToDelete != nil && !showDeleteActiveWarning },
-                set: { if !$0 { planToDelete = nil } }
-            )) {
-                Button("delete", role: .destructive) {
-                    if let plan = planToDelete {
-                        deletePlan(plan)
-                    }
-                }
-                Button("cancel", role: .cancel) {
-                    planToDelete = nil
-                }
-            } message: {
-                Text(L10n.tr("delete_plan_confirm", planToDelete?.name ?? ""))
-            }
-            .alert("delete_active_plan", isPresented: $showDeleteActiveWarning) {
-                Button("delete", role: .destructive) {
-                    if let plan = planToDelete {
-                        deletePlan(plan)
-                    }
-                    showDeleteActiveWarning = false
-                }
-                Button("cancel", role: .cancel) {
-                    planToDelete = nil
-                    showDeleteActiveWarning = false
-                }
-            } message: {
-                Text("delete_active_plan_warning")
-            }
-            .alert("new_plan", isPresented: $showNewPlanAlert) {
-                TextField("plan_name", text: $newPlanName)
-                Button("cancel", role: .cancel) {}
-                Button("create") {
-                    createPlan()
-                }
-                .disabled(newPlanName.trimmingCharacters(in: .whitespaces).isEmpty)
-            } message: {
-                Text("enter_plan_name")
-            }
-            .confirmationDialog(
-                "select_active_plan",
-                isPresented: $showActivePlanPicker,
-                titleVisibility: .visible
-            ) {
-                ForEach(plans, id: \.id) { plan in
-                    Button(plan.name) {
-                        setActivePlan(plan)
-                    }
-                }
-                Button("none") {
-                    clearActivePlan()
-                }
-                Button("cancel", role: .cancel) {}
-            }
+            .padding(.bottom, 20)
         }
     }
 
@@ -149,165 +360,210 @@ struct RoutinesView: View {
                 Text("cycle").tag(ExecutionMode.cycle)
             }
             .pickerStyle(.segmented)
+
+            // Hint text
+            Text(executionModeHint)
+                .font(.caption)
+                .foregroundColor(AppColors.textSecondary)
         }
         .padding()
         .background(AppColors.cardBackground)
         .cornerRadius(12)
     }
 
-    // MARK: - Active Plan Section (Single Mode)
+    private var executionModeHint: String {
+        if profile?.executionMode == .cycle {
+            return L10n.tr("execution_mode_cycle_hint")
+        }
+        return L10n.tr("execution_mode_single_hint")
+    }
 
-    private var activePlanSection: some View {
-        Button {
-            showActivePlanPicker = true
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("active_plan")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(AppColors.textPrimary)
+    // MARK: - Current Operation Section (Unified)
 
-                    Text(activePlanName)
-                        .font(.caption)
-                        .foregroundColor(AppColors.textSecondary)
+    private var currentOperationSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Section header
+            Text(L10n.tr("current_operation"))
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(AppColors.textSecondary)
+
+            // Operation card
+            Button {
+                if profile?.executionMode == .cycle {
+                    showCyclePicker = true
+                } else {
+                    showActivePlanPicker = true
                 }
-
-                Spacer()
-
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption)
-                    .foregroundColor(AppColors.textMuted)
-            }
-            .padding()
-            .background(AppColors.cardBackground)
-            .cornerRadius(12)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var activePlanName: String {
-        guard let activePlanId = profile?.activePlanId,
-              let plan = plans.first(where: { $0.id == activePlanId }) else {
-            return L10n.tr("not_set")
-        }
-        return plan.name
-    }
-
-    // MARK: - Cycle Section (Cycle Mode)
-
-    private var cycleSection: some View {
-        VStack(spacing: 0) {
-            // Cycle toggle row
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("cycle")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(AppColors.textPrimary)
-
-                    if let cycle = activeCycle {
-                        Text(cycleSummary(for: cycle))
-                            .font(.caption)
-                            .foregroundColor(AppColors.textSecondary)
-                            .lineLimit(1)
-                    } else {
-                        Text("no_active_cycle")
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        // Label (mode-specific)
+                        Text(profile?.executionMode == .cycle
+                             ? L10n.tr("active_cycle")
+                             : L10n.tr("active_plan"))
                             .font(.caption)
                             .foregroundColor(AppColors.textMuted)
-                    }
-                }
 
-                Spacer()
+                        // Main value
+                        Text(currentOperationName)
+                            .font(.body)
+                            .fontWeight(.medium)
+                            .foregroundColor(AppColors.textPrimary)
 
-                Toggle("", isOn: Binding(
-                    get: { activeCycle != nil },
-                    set: { isOn in
-                        if !isOn, let cycle = activeCycle {
-                            CycleService.deactivateCycle(cycle)
-                            try? modelContext.save()
-                            loadActiveCycle()
+                        // Summary (only when set)
+                        if let summary = currentOperationSummary {
+                            Text(summary)
+                                .font(.caption)
+                                .foregroundColor(AppColors.textSecondary)
+                        }
+
+                        // Empty hint (only when not set)
+                        if !hasActiveOperation {
+                            Text(L10n.tr("current_operation_empty_hint"))
+                                .font(.caption)
+                                .foregroundColor(AppColors.textMuted)
                         }
                     }
-                ))
-                .labelsHidden()
-            }
-            .padding()
-
-            // Edit button (navigate to cycle list)
-            NavigationLink(destination: CycleListView()) {
-                HStack {
-                    Text("edit_cycles")
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.accentBlue)
 
                     Spacer()
+
+                    // Right side: checkmark + chevron (when set) or just chevron (when not set)
+                    if hasActiveOperation {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(AppColors.accentBlue)
+                    }
 
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundColor(AppColors.textMuted)
                 }
                 .padding()
-                .background(AppColors.cardBackground.opacity(0.5))
+                .background(AppColors.cardBackground)
+                .cornerRadius(12)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
-        .background(AppColors.cardBackground)
-        .cornerRadius(12)
     }
 
-    private func cycleSummary(for cycle: PlanCycle) -> String {
-        let planNames = cycle.sortedItems.compactMap { $0.plan?.name }
-        if planNames.isEmpty {
-            return L10n.tr("no_plans")
+    private var hasActiveOperation: Bool {
+        if profile?.executionMode == .cycle {
+            return activeCycle != nil
+        } else {
+            return profile?.activePlanId != nil && plans.contains { $0.id == profile?.activePlanId }
         }
-        return planNames.joined(separator: " → ")
     }
 
-    // MARK: - Divider Section
-
-    private var dividerSection: some View {
-        HStack {
-            Rectangle()
-                .fill(AppColors.textMuted.opacity(0.3))
-                .frame(height: 1)
-
-            Text("plans")
-                .font(.caption)
-                .foregroundColor(AppColors.textMuted)
-
-            Rectangle()
-                .fill(AppColors.textMuted.opacity(0.3))
-                .frame(height: 1)
+    private var currentOperationName: String {
+        if profile?.executionMode == .cycle {
+            return activeCycle?.name ?? L10n.tr("not_set")
+        } else {
+            guard let activePlanId = profile?.activePlanId,
+                  let plan = plans.first(where: { $0.id == activePlanId }) else {
+                return L10n.tr("not_set")
+            }
+            return plan.name
         }
-        .padding(.vertical, 8)
     }
 
-    // MARK: - Add Plan Card
-
-    private var addPlanCard: some View {
-        Button {
-            newPlanName = ""
-            showNewPlanAlert = true
-        } label: {
-            ActionCardButton(
-                title: L10n.tr("add_plan"),
-                subtitle: L10n.tr("add_plan_subtitle"),
-                icon: "plus",
-                showChevron: false
-            )
+    private var currentOperationSummary: String? {
+        if profile?.executionMode == .cycle {
+            guard let profile = profile,
+                  let cycle = activeCycle else { return nil }
+            if let scheduledDate = profile.scheduledCycleStartDate,
+               let scheduledCycleId = profile.scheduledCycleId,
+               scheduledCycleId == cycle.id,
+               scheduledDate > DateUtilities.todayWorkoutDate(transitionHour: profile.dayTransitionHour) {
+                return L10n.tr("plan_start_scheduled_summary", DateUtilities.formatShort(scheduledDate))
+            }
+            return L10n.tr("cycle_plan_count", cycle.sortedItems.count)
+        } else {
+            guard let profile = profile,
+                  let activePlanId = profile.activePlanId,
+                  let plan = plans.first(where: { $0.id == activePlanId }) else {
+                return nil
+            }
+            if let scheduledDate = profile.scheduledPlanStartDate,
+               let scheduledPlanId = profile.scheduledPlanId,
+               scheduledPlanId == activePlanId,
+               scheduledDate > DateUtilities.todayWorkoutDate(transitionHour: profile.dayTransitionHour) {
+                return L10n.tr("plan_start_scheduled_summary", DateUtilities.formatShort(scheduledDate))
+            }
+            return L10n.tr("plan_summary_days_exercises", plan.dayCount, plan.totalExerciseCount)
         }
-        .buttonStyle(.plain)
     }
 
-    // MARK: - Plans Section
+    // MARK: - Library Section (Unified)
 
-    private var plansSection: some View {
+    private var librarySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Section header
+            Text(L10n.tr("library"))
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(AppColors.textSecondary)
+
+            // CTA card (mode-specific action, same style)
+            if profile?.executionMode == .cycle {
+                Button {
+                    showCycleWizard = true
+                } label: {
+                    ActionCardButton(
+                        title: L10n.tr("cycle_create"),
+                        subtitle: L10n.tr("cycle_empty_description"),
+                        icon: "plus",
+                        showChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    newPlanName = ""
+                    showNewPlanAlert = true
+                } label: {
+                    ActionCardButton(
+                        title: L10n.tr("add_plan"),
+                        subtitle: L10n.tr("add_plan_subtitle"),
+                        icon: "plus",
+                        showChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
+                .overlay(
+                    GeometryReader { proxy in
+                        Color.clear
+                            .onAppear {
+                                planAddButtonFrame = proxy.frame(in: .global)
+                            }
+                            .onChange(of: proxy.frame(in: .global)) { _, newFrame in
+                                planAddButtonFrame = newFrame
+                            }
+                    }
+                )
+            }
+
+            // List (mode-specific content)
+            if profile?.executionMode == .cycle {
+                cycleListContent
+            } else {
+                planListContent
+            }
+        }
+    }
+
+    private var planListContent: some View {
         Group {
             if plans.isEmpty {
                 emptyPlansMessage
+
+                // Show ad below empty message
+                if shouldShowPlanAd {
+                    NativeAdCardView(nativeAd: adManager.nativeAds[0])
+                }
             } else {
-                ForEach(plans, id: \.id) { plan in
+                ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
                     PlanCardView(
                         plan: plan,
                         isActive: isActivePlan(plan),
@@ -318,9 +574,92 @@ struct RoutinesView: View {
                             requestDeletePlan(plan)
                         }
                     )
+
+                    // Show ad after every 4 plans (only if more than 3 plans)
+                    if let adIndex = shouldShowPlanAdAfterIndex(index),
+                       adIndex < adManager.nativeAds.count {
+                        NativeAdCardView(nativeAd: adManager.nativeAds[adIndex])
+                    }
+                }
+
+                // Show ad at bottom for 3 or fewer plans
+                if plans.count <= 3, shouldShowPlanAd {
+                    NativeAdCardView(nativeAd: adManager.nativeAds[0])
                 }
             }
         }
+    }
+
+    private var shouldShowPlanAd: Bool {
+        guard !(profile?.isPremiumUser ?? false) else { return false }
+        guard !adManager.nativeAds.isEmpty else { return false }
+        return true
+    }
+
+    private func shouldShowPlanAdAfterIndex(_ index: Int) -> Int? {
+        guard !(profile?.isPremiumUser ?? false) else { return nil }
+        guard plans.count > 3 else { return nil }
+        guard (index + 1) % 4 == 0 else { return nil }
+        let adIndex = (index + 1) / 4 - 1
+        return adIndex
+    }
+
+    private var cycleListContent: some View {
+        Group {
+            if cycles.isEmpty {
+                emptyCyclesMessage
+
+                // Show ad below empty message
+                if shouldShowCycleAd {
+                    NativeAdCardView(nativeAd: adManager.nativeAds[0])
+                }
+            } else {
+                ForEach(Array(cycles.enumerated()), id: \.element.id) { index, cycle in
+                    CycleCardView(
+                        cycle: cycle,
+                        isActive: isActiveCycle(cycle),
+                        onTap: {
+                            navigationPath.append(cycle)
+                        },
+                        onDelete: {
+                            requestDeleteCycle(cycle)
+                        }
+                    )
+
+                    // Show ad after every 4 cycles (only if more than 3 cycles)
+                    if let adIndex = shouldShowCycleAdAfterIndex(index),
+                       adIndex < adManager.nativeAds.count {
+                        NativeAdCardView(nativeAd: adManager.nativeAds[adIndex])
+                    }
+                }
+
+                // Show ad at bottom for 3 or fewer cycles
+                if cycles.count <= 3, shouldShowCycleAd {
+                    NativeAdCardView(nativeAd: adManager.nativeAds[0])
+                }
+            }
+        }
+    }
+
+    private var shouldShowCycleAd: Bool {
+        guard !(profile?.isPremiumUser ?? false) else { return false }
+        guard !adManager.nativeAds.isEmpty else { return false }
+        return true
+    }
+
+    private func shouldShowCycleAdAfterIndex(_ index: Int) -> Int? {
+        guard !(profile?.isPremiumUser ?? false) else { return nil }
+        guard cycles.count > 3 else { return nil }
+        guard (index + 1) % 4 == 0 else { return nil }
+        let adIndex = (index + 1) / 4 - 1
+        return adIndex
+    }
+
+    // MARK: - Helper Functions
+
+    private func isActiveCycle(_ cycle: PlanCycle) -> Bool {
+        guard profile?.executionMode == .cycle else { return false }
+        return cycle.isActive
     }
 
     private func isActivePlan(_ plan: WorkoutPlan) -> Bool {
@@ -328,7 +667,21 @@ struct RoutinesView: View {
         return profile?.activePlanId == plan.id
     }
 
-    // MARK: - Empty Plans Message
+    // MARK: - Empty State Messages
+
+    private var emptyCyclesMessage: some View {
+        VStack(spacing: 8) {
+            Text("no_cycles")
+                .font(.subheadline)
+                .foregroundColor(AppColors.textSecondary)
+
+            Text("create_cycle_hint")
+                .font(.caption)
+                .foregroundColor(AppColors.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+    }
 
     private var emptyPlansMessage: some View {
         VStack(spacing: 8) {
@@ -356,6 +709,7 @@ struct RoutinesView: View {
         )
 
         loadActiveCycle()
+        loadCycles()
     }
 
     private func loadActiveCycle() {
@@ -366,24 +720,12 @@ struct RoutinesView: View {
         activeCycle = CycleService.getActiveCycle(profileId: profile.id, modelContext: modelContext)
     }
 
-    private func createPlan() {
-        guard let profile = profile,
-              !newPlanName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-
-        let trimmedName = newPlanName.trimmingCharacters(in: .whitespaces)
-        let plan = WorkoutPlan(profileId: profile.id, name: trimmedName)
-
-        // Create initial Day 1
-        _ = plan.createDay()
-
-        modelContext.insert(plan)
-        try? modelContext.save()
-        loadData()
-
-        // Navigate to the created plan
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            navigationPath.append(plan)
+    private func loadCycles() {
+        guard let profile = profile else {
+            cycles = []
+            return
         }
+        cycles = CycleService.getCycles(profileId: profile.id, modelContext: modelContext)
     }
 
     private func requestDeletePlan(_ plan: WorkoutPlan) {
@@ -403,6 +745,9 @@ struct RoutinesView: View {
         // If this was the active plan in single mode, clear it
         if profile?.activePlanId == plan.id {
             profile?.activePlanId = nil
+            profile?.scheduledPlanStartDate = nil
+            profile?.scheduledPlanStartDayIndex = nil
+            profile?.scheduledPlanId = nil
         }
 
         // Remove from any cycles
@@ -431,13 +776,294 @@ struct RoutinesView: View {
         }
     }
 
+    private func createPlanFromAlert() {
+        guard let profile = profile else { return }
+
+        let trimmedName = newPlanName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let planName = trimmedName.isEmpty ? L10n.tr("new_plan") : trimmedName
+
+        let plan = WorkoutPlan(profileId: profile.id, name: planName)
+        modelContext.insert(plan)
+        try? modelContext.save()
+        loadData()
+        newlyCreatedPlanId = plan.id
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            navigationPath.append(plan)
+        }
+    }
+
     private func setActivePlan(_ plan: WorkoutPlan) {
         profile?.activePlanId = plan.id
+        profile?.scheduledPlanStartDate = nil
+        profile?.scheduledPlanStartDayIndex = nil
+        profile?.scheduledPlanId = nil
         try? modelContext.save()
     }
 
     private func clearActivePlan() {
         profile?.activePlanId = nil
+        profile?.scheduledPlanStartDate = nil
+        profile?.scheduledPlanStartDayIndex = nil
+        profile?.scheduledPlanId = nil
+        try? modelContext.save()
+    }
+
+    private func activateCycle(_ cycle: PlanCycle) {
+        guard let profile = profile else { return }
+
+        // Clear single plan when activating a cycle
+        profile.activePlanId = nil
+        profile.scheduledPlanStartDate = nil
+        profile.scheduledPlanStartDayIndex = nil
+        profile.scheduledPlanId = nil
+        profile.scheduledCycleStartDate = nil
+        profile.scheduledCyclePlanIndex = nil
+        profile.scheduledCycleDayIndex = nil
+        profile.scheduledCycleId = nil
+
+        // Switch execution mode to cycle
+        profile.executionMode = .cycle
+
+        // Activate the selected cycle
+        CycleService.setActiveCycle(cycle, profileId: profile.id, modelContext: modelContext)
+
+        try? modelContext.save()
+        loadActiveCycle()
+        loadCycles()
+    }
+
+    private func applyCycle(
+        _ cycle: PlanCycle,
+        timing: PlanStartTiming,
+        planIndex: Int,
+        dayIndex: Int,
+        startDate: Date?
+    ) {
+        guard let profile = profile else { return }
+
+        // Clear single plan when activating a cycle
+        profile.activePlanId = nil
+        profile.scheduledPlanStartDate = nil
+        profile.scheduledPlanStartDayIndex = nil
+        profile.scheduledPlanId = nil
+        profile.scheduledCycleStartDate = nil
+        profile.scheduledCyclePlanIndex = nil
+        profile.scheduledCycleDayIndex = nil
+        profile.scheduledCycleId = nil
+
+        // Switch execution mode to cycle
+        profile.executionMode = .cycle
+
+        // Activate the selected cycle
+        CycleService.setActiveCycle(cycle, profileId: profile.id, modelContext: modelContext)
+
+        let todayWorkoutDate = DateUtilities.todayWorkoutDate(transitionHour: profile.dayTransitionHour)
+        let normalizedStartDate = startDate.map { DateUtilities.startOfDay($0) }
+
+        let applyCycleToToday = {
+            if let (plan, planDay) = CycleService.getCurrentPlanDay(for: cycle, modelContext: modelContext) {
+                let workoutDate = todayWorkoutDate
+                let workoutDay = WorkoutService.getOrCreateWorkoutDay(
+                    profileId: profile.id,
+                    date: workoutDate,
+                    mode: .routine,
+                    routinePresetId: plan.id,
+                    routineDayId: planDay.id,
+                    modelContext: modelContext
+                )
+                // Clear existing entries
+                for entry in workoutDay.entries {
+                    modelContext.delete(entry)
+                }
+                workoutDay.entries.removeAll()
+
+                // Set mode and routine info
+                workoutDay.mode = .routine
+                workoutDay.routinePresetId = plan.id
+                workoutDay.routineDayId = planDay.id
+
+                // Expand plan to workout
+                PlanService.expandPlanToWorkout(planDay: planDay, workoutDay: workoutDay, modelContext: modelContext)
+            }
+        }
+
+        switch timing {
+        case .today, .nextWorkout:
+            if let progress = cycle.progress {
+                progress.currentItemIndex = planIndex
+                progress.currentDayIndex = dayIndex
+                progress.lastAdvancedAt = Date()
+            }
+            applyCycleToToday()
+        case .scheduled:
+            if let scheduledDate = normalizedStartDate, scheduledDate <= todayWorkoutDate {
+                if let progress = cycle.progress {
+                    progress.currentItemIndex = planIndex
+                    progress.currentDayIndex = dayIndex
+                    progress.lastAdvancedAt = Date()
+                }
+                applyCycleToToday()
+            } else if let scheduledDate = normalizedStartDate {
+                if let progress = cycle.progress {
+                    progress.currentItemIndex = planIndex
+                    progress.currentDayIndex = dayIndex
+                    progress.lastAdvancedAt = nil
+                }
+                profile.scheduledCycleStartDate = scheduledDate
+                profile.scheduledCyclePlanIndex = planIndex
+                profile.scheduledCycleDayIndex = dayIndex
+                profile.scheduledCycleId = cycle.id
+            } else {
+                if let progress = cycle.progress {
+                    progress.currentItemIndex = planIndex
+                    progress.currentDayIndex = dayIndex
+                    progress.lastAdvancedAt = Date()
+                }
+                applyCycleToToday()
+            }
+        }
+
+        try? modelContext.save()
+        loadActiveCycle()
+        loadCycles()
+    }
+
+    private func requestDeleteCycle(_ cycle: PlanCycle) {
+        cycleToDelete = cycle
+
+        // Check if this is the active cycle
+        if cycle.isActive {
+            showDeleteActiveCycleWarning = true
+            return
+        }
+    }
+
+    private func deleteCycle(_ cycle: PlanCycle) {
+        if let profile = profile,
+           profile.scheduledCycleId == cycle.id {
+            profile.scheduledCycleStartDate = nil
+            profile.scheduledCyclePlanIndex = nil
+            profile.scheduledCycleDayIndex = nil
+            profile.scheduledCycleId = nil
+        }
+
+        // Delete all cycle items first
+        for item in cycle.sortedItems {
+            modelContext.delete(item)
+        }
+
+        // Delete progress if exists
+        if let progress = cycle.progress {
+            modelContext.delete(progress)
+        }
+
+        modelContext.delete(cycle)
+        try? modelContext.save()
+        cycleToDelete = nil
+        loadCycles()
+        loadActiveCycle()
+    }
+
+    // MARK: - Plan Start Actions
+
+    private func checkTodayHasWorkoutData() -> Bool {
+        guard let profile = profile else { return false }
+        let workoutDate = DateUtilities.todayWorkoutDate(transitionHour: profile.dayTransitionHour)
+        if let todayWorkout = WorkoutService.getWorkoutDay(
+            profileId: profile.id,
+            date: workoutDate,
+            modelContext: modelContext
+        ) {
+            // Check if any set has actual logged data
+            for entry in todayWorkout.entries {
+                for workoutSet in entry.sortedSets {
+                    if hasActualData(workoutSet) {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    private func hasActualData(_ workoutSet: WorkoutSet) -> Bool {
+        switch workoutSet.metricType {
+        case .weightReps:
+            return (workoutSet.weight ?? 0) > 0 || (workoutSet.reps ?? 0) > 0
+        case .bodyweightReps:
+            return (workoutSet.reps ?? 0) > 0
+        case .timeDistance:
+            return (workoutSet.durationSeconds ?? 0) > 0 || (workoutSet.distanceMeters ?? 0) > 0
+        case .completion:
+            return workoutSet.isCompleted
+        }
+    }
+
+    private func applyPlan(
+        _ plan: WorkoutPlan,
+        timing: PlanStartTiming,
+        startDayIndex: Int,
+        startDate: Date?
+    ) {
+        guard let profile = profile else { return }
+
+        // 1. Create/update PlanProgress and set start day
+        let progress = PlanService.getOrCreateProgress(
+            profileId: profile.id,
+            planId: plan.id,
+            modelContext: modelContext
+        )
+        progress.currentDayIndex = startDayIndex
+
+        // Reset any scheduled plan start
+        profile.scheduledPlanStartDate = nil
+        profile.scheduledPlanStartDayIndex = nil
+        profile.scheduledPlanId = nil
+
+        // 2. Set activePlanId
+        profile.activePlanId = plan.id
+
+        // 3. Apply now or schedule for a future date
+        let todayWorkoutDate = DateUtilities.todayWorkoutDate(transitionHour: profile.dayTransitionHour)
+        let normalizedStartDate = startDate.map { DateUtilities.startOfDay($0) }
+
+        switch timing {
+        case .today, .nextWorkout:
+            progress.lastOpenedDate = todayWorkoutDate
+            _ = PlanService.applyPlanToday(
+                profile: profile,
+                plan: plan,
+                dayIndex: startDayIndex,
+                modelContext: modelContext
+            )
+        case .scheduled:
+            if let scheduledDate = normalizedStartDate {
+                if scheduledDate <= todayWorkoutDate {
+                    progress.lastOpenedDate = todayWorkoutDate
+                    _ = PlanService.applyPlanToday(
+                        profile: profile,
+                        plan: plan,
+                        dayIndex: startDayIndex,
+                        modelContext: modelContext
+                    )
+                } else {
+                    progress.lastOpenedDate = nil
+                    profile.scheduledPlanStartDate = scheduledDate
+                    profile.scheduledPlanStartDayIndex = startDayIndex
+                    profile.scheduledPlanId = plan.id
+                }
+            } else {
+                progress.lastOpenedDate = todayWorkoutDate
+                _ = PlanService.applyPlanToday(
+                    profile: profile,
+                    plan: plan,
+                    dayIndex: startDayIndex,
+                    modelContext: modelContext
+                )
+            }
+        }
+
         try? modelContext.save()
     }
 }
@@ -462,14 +1088,7 @@ private struct PlanCardView: View {
                         .foregroundColor(AppColors.textPrimary)
 
                     if isActive {
-                        Text("active")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(AppColors.accentBlue)
-                            .foregroundColor(.white)
-                            .cornerRadius(4)
+                        ActiveBadge()
                     }
 
                     Spacer()
@@ -500,6 +1119,66 @@ private struct PlanCardView: View {
                         .foregroundColor(AppColors.textMuted)
                         .lineLimit(2)
                 }
+            }
+            .padding()
+            .background(AppColors.cardBackground)
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("delete", systemImage: "trash")
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("delete", systemImage: "trash")
+            }
+        }
+    }
+}
+
+// MARK: - Cycle Card View
+
+private struct CycleCardView: View {
+    let cycle: PlanCycle
+    let isActive: Bool
+    let onTap: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        Button {
+            onTap()
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                // Header
+                HStack {
+                    Text(cycle.name.isEmpty ? L10n.tr("cycle_new_title") : cycle.name)
+                        .font(.headline)
+                        .foregroundColor(AppColors.textPrimary)
+
+                    if isActive {
+                        ActiveBadge()
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(AppColors.textMuted)
+                }
+
+                // Summary
+                Label(
+                    L10n.tr("cycle_plan_count", cycle.sortedItems.count),
+                    systemImage: "doc.on.doc"
+                )
+                .font(.caption)
+                .foregroundColor(AppColors.textSecondary)
             }
             .padding()
             .background(AppColors.cardBackground)

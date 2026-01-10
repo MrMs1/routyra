@@ -92,12 +92,37 @@ enum WorkoutService {
         getWorkoutDay(profileId: profileId, date: Date(), modelContext: modelContext)
     }
 
+    /// Checks if today's workout is linked to the specified plan day.
+    /// - Parameters:
+    ///   - profileId: The owner profile ID.
+    ///   - planDayId: The plan day ID to check.
+    ///   - modelContext: The SwiftData model context.
+    /// - Returns: The linked workout day if found, nil otherwise.
+    @MainActor
+    static func getTodayWorkoutLinkedToPlanDay(
+        profileId: UUID,
+        planDayId: UUID,
+        modelContext: ModelContext
+    ) -> WorkoutDay? {
+        guard let todayWorkout = getTodayWorkout(profileId: profileId, modelContext: modelContext) else {
+            return nil
+        }
+
+        guard todayWorkout.mode == .routine,
+              todayWorkout.routineDayId == planDayId else {
+            return nil
+        }
+
+        return todayWorkout
+    }
+
     // MARK: - Exercise Entry Management
 
     /// Adds a new exercise entry to a workout day.
     /// - Parameters:
     ///   - workoutDay: The workout day to add to.
     ///   - exerciseId: The exercise definition ID.
+    ///   - metricType: The metric type for sets in this entry.
     ///   - plannedSetCount: Number of planned sets (0 for no target).
     ///   - source: How the entry was added (routine or free).
     /// - Returns: The created entry.
@@ -105,6 +130,7 @@ enum WorkoutService {
     static func addEntry(
         to workoutDay: WorkoutDay,
         exerciseId: UUID,
+        metricType: SetMetricType = .weightReps,
         plannedSetCount: Int = 0,
         source: EntrySource = .free
     ) -> WorkoutExerciseEntry {
@@ -113,6 +139,7 @@ enum WorkoutService {
         let entry = WorkoutExerciseEntry(
             exerciseId: exerciseId,
             orderIndex: nextOrder,
+            metricType: metricType,
             source: source,
             plannedSetCount: plannedSetCount
         )
@@ -180,6 +207,77 @@ enum WorkoutService {
         logSet(for: entry, weight: Decimal(weightDouble), reps: reps, isCompleted: isCompleted)
     }
 
+    /// Logs a bodyweight reps set (no weight, just reps).
+    @discardableResult
+    static func logBodyweightSet(
+        for entry: WorkoutExerciseEntry,
+        reps: Int,
+        isCompleted: Bool = true
+    ) -> WorkoutSet {
+        let set = entry.createSet(
+            weight: nil,
+            reps: reps,
+            durationSeconds: nil,
+            distanceMeters: nil,
+            isCompleted: isCompleted
+        )
+        return set
+    }
+
+    /// Logs a time/distance set (for cardio exercises).
+    @discardableResult
+    static func logTimeDistanceSet(
+        for entry: WorkoutExerciseEntry,
+        durationSeconds: Int,
+        distanceMeters: Double? = nil,
+        isCompleted: Bool = true
+    ) -> WorkoutSet {
+        let set = entry.createSet(
+            weight: nil,
+            reps: nil,
+            durationSeconds: durationSeconds,
+            distanceMeters: distanceMeters,
+            isCompleted: isCompleted
+        )
+        return set
+    }
+
+    /// Logs a completion-only set (no metrics, just marked as done).
+    @discardableResult
+    static func logCompletionSet(
+        for entry: WorkoutExerciseEntry,
+        isCompleted: Bool = true
+    ) -> WorkoutSet {
+        let set = entry.createSet(
+            weight: nil,
+            reps: nil,
+            durationSeconds: nil,
+            distanceMeters: nil,
+            isCompleted: isCompleted
+        )
+        return set
+    }
+
+    /// Generic log set for any metric type.
+    @discardableResult
+    static func logSet(
+        for entry: WorkoutExerciseEntry,
+        weight: Decimal? = nil,
+        reps: Int? = nil,
+        durationSeconds: Int? = nil,
+        distanceMeters: Double? = nil,
+        isCompleted: Bool = true
+    ) -> WorkoutSet {
+        let set = entry.createSet(
+            weight: weight,
+            reps: reps,
+            durationSeconds: durationSeconds,
+            distanceMeters: distanceMeters,
+            isCompleted: isCompleted
+        )
+        return set
+    }
+
     /// Marks a set as completed.
     /// - Parameters:
     ///   - set: The set to complete.
@@ -222,6 +320,35 @@ enum WorkoutService {
         set.update(weight: weight, reps: reps)
     }
 
+    // MARK: - Validation
+
+    /// Validates set input based on metric type.
+    /// - Parameters:
+    ///   - metricType: The metric type of the set.
+    ///   - weight: Weight value (for weightReps type).
+    ///   - reps: Reps value (for weightReps and bodyweightReps types).
+    ///   - durationSeconds: Duration in seconds (for timeDistance type).
+    ///   - distanceMeters: Distance in meters (optional, for timeDistance type).
+    /// - Returns: true if input is valid, false otherwise.
+    static func validateSetInput(
+        metricType: SetMetricType,
+        weight: Double,
+        reps: Int,
+        durationSeconds: Int = 0,
+        distanceMeters: Double? = nil
+    ) -> Bool {
+        switch metricType {
+        case .weightReps:
+            return weight > 0 && reps > 0
+        case .bodyweightReps:
+            return reps > 0
+        case .timeDistance:
+            return durationSeconds > 0
+        case .completion:
+            return true
+        }
+    }
+
     // MARK: - Placeholder Set Creation Strategy
     //
     // Decision: We use LAZY set creation by default.
@@ -251,5 +378,159 @@ enum WorkoutService {
             volume: workoutDay.totalVolume,
             exercises: workoutDay.totalExercisesWithSets
         )
+    }
+
+    /// Calculates the estimated one-rep max using the Epley formula.
+    /// - Parameters:
+    ///   - weight: The weight lifted.
+    ///   - reps: The number of reps performed.
+    /// - Returns: The estimated 1RM, or 0 if inputs are invalid.
+    static func epleyOneRM(weight: Double, reps: Int) -> Double {
+        guard weight > 0, reps > 0 else { return 0 }
+        return weight * (1 + Double(reps) / 30.0)
+    }
+
+    // MARK: - Last Workout Lookup
+
+    /// Gets the sets from the most recent workout for a specific exercise.
+    /// - Parameters:
+    ///   - profileId: The owner profile ID.
+    ///   - exerciseId: The exercise ID to find.
+    ///   - excludeDate: Optional date to exclude (e.g., current workout date).
+    ///   - modelContext: The SwiftData model context.
+    /// - Returns: Array of (weight, reps) tuples if found, nil otherwise.
+    @MainActor
+    static func getLastWorkoutSets(
+        profileId: UUID,
+        exerciseId: UUID,
+        excludeDate: Date? = nil,
+        modelContext: ModelContext
+    ) -> [(weight: Double, reps: Int)]? {
+        // Fetch all workout days, sorted by date descending
+        var descriptor = FetchDescriptor<WorkoutDay>(
+            predicate: #Predicate<WorkoutDay> { workout in
+                workout.profileId == profileId
+            },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        descriptor.fetchLimit = 30  // Look through recent workouts only
+
+        do {
+            let workoutDays = try modelContext.fetch(descriptor)
+
+            // Normalize exclude date if provided
+            let normalizedExcludeDate = excludeDate.map { DateUtilities.startOfDay($0) }
+
+            for workoutDay in workoutDays {
+                // Skip excluded date
+                if let excludeDate = normalizedExcludeDate,
+                   DateUtilities.isSameDay(workoutDay.date, excludeDate) {
+                    continue
+                }
+
+                // Find matching entry
+                for entry in workoutDay.sortedEntries {
+                    if entry.exerciseId == exerciseId {
+                        // Get active sets (non-deleted) with valid data
+                        let activeSets = entry.sortedSets
+                            .filter { ($0.weight ?? 0) > 0 || ($0.reps ?? 0) > 0 }
+
+                        if activeSets.isEmpty {
+                            continue
+                        }
+
+                        // Return the sets
+                        return activeSets.map { set in
+                            (weight: set.weightDouble, reps: set.reps ?? 0)
+                        }
+                    }
+                }
+            }
+
+            return nil
+        } catch {
+            print("Error fetching last workout sets: \(error)")
+            return nil
+        }
+    }
+
+    /// Gets all workout history for an exercise as WorkoutCopyCandidate array.
+    /// - Parameters:
+    ///   - profileId: The owner profile ID.
+    ///   - exerciseId: The exercise ID to find.
+    ///   - limit: Maximum number of candidates to return.
+    ///   - excludeDate: Optional date to exclude (e.g., current workout date).
+    ///   - modelContext: The SwiftData model context.
+    /// - Returns: Array of WorkoutCopyCandidate sorted by date descending.
+    @MainActor
+    static func getWorkoutHistorySets(
+        profileId: UUID,
+        exerciseId: UUID,
+        limit: Int = 20,
+        excludeDate: Date? = nil,
+        modelContext: ModelContext
+    ) -> [WorkoutCopyCandidate] {
+        // Fetch all workout days, sorted by date descending
+        var descriptor = FetchDescriptor<WorkoutDay>(
+            predicate: #Predicate<WorkoutDay> { workout in
+                workout.profileId == profileId
+            },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        descriptor.fetchLimit = 100  // Look through more workouts for history
+
+        var candidates: [WorkoutCopyCandidate] = []
+
+        do {
+            let workoutDays = try modelContext.fetch(descriptor)
+
+            // Normalize exclude date if provided
+            let normalizedExcludeDate = excludeDate.map { DateUtilities.startOfDay($0) }
+
+            for workoutDay in workoutDays {
+                // Check limit
+                if candidates.count >= limit {
+                    break
+                }
+
+                // Skip excluded date
+                if let excludeDate = normalizedExcludeDate,
+                   DateUtilities.isSameDay(workoutDay.date, excludeDate) {
+                    continue
+                }
+
+                // Find matching entry
+                for entry in workoutDay.sortedEntries {
+                    if entry.exerciseId == exerciseId {
+                        // Get active sets (non-deleted) with valid data
+                        let activeSets = entry.sortedSets
+                            .filter { ($0.weight ?? 0) > 0 || ($0.reps ?? 0) > 0 }
+
+                        if activeSets.isEmpty {
+                            continue
+                        }
+
+                        // Create candidate
+                        let sets = activeSets.map { set in
+                            CopyableSetData(
+                                weight: set.weightDouble,
+                                reps: set.reps ?? 0,
+                                restTimeSeconds: set.restTimeSeconds
+                            )
+                        }
+
+                        candidates.append(WorkoutCopyCandidate(
+                            workoutDate: workoutDay.date,
+                            sets: sets
+                        ))
+                    }
+                }
+            }
+
+            return candidates
+        } catch {
+            print("Error fetching workout history sets: \(error)")
+            return []
+        }
     }
 }

@@ -85,7 +85,7 @@ struct EditPlanSheetView: View {
 #Preview {
     EditPlanSheetView(
         currentName: "Push Pull Legs",
-        currentNote: "週3回のプラン",
+        currentNote: "週3回のトレーニングプラン",
         onSave: { _, _ in }
     )
     .preferredColorScheme(.dark)

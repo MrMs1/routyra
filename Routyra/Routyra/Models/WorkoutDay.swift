@@ -34,6 +34,10 @@ final class WorkoutDay {
     @Relationship(deleteRule: .cascade, inverse: \WorkoutExerciseEntry.workoutDay)
     var entries: [WorkoutExerciseEntry]
 
+    /// Exercise groups for this workout (supersets/giant sets).
+    @Relationship(deleteRule: .cascade, inverse: \WorkoutExerciseGroup.workoutDay)
+    var exerciseGroups: [WorkoutExerciseGroup]
+
     /// Creation timestamp.
     var createdAt: Date
 
@@ -63,6 +67,7 @@ final class WorkoutDay {
         self.routinePresetId = routinePresetId
         self.routineDayId = routineDayId
         self.entries = []
+        self.exerciseGroups = []
         self.createdAt = Date()
         self.updatedAt = Date()
     }

@@ -10,6 +10,12 @@
 "none" = "None";
 "active" = "Active";
 "not_set" = "Not Set";
+"today" = "Today";
+"day_compact" = "Day %d/%d";
+"day_selector_title" = "Change Day";
+"current_operation" = "Current Operation";
+"library" = "Library";
+"current_operation_empty_hint" = "Create or select one";
 
 // MARK: - Workout Plans Screen
 "workout_plans" = "Workout Plans";
@@ -18,10 +24,18 @@
 "cycle" = "Cycle";
 "active_plan" = "Active Plan";
 "select_active_plan" = "Select Active Plan";
+"execution_mode_single_hint" = "Train with one plan";
+"execution_mode_cycle_hint" = "Rotate multiple plans";
+"active_cycle" = "Active Cycle";
 "no_active_cycle" = "No active cycle";
 "no_plans_in_cycle" = "No plans in cycle";
 "edit_cycles" = "Edit Cycles";
+"select_or_create_cycle" = "Create or Select Cycle";
+"select_or_create_cycle_subtitle" = "Set up a cycle to rotate plans";
+"cycle_plan_count" = "%d plans";
+"cycle_create" = "Create Cycle";
 "plans" = "Plans";
+"cycles" = "Cycles";
 "add_plan" = "Add Plan";
 "add_plan_subtitle" = "Create a new workout plan";
 "no_plans" = "No plans";
@@ -42,6 +56,7 @@
 
 // MARK: - General
 "done" = "Done";
+"back" = "Back";
 "edit" = "Edit";
 "save" = "Save";
 "ok" = "OK";
@@ -49,6 +64,9 @@
 "duplicate" = "Duplicate";
 "reorder" = "Reorder";
 "add_day" = "Add Day";
+"new_day" = "New Day";
+"day_name" = "Day Name";
+"enter_day_name" = "Enter a day name";
 "duplicate_day" = "Duplicate Day";
 "delete_day" = "Delete Day";
 "rename_day" = "Rename Day";
@@ -79,6 +97,40 @@
 "routines" = "Plans";
 "settings" = "Settings";
 "history_subtitle" = "Weekly and monthly workout history";
+"history_day_summary_with_date" = "Summary for %@";
+"history_month_summary_with_date" = "Summary for %@";
+"history_day_summary" = "Day Summary";
+"history_month_summary" = "Monthly Summary";
+"history_exercise_summary" = "Exercises";
+"history_workout_days" = "Workout Days";
+"history_total_sets" = "Total Sets";
+"history_total_volume" = "Total Volume";
+"history_weekly_total_volume" = "Weekly total volume";
+"history_weekday_average_volume" = "Average volume by weekday";
+"history_summary" = "Summary";
+"history_weekly_avg_workouts" = "Avg workouts / week";
+"history_avg_volume_per_workout" = "Avg volume / workout";
+"history_max_weight" = "Max Weight";
+"history_estimated_1rm" = "Estimated 1RM";
+"history_range_month" = "Month";
+"history_range_year" = "Year";
+"history_range_all" = "All";
+"history_no_workouts_month" = "No workouts in this period";
+"history_no_workouts_day" = "No workouts on this day";
+"history_session_list" = "Sessions";
+"history_date" = "Date";
+"history_detail" = "Details";
+"history_completed" = "Completed";
+"history_set_label" = "Set %d";
+"history_total_reps" = "Total Reps";
+"history_total_time" = "Total Time";
+"history_total_distance" = "Total Distance";
+"history_personal_records" = "Personal Records";
+"history_all_time" = "All Time";
+"history_max_volume" = "Max Volume";
+"history_progress_this_month" = "Progress This Month";
+"history_progress_this_year" = "Progress This Year";
+"history_progress_all_time" = "Overall Progress";
 
 // MARK: - Settings
 "settings_title" = "Settings";
@@ -87,18 +139,28 @@
 "settings_app_info" = "App Info";
 "settings_version" = "Version";
 "settings_day_transition_time" = "Day Transition Time";
+"settings_plan_update_section" = "Plan Updates";
+"settings_plan_update_footer" = "When confirmation is off, updates are applied automatically.";
+"settings_plan_update_confirm_toggle" = "Confirm before updating plan";
+"settings_plan_update_increase" = "When values go up";
+"settings_plan_update_decrease" = "When values go down";
+"plan_update_policy_confirm" = "Ask every time";
+"plan_update_policy_auto" = "Update automatically";
 
 // MARK: - Workout
 "workout_change_exercise" = "Change";
 "workout_change_exercise_title" = "Change Exercise";
 "workout_add_set" = "Add next set";
 "workout_log_set" = "Log this set";
+"workout_log_round" = "Log this round";
 "workout_go_to_current_set" = "Go to current set";
+"workout_uncomplete_set" = "Mark as incomplete";
+"workout_completion_ready" = "Ready to complete";
 "workout_rest_timer" = "Rest Timer";
 "workout_sets_completed" = "%d sets completed";
 "workout_sets_progress" = "%d/%d sets";
 "workout_add_another_set" = "Add another set";
-"workout_add_to_workout" = "Add to Workout";
+"workout_add_to_workout" = "Add";
 "workout_add_sets_title" = "Add Sets";
 "workout_unknown_exercise" = "Unknown Exercise";
 "workout_advanced_to_next" = "Moved to next workout";
@@ -106,6 +168,20 @@
 "workout_set_deleted" = "Set deleted: %@ kg × %d";
 "workout_delete_entry_title" = "Delete Exercise";
 "workout_delete_entry_message" = "Delete \"%@\" from this workout?";
+"workout_update_set" = "Update Set";
+"workout_invalid_input" = "Please enter weight and reps";
+"workout_plan_updated" = "Plan updated";
+"plan_update_title" = "Update Plan?";
+"plan_update_message" = "Update the plan for \"%@\"?";
+"plan_update_confirm" = "Update";
+"plan_update_cancel" = "Not now";
+"plan_update_skip_confirm_toggle" = "Don't ask again when it goes %@";
+"plan_update_direction_increase" = "up";
+"plan_update_direction_decrease" = "down";
+"workout_reorder_plan_title" = "Update plan order?";
+"workout_reorder_plan_message" = "Apply this order to the plan for this day?";
+"workout_reorder_plan_confirm" = "Update";
+"workout_reorder_plan_cancel" = "Not now";
 
 // MARK: - Empty State (Onboarding)
 "empty_state_headline" = "Auto-display with a plan, start recording instantly";
@@ -180,6 +256,12 @@
 "cycle_edit_title" = "Edit Cycle";
 "plan_not_found" = "Plan not found";
 "cycle_day_progress" = "Day %d / %d";
+"no_cycles" = "No cycles yet";
+"create_cycle_hint" = "Create a cycle to rotate through multiple plans.";
+"delete_cycle" = "Delete Cycle";
+"delete_cycle_confirm" = "Delete \"%@\"?";
+"delete_active_cycle" = "Delete Active Cycle";
+"delete_active_cycle_warning" = "This is the active cycle. Deleting it will stop the rotation.";
 
 // MARK: - Plans
 "plan_available_section" = "Available Plans";
@@ -206,6 +288,10 @@
 "plan_day_add_exercise_hint" = "Add exercises to set up this day";
 "plan_day_add_from_edit" = "Add from Edit button";
 "plan_add_to_day" = "Add to %@";
+"plan_add_sets_title" = "Add Sets";
+"plan_edit_sets_title" = "Edit Sets";
+"plan_add_exercise_confirm" = "Add";
+"exercise_not_found" = "Exercise not found";
 "unknown_plan" = "Unknown Plan";
 "plans_count" = "Plan";
 "activate" = "Activate";
@@ -213,14 +299,53 @@
 
 // MARK: - Units & Formats
 "unit_kg" = "kg";
+"unit_lb" = "lb";
+"unit_t" = "t";
+"unit_klb" = "klb";
+"unit_kt" = "kt";
+"unit_mlb" = "Mlb";
+"unit_mt" = "Mt";
+"unit_glb" = "Glb";
+"unit_gt" = "Gt";
+"unit_tlb" = "Tlb";
 "unit_reps" = "reps";
 "weight_with_unit" = "%@ kg";
+"weight_with_unit_lb" = "%@ lb";
 "weight_range_with_unit" = "%@–%@ kg";
+"weight_range_with_unit_lb" = "%@–%@ lb";
 "weight_placeholder" = "— kg";
+"weight_placeholder_lb" = "— lb";
 "reps_with_unit" = "%d reps";
 "reps_range_with_unit" = "%d–%d reps";
 "reps_placeholder" = "— reps";
 "sets_with_unit" = "%d sets";
+
+// MARK: - Weight Unit
+"weight_unit_kg" = "Kilograms (kg)";
+"weight_unit_lb" = "Pounds (lb)";
+"settings_weight_unit" = "Weight Unit";
+"settings_display_section" = "Display";
+"settings_display_footer" = "Customize how information is displayed.";
+"theme_group_dark" = "Dark";
+"theme_group_light" = "Light";
+
+// MARK: - Theme
+"settings_theme" = "Theme";
+"theme_dark" = "Midnight";
+"theme_midnight" = "Dark";
+"theme_light" = "Light";
+"theme_gruvbox_light" = "Gruvbox Light";
+"theme_gruvbox_dark" = "Gruvbox Dark";
+"theme_serenity" = "Serenity";
+"theme_blossom" = "Blossom";
+"theme_kuromi" = "Noir";
+"theme_lime" = "Lime";
+"theme_lavender_dusk" = "Lavender Dusk";
+"theme_rose_tea" = "Rose Tea";
+"theme_matcha_cream" = "Matcha Cream";
+"theme_apricot_sand" = "Apricot Sand";
+"theme_powder_blue" = "Powder Blue";
+"theme_ocean" = "Ocean";
 
 // MARK: - Day Context & Change
 "day_context_plan_label" = "Plan";
@@ -228,6 +353,298 @@
 "day_started_badge" = "Started";
 "day_change_title" = "Change Day";
 "day_change_message" = "Change to Day %d. Current incomplete sets will be replaced.";
-"day_change_skip_toggle" = "Skip this day and move to next day from tomorrow";
+"day_change_note" = "Your next workout will start from Day %d";
 "day_change_confirm" = "Change";
 "day_changed_success" = "Changed to Day %d";
+
+// MARK: - Copy Candidates
+"copy_candidates" = "Copy from";
+"copy_from_plan" = "Copy from plan";
+"last_workout_candidate" = "Previous workout";
+"other_copy_sources" = "Other sources...";
+"select_copy_source" = "Select Source";
+"copy_tab_plan" = "Plan";
+"copy_tab_workout" = "Workout";
+"copy_section_this_plan" = "This Plan";
+"copy_section_other_plans" = "Other Plans";
+"copy_section_workout_history" = "Workout History";
+"no_plan_candidates" = "No plan candidates";
+"no_workout_candidates" = "No workout history";
+"sets_applied" = "%d sets applied";
+
+// MARK: - Metric Types
+"metric_type_label" = "Input Type";
+"metric_type_weight_reps" = "Weight";
+"metric_type_bodyweight_reps" = "BW";
+"metric_type_time_distance" = "Time";
+"metric_type_completion" = "Done";
+"body_part_cardio_name" = "Cardio";
+"bodyweight_label" = "BW";
+"completion_only_hint" = "Tap to complete";
+"completion_only_label" = "Completion only";
+"unit_min" = "min";
+"unit_sec" = "sec";
+"unit_km" = "km";
+"unit_m" = "m";
+
+// MARK: - Plan-Workout Sync
+"add_to_workout_title" = "Add to Today's Workout?";
+"add_to_workout_message" = "Would you like to add this exercise to today's workout as well?";
+"add_to_workout_confirm" = "Add to Workout";
+"add_to_plan_only" = "Plan Only";
+
+// MARK: - Plan Creation Wizard
+
+// MARK: - Plan Start Picker
+"plan_start_title" = "When to start?";
+"plan_start_subtitle" = "Starting from %@";
+"plan_start_today" = "Start Today";
+"plan_start_next_workout" = "Start Next Workout";
+"plan_start_scheduled" = "Start on Date";
+"plan_start_date_label" = "Start Date";
+"plan_start_scheduled_summary" = "Starts on %@";
+"plan_start_day_label" = "Start Day";
+"plan_start_day_picker_title" = "Select Start Day";
+"plan_start_warning_replace_today" = "Today's workout will be replaced with this plan.";
+
+// MARK: - Cycle Start Picker
+"cycle_start_title" = "When to start?";
+"cycle_start_subtitle" = "Starting from %@";
+"cycle_start_position_label" = "Start Position";
+"cycle_start_position_picker_title" = "Select Start Position";
+"cycle_start_plan_label" = "Plan %d: %@";
+"cycle_start_day_label" = "Day %d";
+
+// MARK: - Past Day Rescue & Future Preview
+"workout_rescue_from_plan" = "Record from Plan";
+"workout_rescue_from_plan_subtitle" = "Add this day's workout from your active plan";
+"workout_rescue_from_plan_button" = "Record from Plan";
+"workout_future_plan_preview" = "Preview (read-only)";
+
+// MARK: - Plan Guide
+"plan_guide_step1_title" = "When a plan is set";
+"plan_guide_step1_body" = "Today's menu appears automatically—no need to choose exercises each time.";
+"plan_guide_step2_title" = "A plan has multiple days";
+"plan_guide_step2_body" = "It contains Day 1 / Day 2 / Day 3";
+"plan_guide_step3_title" = "Each day has exercises";
+"plan_guide_step3_body" = "You can add multiple exercises to each day";
+"plan_guide_step4_title" = "Two ways to use it";
+"plan_guide_single" = "Single plan: use one plan";
+"plan_guide_cycle" = "Cycle: rotate through multiple plans";
+"plan_guide_next" = "Next";
+"plan_guide_back" = "Back";
+"plan_guide_close" = "Close";
+"plan_guide_node_plan" = "Plan";
+"plan_guide_node_day" = "Day";
+"plan_guide_node_exercise" = "Exercise";
+"plan_guide_exercise_bench_press" = "Bench Press";
+"plan_guide_exercise_incline_press" = "Incline Press";
+"plan_guide_exercise_bench" = "Bench";
+"plan_guide_exercise_squat" = "Squat";
+
+// MARK: - Spotlight
+"spotlight_create_plan_hint" = "Create a plan here";
+"spotlight_add_day_hint" = "Add a day from here";
+"spotlight_add_exercise_hint" = "Add exercises from here";
+"spotlight_next_day_hint" = "Move to the next day from here";
+
+// MARK: - Rest Timer Settings
+"settings_rest_timer_section" = "Rest Timer";
+"settings_rest_timer_footer" = "Configure rest timer behavior between sets.";
+"settings_default_rest_time" = "Default Rest Time";
+"settings_combine_record_timer" = "Auto-start Timer on Log";
+"settings_combine_record_timer_hint" = "Timer starts automatically when you log a set";
+"settings_reshow_announcement" = "Re-show Timer Announcement";
+
+// MARK: - Rest Timer
+"rest_timer_complete_title" = "Rest Complete";
+"rest_timer_complete_body" = "Time to start your next set!";
+"rest_timer_start" = "Start Rest";
+"rest_timer_running" = "Running...";
+"rest_timer_add_30s" = "+30s";
+"rest_timer_conflict_title" = "Timer Already Running";
+"rest_timer_conflict_message" = "A rest timer is already active.";
+"rest_timer_conflict_continue" = "Keep Current";
+"rest_timer_conflict_switch" = "Switch to New";
+"rest_timer_label" = "REST";
+"rest_timer_log_set" = "Log Set";
+"rest_timer_log_and_start" = "Log → Rest";
+"rest_timer_cancel" = "Cancel";
+"rest_timer_remaining" = "Remaining";
+
+// MARK: - Rest Time Picker
+"rest_time_picker_title" = "Rest Time";
+"rest_time_minutes" = "min";
+"rest_time_seconds" = "sec";
+
+// MARK: - Combination Mode Announcement
+"combination_announcement_title" = "Start the rest timer automatically?";
+"combination_announcement_message" = "You can start the timer when you log a set.";
+"combination_enable_and_run" = "Enable linking and start";
+"combination_run_without_link" = "Start without linking";
+"combination_dont_show" = "Don't show again";
+
+// MARK: - Exercise Groups
+"group_label" = "Group";
+"group_exercises" = "Group Exercises";
+"create_group" = "Create Group";
+"dissolve_group" = "Dissolve Group";
+"group_set_count" = "%d rounds";
+"set_count" = "Set Count";
+"sets_unit" = "sets";
+"group_round_rest" = "Rest between rounds";
+"select_exercises_to_group" = "Select exercises to group";
+"set_count_mismatch_title" = "Set Count Mismatch";
+"use_maximum" = "Use Maximum (%d)";
+"use_minimum" = "Use Minimum (%d)";
+"specify_manually" = "Specify Manually";
+"group_requires_two" = "Groups require at least 2 exercises";
+"round_label" = "Round %d/%d";
+"remove_from_group" = "Remove from Group";
+"add_to_group" = "Add to Group";
+"group_rest_seconds" = "Group Rest";
+
+// MARK: - Premium
+"settings_premium_section" = "Premium";
+"premium_remove_ads_title" = "Remove Ads";
+"premium_remove_ads_description" = "Remove all ads from the app";
+"premium_purchased" = "Ads Removed";
+"premium_restore_button" = "Restore Purchase";
+"premium_restore_success" = "Purchase restored successfully!";
+"premium_restore_no_products" = "No purchases to restore.";
+"purchase_error_verification" = "Purchase verification failed";
+"purchase_error_not_found" = "Product not found";
+"purchase_error_failed" = "Purchase failed";
+"purchase_error_cancelled" = "Purchase cancelled";
+"purchase_error_pending" = "Purchase pending approval";
+"purchase_error_load_failed" = "Failed to load products";
+"purchase_error_restore_failed" = "Failed to restore purchases";
+
+// MARK: - Notification Settings
+"settings_notification_section" = "Notifications";
+"settings_notification_footer" = "Enable notifications to receive workout reminders.";
+"settings_open_system_notifications" = "Open System Settings";
+"settings_enable_notifications" = "Enable Notifications";
+
+// MARK: - Other Settings
+"settings_other_section" = "About";
+"settings_terms_of_service" = "Terms of Service";
+"settings_privacy_policy" = "Privacy Policy";
+"settings_feedback" = "Send Feedback";
+
+// MARK: - Data Management
+"settings_data_management_section" = "Data Management";
+"settings_delete_all_data" = "Delete All Data";
+"settings_delete_all_footer" = "This will permanently delete all workout data, plans, and cycles.";
+"settings_delete_all_confirm_title" = "Delete All Data?";
+"settings_delete_all_confirm_message" = "This action cannot be undone. All your workout history, plans, and cycles will be permanently deleted.";
+
+// MARK: - Common (additional)
+"common_cancel" = "Cancel";
+"common_delete" = "Delete";
+"common_ok" = "OK";
+"next" = "Next";
+
+// MARK: - Ads
+"ad_badge" = "Ad";
+"ad_cta_button" = "Learn More";
+
+// MARK: - Cardio
+"cardio_history_title" = "Cardio";
+"cardio_activity_type" = "Activity";
+"cardio_date" = "Date";
+"cardio_duration" = "Duration";
+"cardio_distance" = "Distance";
+"cardio_distance_optional" = "Distance (optional)";
+"cardio_hours_short" = "h";
+"cardio_minutes_short" = "m";
+"cardio_seconds_short" = "s";
+"cardio_add_workout" = "Add Cardio Workout";
+"cardio_no_workouts" = "No Cardio Workouts";
+"cardio_no_workouts_hint" = "Sync from Health or add manually";
+"cardio_sync_health" = "Sync Health";
+"cardio_add_manual" = "Add Manually";
+"cardio_sync_complete" = "Sync Complete";
+"cardio_sync_imported" = "%d workouts imported";
+"cardio_sync_no_new" = "No new workouts to import";
+"cardio_sync_error" = "Sync failed: %@";
+"cardio_health_not_available" = "HealthKit is not available on this device";
+"cardio_health_permission_title" = "Permission Required";
+"cardio_health_permission_message" = "Please allow access to workout data in Settings > Privacy > Health.";
+"cardio_record_button" = "Record Cardio";
+"cardio_record_subtitle" = "Track running, cycling, swimming, etc.";
+"cardio_monthly_summary" = "Cardio";
+"cardio_no_workouts_month" = "No cardio workouts this month";
+"cardio_total_sessions" = "%d sessions";
+"cardio_max_heart_rate" = "Max %d bpm";
+"cardio_avg_heart_rate" = "Avg %d bpm";
+"cardio_energy_burned" = "Burned %d kcal";
+"cardio_start_time" = "Start %@";
+"cardio_max_heart_rate_label" = "Max HR";
+"cardio_avg_heart_rate_label" = "Avg HR";
+"cardio_energy_burned_label" = "Energy";
+"cardio_other" = "Other";
+"cardio_detail_duration_label" = "Workout Time";
+"cardio_detail_distance_label" = "Distance";
+"cardio_detail_max_heart_rate_label" = "Max Heart Rate";
+"cardio_detail_avg_heart_rate_label" = "Average Heart Rate";
+"cardio_detail_energy_burned_label" = "Active Calories";
+"cardio_mark_complete" = "Mark as complete";
+"cardio_mark_incomplete" = "Mark as incomplete";
+"cardio_completed" = "Completed";
+"cardio_delete_message" = "Delete %@ workout?";
+
+// MARK: - Cardio Activity Types
+"activity_running" = "Running";
+"activity_walking" = "Walking";
+"activity_cycling" = "Cycling";
+"activity_swimming" = "Swimming";
+"activity_hiking" = "Hiking";
+"activity_elliptical" = "Elliptical";
+"activity_rowing" = "Rowing";
+"activity_stair_climbing" = "Stair Climbing";
+"activity_stairs" = "Stairs";
+"activity_hiit" = "HIIT";
+"activity_mixed_cardio" = "Mixed Cardio";
+"activity_jump_rope" = "Jump Rope";
+"activity_dance" = "Dance";
+"activity_cardio_dance" = "Cardio Dance";
+"activity_social_dance" = "Social Dance";
+"activity_yoga" = "Yoga";
+"activity_pilates" = "Pilates";
+"activity_core_training" = "Core Training";
+"activity_functional_strength" = "Functional Strength";
+"activity_traditional_strength" = "Strength Training";
+"activity_cross_training" = "Cross Training";
+"activity_kickboxing" = "Kickboxing";
+"activity_martial_arts" = "Martial Arts";
+"activity_boxing" = "Boxing";
+"activity_climbing" = "Climbing";
+"activity_cross_country_skiing" = "Cross Country Skiing";
+"activity_downhill_skiing" = "Downhill Skiing";
+"activity_snow_sports" = "Snow Sports";
+"activity_snowboarding" = "Snowboarding";
+"activity_skating" = "Skating";
+"activity_surfing" = "Surfing";
+"activity_water_fitness" = "Water Fitness";
+"activity_tennis" = "Tennis";
+"activity_badminton" = "Badminton";
+"activity_table_tennis" = "Table Tennis";
+"activity_squash" = "Squash";
+"activity_racquetball" = "Racquetball";
+"activity_golf" = "Golf";
+"activity_baseball" = "Baseball";
+"activity_softball" = "Softball";
+"activity_basketball" = "Basketball";
+"activity_soccer" = "Soccer";
+"activity_volleyball" = "Volleyball";
+"activity_american_football" = "American Football";
+"activity_australian_football" = "Australian Football";
+"activity_rugby" = "Rugby";
+"activity_hockey" = "Hockey";
+"activity_lacrosse" = "Lacrosse";
+"activity_handball" = "Handball";
+"activity_cricket" = "Cricket";
+"activity_other" = "Other";
+"ok" = "OK";
+"save" = "Save";

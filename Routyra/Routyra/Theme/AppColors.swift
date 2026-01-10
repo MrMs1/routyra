@@ -2,25 +2,57 @@
 //  AppColors.swift
 //  Routyra
 //
+//  Provides convenient static access to current theme colors.
+//  All colors are delegated to ThemeManager for dynamic theme switching.
+//
 
 import SwiftUI
 
+// MARK: - App Colors
+
+/// Static color accessors that delegate to the current theme.
+/// Use these throughout the app for consistent theming.
 enum AppColors {
-    static let background = Color(hex: "0F0F10")
-    static let cardBackground = Color(hex: "1C1C1E")
-    static let cardBackgroundCompleted = Color(hex: "141416")
-    static let accentBlue = Color(hex: "0A84FF")
-    static let mutedBlue = Color(hex: "2C5282")
-    static let weekendSaturday = Color(hex: "64D2FF")
-    static let weekendSunday = Color(hex: "FF453A")
-    static let textPrimary = Color.white
-    static let textSecondary = Color(hex: "8E8E93")
-    static let textMuted = Color(hex: "636366")
-    static let streakOrange = Color(hex: "FF9500")
-    static let divider = Color(hex: "38383A")
-    static let dotEmpty = Color(hex: "48484A")
-    static let dotFilled = Color(hex: "0A84FF")
+    // MARK: - Theme Reference
+
+    /// Reference to the current theme for internal use.
+    private static var theme: ColorTheme {
+        ThemeManager.shared.currentTheme
+    }
+
+    // MARK: - Backgrounds
+
+    static var background: Color { theme.background }
+    static var cardBackground: Color { theme.cardBackground }
+    static var cardBackgroundCompleted: Color { theme.cardBackgroundCompleted }
+    static var groupedCardBackground: Color { theme.groupedCardBackground }
+    static var groupedCardBackgroundCompleted: Color { theme.groupedCardBackgroundCompleted }
+
+    // MARK: - Accent Colors
+
+    static var accentBlue: Color { theme.accentBlue }
+    static var mutedBlue: Color { theme.mutedBlue }
+    static var streakOrange: Color { theme.streakOrange }
+
+    // MARK: - Calendar Colors
+
+    static var weekendSaturday: Color { theme.weekendSaturday }
+    static var weekendSunday: Color { theme.weekendSunday }
+
+    // MARK: - Text Colors
+
+    static var textPrimary: Color { theme.textPrimary }
+    static var textSecondary: Color { theme.textSecondary }
+    static var textMuted: Color { theme.textMuted }
+
+    // MARK: - UI Elements
+
+    static var divider: Color { theme.divider }
+    static var dotEmpty: Color { theme.dotEmpty }
+    static var dotFilled: Color { theme.dotFilled }
 }
+
+// MARK: - Color Hex Extension
 
 extension Color {
     init(hex: String) {

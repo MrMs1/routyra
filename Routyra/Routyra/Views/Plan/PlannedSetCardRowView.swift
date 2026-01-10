@@ -3,7 +3,7 @@
 //  Routyra
 //
 //  Mini-card row for displaying/editing a planned set.
-//  Tap to enter edit mode, with ellipsis menu for actions.
+//  2-tier layout: Top row for main inputs, bottom row for secondary controls.
 //
 
 import SwiftUI
@@ -12,10 +12,10 @@ import SwiftData
 // MARK: - Constants
 
 private enum SetRowConstants {
-    static let cardHeight: CGFloat = 44
-    static let cardCornerRadius: CGFloat = 10
-    static let horizontalPadding: CGFloat = 12
-    static let setNumberWidth: CGFloat = 40
+    static let cardCornerRadius: CGFloat = 12
+    static let horizontalPadding: CGFloat = 14
+    static let verticalPadding: CGFloat = 12
+    static let setLabelWidth: CGFloat = 44
 }
 
 // MARK: - PlannedSetCardRowView
@@ -23,7 +23,9 @@ private enum SetRowConstants {
 struct PlannedSetCardRowView: View {
     @Bindable var plannedSet: PlannedSet
     let setIndex: Int
+    let canDelete: Bool
     let onDelete: () -> Void
+    let weightUnit: WeightUnit
 
     @State private var isEditing: Bool = false
     @State private var weightText: String = ""
@@ -35,42 +37,47 @@ struct PlannedSetCardRowView: View {
         case reps
     }
 
+    // MARK: - Computed Properties
+
+    private var isBodyweight: Bool {
+        plannedSet.metricType == .bodyweightReps
+    }
+
+    private var isTimeDistance: Bool {
+        plannedSet.metricType == .timeDistance
+    }
+
+    private var isCompletionOnly: Bool {
+        plannedSet.metricType == .completion
+    }
+
+    private var supportsRestTimer: Bool {
+        plannedSet.metricType == .weightReps || plannedSet.metricType == .bodyweightReps
+    }
+
+    private var supportsWeightToggle: Bool {
+        plannedSet.metricType == .weightReps || plannedSet.metricType == .bodyweightReps
+    }
+
+    private var restTimeBinding: Binding<Int> {
+        Binding(
+            get: { plannedSet.restTimeSeconds ?? 0 },
+            set: { plannedSet.restTimeSeconds = $0 > 0 ? $0 : nil }
+        )
+    }
+
+    // MARK: - Body
+
     var body: some View {
-        HStack(spacing: 0) {
-            // Left: Set number
-            Text(L10n.tr("set_label", setIndex))
-                .font(.caption)
-                .foregroundColor(AppColors.textMuted)
-                .frame(width: SetRowConstants.setNumberWidth, alignment: .leading)
+        VStack(spacing: 8) {
+            // MARK: - Top Row: Main Input Area
+            topRow
 
-            Spacer()
-
-            // Center: Weight × Reps
-            if isEditing {
-                editModeContent
-            } else {
-                displayModeContent
-            }
-
-            Spacer()
-
-            // Right: Ellipsis menu
-            Menu {
-                Button(role: .destructive) {
-                    onDelete()
-                } label: {
-                    Label("delete", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppColors.textMuted)
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
-            }
+            // MARK: - Bottom Row: Secondary Controls
+            bottomRow
         }
         .padding(.horizontal, SetRowConstants.horizontalPadding)
-        .frame(height: SetRowConstants.cardHeight)
+        .padding(.vertical, SetRowConstants.verticalPadding)
         .background(AppColors.background)
         .cornerRadius(SetRowConstants.cardCornerRadius)
         .contentShape(Rectangle())
@@ -87,90 +94,265 @@ struct PlannedSetCardRowView: View {
                 commitChanges()
             }
         }
-    }
-
-    // MARK: - Display Mode
-
-    private var displayModeContent: some View {
-        HStack(spacing: 4) {
-            // Weight
-            HStack(spacing: 1) {
-                Text(weightDisplayText)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(plannedSet.targetWeight != nil ? AppColors.textPrimary : AppColors.textMuted)
-                Text("unit_kg")
-                    .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
-            }
-
-            // Separator
-            Text("/")
-                .font(.caption)
-                .foregroundColor(AppColors.textMuted)
-                .padding(.horizontal, 6)
-
-            // Reps
-            HStack(spacing: 1) {
-                Text(repsDisplayText)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(plannedSet.targetReps != nil ? AppColors.textPrimary : AppColors.textMuted)
-                Text("unit_reps")
-                    .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(L10n.tr("done")) {
+                    exitEditMode()
+                }
+                .foregroundColor(AppColors.accentBlue)
             }
         }
     }
 
-    // MARK: - Edit Mode
+    // MARK: - Top Row
+
+    private var topRow: some View {
+        HStack(spacing: 0) {
+            // Set number (left aligned, fixed width)
+            Text(L10n.tr("set_label", setIndex))
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(AppColors.textSecondary)
+                .frame(width: SetRowConstants.setLabelWidth, alignment: .leading)
+
+            // Main input: Weight × Reps (centered in remaining space)
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+
+                if isEditing {
+                    editModeContent
+                } else {
+                    displayModeContent
+                }
+
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Bottom Row
+
+    private var bottomRow: some View {
+        HStack(spacing: 0) {
+            // Left offset to align with top row (matches set label width)
+            Color.clear
+                .frame(width: SetRowConstants.setLabelWidth)
+
+            // Centered content area (matching top row's centered layout)
+            HStack(spacing: 16) {
+                Spacer(minLength: 0)
+
+                // Segmented toggle (kg/BW) - only for weight-based exercises
+                if supportsWeightToggle {
+                    segmentedToggle
+                }
+
+                // REST picker (if applicable)
+                if supportsRestTimer {
+                    RestTimePickerCompact(restTimeSeconds: restTimeBinding)
+                }
+
+                // Delete button
+                if canDelete {
+                    deleteButton
+                } else {
+                    Color.clear.frame(width: 28, height: 28)
+                }
+
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Segmented Toggle
+
+    private var segmentedToggle: some View {
+        HStack(spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    plannedSet.metricType = .weightReps
+                }
+            } label: {
+                Text(weightUnit.symbol)
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundColor(!isBodyweight ? AppColors.textPrimary : AppColors.textMuted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(!isBodyweight ? AppColors.cardBackground : Color.clear)
+                    .cornerRadius(4)
+            }
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    plannedSet.metricType = .bodyweightReps
+                    plannedSet.targetWeight = nil
+                }
+            } label: {
+                Text("bodyweight_label")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundColor(isBodyweight ? AppColors.accentBlue : AppColors.textMuted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(isBodyweight ? AppColors.accentBlue.opacity(0.15) : Color.clear)
+                    .cornerRadius(4)
+            }
+        }
+        .padding(2)
+        .background(AppColors.cardBackground.opacity(0.5))
+        .cornerRadius(6)
+    }
+
+    // MARK: - Delete Button
+
+    private var deleteButton: some View {
+        Button {
+            onDelete()
+        } label: {
+            Image(systemName: "trash")
+                .font(.caption)
+                .foregroundColor(AppColors.textMuted)
+                .frame(width: 28, height: 28)
+                .background(AppColors.cardBackground)
+                .cornerRadius(6)
+        }
+    }
+
+    // MARK: - Display Mode Content
+
+    private var displayModeContent: some View {
+        Group {
+            if isCompletionOnly {
+                // Completion only display
+                Text(L10n.tr("completion_only_label"))
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.textMuted)
+            } else if isTimeDistance {
+                // Time / Distance display for cardio
+                HStack(spacing: 8) {
+                    // Duration
+                    Text(plannedSet.durationString)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(plannedSet.targetDurationSeconds != nil ? AppColors.textPrimary : AppColors.textMuted)
+
+                    // Separator (if has distance)
+                    if plannedSet.targetDistanceMeters != nil {
+                        Text("/")
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.textMuted)
+
+                        // Distance
+                        HStack(spacing: 2) {
+                            Text(plannedSet.distanceString)
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.textPrimary)
+                            Text(L10n.tr("unit_km"))
+                                .font(.caption)
+                                .foregroundColor(AppColors.textMuted)
+                        }
+                    }
+                }
+            } else {
+                // Weight × Reps display
+                HStack(spacing: 8) {
+                    // Weight or BW
+                    if isBodyweight {
+                        Text("bodyweight_label")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.accentBlue)
+                    } else {
+                        HStack(spacing: 2) {
+                            Text(weightDisplayText)
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(plannedSet.targetWeight != nil ? AppColors.textPrimary : AppColors.textMuted)
+                            Text(weightUnit.symbol)
+                                .font(.caption)
+                                .foregroundColor(AppColors.textMuted)
+                        }
+                    }
+
+                    // Separator
+                    Text("×")
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.textMuted)
+
+                    // Reps
+                    HStack(spacing: 2) {
+                        Text(repsDisplayText)
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(plannedSet.targetReps != nil ? AppColors.textPrimary : AppColors.textMuted)
+                        Text("unit_reps")
+                            .font(.caption)
+                            .foregroundColor(AppColors.textMuted)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Edit Mode Content
 
     private var editModeContent: some View {
-        HStack(spacing: 4) {
-            // Weight input
-            HStack(spacing: 1) {
-                TextField("—", text: $weightText)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.center)
-                    .frame(width: 50)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
-                    .background(AppColors.cardBackground)
-                    .cornerRadius(6)
-                    .font(.subheadline)
+        HStack(spacing: 8) {
+            // Weight input or BW label
+            if isBodyweight {
+                Text("bodyweight_label")
+                    .font(.headline)
                     .fontWeight(.semibold)
-                    .foregroundColor(AppColors.textPrimary)
-                    .focused($focusedField, equals: .weight)
+                    .foregroundColor(AppColors.accentBlue)
+            } else {
+                HStack(spacing: 2) {
+                    TextField("—", text: $weightText)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.center)
+                        .frame(width: 56)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(AppColors.cardBackground)
+                        .cornerRadius(8)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(AppColors.textPrimary)
+                        .focused($focusedField, equals: .weight)
 
-                Text("unit_kg")
-                    .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
+                    Text(weightUnit.symbol)
+                        .font(.caption)
+                        .foregroundColor(AppColors.textMuted)
+                }
             }
 
             // Separator
-            Text("/")
-                .font(.caption)
+            Text("×")
+                .font(.subheadline)
                 .foregroundColor(AppColors.textMuted)
-                .padding(.horizontal, 6)
 
             // Reps input
-            HStack(spacing: 1) {
+            HStack(spacing: 2) {
                 TextField("—", text: $repsText)
                     .keyboardType(.numberPad)
                     .multilineTextAlignment(.center)
-                    .frame(width: 40)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
+                    .frame(width: 48)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
                     .background(AppColors.cardBackground)
-                    .cornerRadius(6)
-                    .font(.subheadline)
+                    .cornerRadius(8)
+                    .font(.headline)
                     .fontWeight(.semibold)
                     .foregroundColor(AppColors.textPrimary)
                     .focused($focusedField, equals: .reps)
 
                 Text("unit_reps")
                     .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
+                    .foregroundColor(AppColors.textMuted)
             }
 
             // Done button
@@ -179,11 +361,11 @@ struct PlannedSetCardRowView: View {
             } label: {
                 Text("done")
                     .font(.caption)
-                    .fontWeight(.medium)
+                    .fontWeight(.semibold)
                     .foregroundColor(AppColors.accentBlue)
             }
             .buttonStyle(.plain)
-            .padding(.leading, 8)
+            .padding(.leading, 4)
         }
     }
 
@@ -212,9 +394,9 @@ struct PlannedSetCardRowView: View {
         withAnimation(.easeOut(duration: 0.15)) {
             isEditing = true
         }
-        // Focus weight field after a brief delay
+        // Focus appropriate field after a brief delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            focusedField = .weight
+            focusedField = isBodyweight ? .reps : .weight
         }
     }
 
@@ -263,52 +445,118 @@ struct PlannedSetCardRowView: View {
 struct PlannedSetDisplayRow: View {
     let plannedSet: PlannedSet
     let setIndex: Int
+    let weightUnit: WeightUnit
+
+    private var isBodyweight: Bool {
+        plannedSet.metricType == .bodyweightReps
+    }
+
+    private var isTimeDistance: Bool {
+        plannedSet.metricType == .timeDistance
+    }
+
+    private var isCompletionOnly: Bool {
+        plannedSet.metricType == .completion
+    }
+
+    private var formattedRestTime: String? {
+        guard let seconds = plannedSet.restTimeSeconds, seconds > 0 else { return nil }
+        let mins = seconds / 60
+        let secs = seconds % 60
+        return String(format: "%d:%02d", mins, secs)
+    }
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Left: Set number
+        HStack(spacing: 8) {
+            // Left: Set number (no fixed width, natural size)
             Text(L10n.tr("set_label", setIndex))
                 .font(.caption)
                 .foregroundColor(AppColors.textMuted)
-                .frame(width: SetRowConstants.setNumberWidth, alignment: .leading)
+                .lineLimit(1)
+                .fixedSize()
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            // Center: Weight / Reps
-            HStack(spacing: 4) {
-                // Weight
-                HStack(spacing: 1) {
-                    Text(weightDisplayText)
+            // Center content
+            if isCompletionOnly {
+                // Completion only display
+                Text(L10n.tr("completion_only_label"))
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.textMuted)
+            } else if isTimeDistance {
+                // Time / Distance display for cardio
+                Text(plannedSet.durationString)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(plannedSet.targetDurationSeconds != nil ? AppColors.textPrimary : AppColors.textMuted)
+
+                if plannedSet.targetDistanceMeters != nil {
+                    Text("/")
                         .font(.subheadline)
+                        .foregroundColor(AppColors.textMuted)
+
+                    HStack(spacing: 2) {
+                        Text(plannedSet.distanceString)
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColors.textPrimary)
+                        Text(L10n.tr("unit_km"))
+                            .font(.caption)
+                            .foregroundColor(AppColors.textMuted)
+                    }
+                }
+            } else {
+                // Weight × Reps display
+                if isBodyweight {
+                    Text("bodyweight_label")
+                        .font(.headline)
                         .fontWeight(.semibold)
-                        .foregroundColor(plannedSet.targetWeight != nil ? AppColors.textPrimary : AppColors.textMuted)
-                    Text("unit_kg")
-                        .font(.caption)
-                        .foregroundColor(AppColors.textSecondary)
+                        .foregroundColor(AppColors.accentBlue)
+                } else {
+                    HStack(spacing: 2) {
+                        Text(weightDisplayText)
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(plannedSet.targetWeight != nil ? AppColors.textPrimary : AppColors.textMuted)
+                        Text(weightUnit.symbol)
+                            .font(.caption)
+                            .foregroundColor(AppColors.textMuted)
+                    }
                 }
 
-                // Separator
-                Text("/")
-                    .font(.caption)
+                Text("×")
+                    .font(.subheadline)
                     .foregroundColor(AppColors.textMuted)
-                    .padding(.horizontal, 6)
 
-                // Reps
-                HStack(spacing: 1) {
+                HStack(spacing: 2) {
                     Text(repsDisplayText)
-                        .font(.subheadline)
+                        .font(.headline)
                         .fontWeight(.semibold)
                         .foregroundColor(plannedSet.targetReps != nil ? AppColors.textPrimary : AppColors.textMuted)
                     Text("unit_reps")
                         .font(.caption)
-                        .foregroundColor(AppColors.textSecondary)
+                        .foregroundColor(AppColors.textMuted)
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
+
+            // Right: Rest time (if set)
+            if let restTime = formattedRestTime {
+                HStack(spacing: 2) {
+                    Image(systemName: "timer")
+                        .font(.caption2)
+                    Text(restTime)
+                        .font(.caption)
+                }
+                .foregroundColor(AppColors.textMuted)
+                .lineLimit(1)
+                .fixedSize()
+            }
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, SetRowConstants.horizontalPadding)
-        .frame(height: SetRowConstants.cardHeight)
+        .padding(.vertical, 10)
         .background(AppColors.cardBackground)
         .cornerRadius(SetRowConstants.cardCornerRadius)
     }
@@ -340,13 +588,17 @@ struct PlannedSetDisplayRow: View {
         PlannedSetCardRowView(
             plannedSet: plannedSet1,
             setIndex: 1,
-            onDelete: {}
+            canDelete: true,
+            onDelete: {},
+            weightUnit: .kg
         )
 
         PlannedSetCardRowView(
             plannedSet: plannedSet2,
             setIndex: 2,
-            onDelete: {}
+            canDelete: false,
+            onDelete: {},
+            weightUnit: .kg
         )
     }
     .padding()

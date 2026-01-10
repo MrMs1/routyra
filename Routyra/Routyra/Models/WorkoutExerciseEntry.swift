@@ -24,6 +24,10 @@ final class WorkoutExerciseEntry {
     /// Display order within the workout (0-indexed).
     var orderIndex: Int
 
+    /// Metric type for sets in this entry.
+    /// Inherited from plan or set at creation for free mode.
+    var metricType: SetMetricType
+
     /// How this entry was added (from routine or freely added).
     var source: EntrySource
 
@@ -35,6 +39,14 @@ final class WorkoutExerciseEntry {
     @Relationship(deleteRule: .cascade, inverse: \WorkoutSet.entry)
     var sets: [WorkoutSet]
 
+    /// Parent exercise group (for superset/giant set).
+    /// nil means this entry is not grouped.
+    var group: WorkoutExerciseGroup?
+
+    /// Display order within the group (0-indexed).
+    /// Only used when this entry belongs to a group.
+    var groupOrderIndex: Int?
+
     /// Creation timestamp.
     var createdAt: Date
 
@@ -44,17 +56,20 @@ final class WorkoutExerciseEntry {
     /// - Parameters:
     ///   - exerciseId: Reference to the exercise definition.
     ///   - orderIndex: Display order.
+    ///   - metricType: Metric type for sets.
     ///   - source: How this entry was created.
     ///   - plannedSetCount: Target number of sets.
     init(
         exerciseId: UUID,
         orderIndex: Int,
+        metricType: SetMetricType = .weightReps,
         source: EntrySource = .free,
         plannedSetCount: Int = 0
     ) {
         self.id = UUID()
         self.exerciseId = exerciseId
         self.orderIndex = orderIndex
+        self.metricType = metricType
         self.source = source
         self.plannedSetCount = plannedSetCount
         self.sets = []
@@ -62,6 +77,11 @@ final class WorkoutExerciseEntry {
     }
 
     // MARK: - Computed Properties
+
+    /// Whether this entry belongs to a group (superset/giant set).
+    var isGrouped: Bool {
+        group != nil
+    }
 
     /// Non-deleted sets (excludes soft-deleted sets).
     var activeSets: [WorkoutSet] {
@@ -79,9 +99,10 @@ final class WorkoutExerciseEntry {
     }
 
     /// Total volume for completed sets.
+    /// Only counts sets with weightReps metric type.
     var totalVolume: Decimal {
         activeSets
-            .filter { $0.isCompleted }
+            .filter { $0.isCompleted && $0.metricType == .weightReps }
             .reduce(Decimal.zero) { $0 + $1.volume }
     }
 
@@ -109,22 +130,45 @@ final class WorkoutExerciseEntry {
         sets.append(set)
     }
 
-    /// Creates and adds a new set with the given weight and reps.
+    /// Creates and adds a new set with full metric support.
     /// - Parameters:
-    ///   - weight: Weight in kg.
-    ///   - reps: Number of repetitions.
+    ///   - weight: Weight in kg (for weightReps type).
+    ///   - reps: Number of repetitions (for weightReps and bodyweightReps types).
+    ///   - durationSeconds: Duration in seconds (for timeDistance type).
+    ///   - distanceMeters: Distance in meters (for timeDistance type).
     ///   - isCompleted: Whether the set is marked as completed.
     /// - Returns: The created set.
     @discardableResult
-    func createSet(weight: Decimal, reps: Int, isCompleted: Bool = false) -> WorkoutSet {
+    func createSet(
+        weight: Decimal? = nil,
+        reps: Int? = nil,
+        durationSeconds: Int? = nil,
+        distanceMeters: Double? = nil,
+        isCompleted: Bool = false
+    ) -> WorkoutSet {
         let set = WorkoutSet(
             setIndex: nextSetIndex,
+            metricType: self.metricType,
             weight: weight,
             reps: reps,
+            durationSeconds: durationSeconds,
+            distanceMeters: distanceMeters,
             isCompleted: isCompleted
         )
         addSet(set)
         return set
+    }
+
+    /// Convenience method for weight/reps sets (backwards compatible).
+    @discardableResult
+    func createSet(weight: Decimal, reps: Int, isCompleted: Bool = false) -> WorkoutSet {
+        createSet(
+            weight: weight,
+            reps: reps,
+            durationSeconds: nil,
+            distanceMeters: nil,
+            isCompleted: isCompleted
+        )
     }
 
     /// Creates placeholder sets up to the planned count.
@@ -135,8 +179,9 @@ final class WorkoutExerciseEntry {
         for i in 1...plannedSetCount where sortedSets.count < plannedSetCount {
             let set = WorkoutSet(
                 setIndex: i,
-                weight: defaultWeight,
-                reps: defaultReps,
+                metricType: self.metricType,
+                weight: metricType == .weightReps ? defaultWeight : nil,
+                reps: (metricType == .weightReps || metricType == .bodyweightReps) ? defaultReps : nil,
                 isCompleted: false
             )
             addSet(set)

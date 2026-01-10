@@ -46,6 +46,10 @@ final class Exercise {
     /// Whether this exercise is archived (hidden from selection).
     var isArchived: Bool
 
+    /// Default metric type for this exercise.
+    /// Determines what inputs are shown when creating sets.
+    var defaultMetricType: SetMetricType
+
     /// Localized translations for system-defined exercises.
     @Relationship(deleteRule: .cascade, inverse: \ExerciseTranslation.exercise)
     var translations: [ExerciseTranslation]
@@ -67,6 +71,7 @@ final class Exercise {
     ///   - ownerProfileId: Owner profile ID (required for user scope).
     ///   - bodyPartId: Reference to the body part.
     ///   - category: Optional category string (legacy).
+    ///   - defaultMetricType: Default metric type for sets.
     init(
         name: String,
         code: String? = nil,
@@ -74,7 +79,8 @@ final class Exercise {
         scope: ExerciseScope = .user,
         ownerProfileId: UUID? = nil,
         bodyPartId: UUID? = nil,
-        category: String? = nil
+        category: String? = nil,
+        defaultMetricType: SetMetricType = .weightReps
     ) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         self.id = UUID()
@@ -87,6 +93,7 @@ final class Exercise {
         self.bodyPartId = bodyPartId
         self.category = category
         self.isArchived = false
+        self.defaultMetricType = defaultMetricType
         self.translations = []
         self.createdAt = Date()
         self.updatedAt = Date()
@@ -99,7 +106,8 @@ final class Exercise {
         code: String,
         defaultName: String,
         bodyPartId: UUID? = nil,
-        category: String? = nil
+        category: String? = nil,
+        defaultMetricType: SetMetricType = .weightReps
     ) -> Exercise {
         Exercise(
             name: defaultName,
@@ -108,7 +116,8 @@ final class Exercise {
             scope: .global,
             ownerProfileId: nil,
             bodyPartId: bodyPartId,
-            category: category
+            category: category,
+            defaultMetricType: defaultMetricType
         )
     }
 
@@ -117,7 +126,8 @@ final class Exercise {
         name: String,
         profileId: UUID,
         bodyPartId: UUID? = nil,
-        category: String? = nil
+        category: String? = nil,
+        defaultMetricType: SetMetricType = .weightReps
     ) -> Exercise {
         Exercise(
             name: name,
@@ -126,7 +136,8 @@ final class Exercise {
             scope: .user,
             ownerProfileId: profileId,
             bodyPartId: bodyPartId,
-            category: category
+            category: category,
+            defaultMetricType: defaultMetricType
         )
     }
 

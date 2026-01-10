@@ -10,8 +10,11 @@ struct ExerciseEntryCardView: View {
     let exerciseName: String
     let bodyPartColor: Color?
     let isExpanded: Bool
+    var isGrouped: Bool = false
     @Binding var currentWeight: Double
     @Binding var currentReps: Int
+    @Binding var currentDuration: Int
+    @Binding var currentDistance: Double?
     let onTap: () -> Void
     let onLogSet: () -> Bool
     let onAddSet: () -> Void
@@ -19,15 +22,25 @@ struct ExerciseEntryCardView: View {
     let onDeleteSet: (WorkoutSet) -> Void
     let onDeleteEntry: () -> Void
     let onChangeExercise: () -> Void
+    var onUpdateSet: ((WorkoutSet) -> Bool)?
+    var onUncompleteSet: ((WorkoutSet) -> Void)?
+    var onTimerStart: ((Int) -> Void)?
+    var onTimerCancel: (() -> Void)?
+    var onUpdateRestTime: ((WorkoutSet, Int) -> Void)?
+    var defaultRestTimeSeconds: Int = 90
+    var isCombinationModeEnabled: Bool = false
+    var timerManager: RestTimerManager?
+    var weightUnit: WeightUnit = .kg
 
     @State private var selectedSetIndex: Int?
-    @State private var logSuccessPulse: Bool = false
-    @State private var hapticTrigger: Int = 0
     @State private var showDeleteEntryConfirmation: Bool = false
     @State private var swipeOffset: CGFloat = 0
     @State private var isSwipeOpen: Bool = false
+    @State private var logSuccessPulse: Bool = false
+    @State private var hapticTrigger: Int = 0
 
     private let deleteButtonWidth: CGFloat = 80
+    private let deleteButtonHeight: CGFloat = 56
 
     private var activeSetIndex: Int? {
         sortedSets.firstIndex { !$0.isCompleted }
@@ -71,9 +84,47 @@ struct ExerciseEntryCardView: View {
         sortedSets.contains { $0.isCompleted }
     }
 
+    /// The last completed set (highest index among completed sets)
+    private var lastCompletedSet: WorkoutSet? {
+        sortedSets.filter { $0.isCompleted }.last
+    }
+
+    /// Whether the selected set is the last completed set (only this can be uncompleted)
+    private var canUncompleteSelectedSet: Bool {
+        guard let selected = selectedSet, let lastCompleted = lastCompletedSet else { return false }
+        return selected.id == lastCompleted.id
+    }
+
     /// Can change exercise only when no sets have been completed yet
     private var canChangeExercise: Bool {
-        !hasCompletedSets
+        !hasCompletedSets && !isGrouped
+    }
+
+    /// Whether this exercise type supports rest timer (weightReps or bodyweightReps)
+    private var supportsRestTimer: Bool {
+        entry.metricType == .weightReps || entry.metricType == .bodyweightReps
+    }
+
+    /// Get rest time from currently selected/active set (in seconds), falling back to default
+    private var currentRestTimeSeconds: Int {
+        if let index = selectedSetIndex, index < sortedSets.count {
+            return sortedSets[index].restTimeSeconds ?? defaultRestTimeSeconds
+        }
+        if let index = activeSetIndex, index < sortedSets.count {
+            return sortedSets[index].restTimeSeconds ?? defaultRestTimeSeconds
+        }
+        return defaultRestTimeSeconds
+    }
+
+    /// Get the current set for rest time editing (selected or active set)
+    private var currentSetForRestTime: WorkoutSet? {
+        if let index = selectedSetIndex, index < sortedSets.count {
+            return sortedSets[index]
+        }
+        if let index = activeSetIndex, index < sortedSets.count {
+            return sortedSets[index]
+        }
+        return nil
     }
 
     /// Whether user is currently viewing a completed set (not the active one)
@@ -81,6 +132,36 @@ struct ExerciseEntryCardView: View {
         guard let selected = selectedSetIndex,
               let active = activeSetIndex else { return false }
         return selected < active
+    }
+
+    /// Whether user is selecting a completed set (including when all sets are completed)
+    private var isEditingCompletedSet: Bool {
+        selectedSet?.isCompleted == true
+    }
+
+    /// Whether the input values differ from the selected completed set's values
+    private var isCompletedSetDirty: Bool {
+        guard let set = selectedSet, set.isCompleted else { return false }
+
+        switch set.metricType {
+        case .weightReps:
+            let weightDiff = abs(currentWeight - set.weightDouble) >= 0.01
+            let repsDiff = currentReps != (set.reps ?? 0)
+            return weightDiff || repsDiff
+        case .bodyweightReps:
+            return currentReps != (set.reps ?? 0)
+        case .timeDistance:
+            let durationDiff = currentDuration != (set.durationSeconds ?? 0)
+            let distanceDiff: Bool
+            if let setDistance = set.distanceMeters, let currentDist = currentDistance {
+                distanceDiff = abs(currentDist - setDistance) >= 0.01
+            } else {
+                distanceDiff = (set.distanceMeters != nil) != (currentDistance != nil)
+            }
+            return durationDiff || distanceDiff
+        case .completion:
+            return false
+        }
     }
 
     private func ensureSelection() {
@@ -115,7 +196,7 @@ struct ExerciseEntryCardView: View {
                     collapsedContent
                 }
             }
-            .background(entry.isPlannedSetsCompleted ? AppColors.cardBackgroundCompleted : AppColors.cardBackground)
+            .background(cardBackgroundColor)
             .cornerRadius(12)
             .offset(x: swipeOffset)
             .gesture(swipeGesture)
@@ -159,24 +240,41 @@ struct ExerciseEntryCardView: View {
     }
 
     private var deleteButton: some View {
-        Button(action: {
-            showDeleteEntryConfirmation = true
-        }) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.red)
+        Group {
+            if isGrouped {
+                Color.clear
+                    .frame(width: deleteButtonWidth, height: deleteButtonHeight)
+            } else {
+                Button(action: {
+                    showDeleteEntryConfirmation = true
+                }) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.red)
 
-                Image(systemName: "trash.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.white)
+                        Image(systemName: "trash.fill")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                    .frame(width: deleteButtonWidth, height: deleteButtonHeight)
+                }
             }
-            .frame(width: deleteButtonWidth)
         }
+    }
+
+    private var cardBackgroundColor: Color {
+        if isGrouped {
+            return entry.isPlannedSetsCompleted
+                ? AppColors.groupedCardBackgroundCompleted
+                : AppColors.groupedCardBackground
+        }
+        return entry.isPlannedSetsCompleted ? AppColors.cardBackgroundCompleted : AppColors.cardBackground
     }
 
     private var swipeGesture: some Gesture {
         DragGesture(minimumDistance: 20, coordinateSpace: .local)
             .onChanged { value in
+                guard !isGrouped else { return }
                 let translation = value.translation.width
                 if isSwipeOpen {
                     // Already open, allow dragging back
@@ -190,6 +288,7 @@ struct ExerciseEntryCardView: View {
                 }
             }
             .onEnded { value in
+                guard !isGrouped else { return }
                 let translation = value.translation.width
                 let velocity = value.predictedEndTranslation.width - translation
 
@@ -219,12 +318,8 @@ struct ExerciseEntryCardView: View {
         VStack(alignment: .leading, spacing: 16) {
             // Header with exercise name and delete button (always same size)
             HStack {
-                Button(action: {
-                    // Only allow change when no completed sets exist
-                    if canChangeExercise {
-                        onChangeExercise()
-                    }
-                }) {
+                // Exercise name - tapping collapses the card
+                Button(action: onTap) {
                     HStack(spacing: 8) {
                         // Body part color dot
                         if let color = bodyPartColor {
@@ -237,29 +332,35 @@ struct ExerciseEntryCardView: View {
                             .font(.title3)
                             .fontWeight(.semibold)
                             .foregroundColor(AppColors.textPrimary)
-
-                        // Show "変更" label and chevron only when exercise can be changed
-                        // (i.e., no completed sets exist)
-                        if canChangeExercise {
-                            Text("workout_change_exercise")
-                                .font(.caption)
-                                .foregroundColor(Color.white.opacity(0.55))
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(Color.white.opacity(0.55))
-                        }
                     }
                 }
                 .buttonStyle(.plain)
+
+                // Change exercise chip - only shown when no completed sets
+                if canChangeExercise {
+                    Button(action: onChangeExercise) {
+                        Text("workout_change_exercise")
+                            .font(.caption)
+                            .foregroundColor(AppColors.textSecondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(AppColors.cardBackground)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
 
                 Spacer()
 
                 // Delete button: deletes set if multiple sets, or shows entry delete confirmation if only one set
                 Button(action: {
+                    let canDeleteEntry = hasOnlyOneSet && !isGrouped
+                    let canDeleteSet = deletableSet != nil
                     if hasOnlyOneSet {
-                        showDeleteEntryConfirmation = true
-                    } else if let set = deletableSet {
+                        if canDeleteEntry {
+                            showDeleteEntryConfirmation = true
+                        }
+                    } else if let set = deletableSet, canDeleteSet {
                         onDeleteSet(set)
                         ensureSelection()
                     }
@@ -269,8 +370,8 @@ struct ExerciseEntryCardView: View {
                         .foregroundColor(hasOnlyOneSet ? AppColors.textMuted : AppColors.textMuted)
                         .padding(8)
                 }
-                .opacity(hasOnlyOneSet || deletableSet != nil ? 1 : 0)
-                .disabled(!hasOnlyOneSet && deletableSet == nil)
+                .opacity((hasOnlyOneSet && !isGrouped) || deletableSet != nil ? 1 : 0)
+                .disabled(!((hasOnlyOneSet && !isGrouped) || deletableSet != nil))
             }
             .padding(.top, 16)
             .padding(.horizontal, 16)
@@ -281,87 +382,55 @@ struct ExerciseEntryCardView: View {
                     activeSetIndex: activeSetIndex,
                     selectedSetIndex: $selectedSetIndex,
                     onCompletedSetTap: handleCompletedSetTap,
+                    onActiveSetTap: handleActiveSetTap,
                     onFutureSetLongPress: handleFutureSetLongPress,
                     pulse: logSuccessPulse
                 )
                 .padding(.leading, 16)
 
                 VStack(spacing: 16) {
-                    WeightRepsInputView(
-                        weight: $currentWeight,
-                        reps: $currentReps,
-                        pulse: logSuccessPulse
-                    )
+                    // Switch input view based on metric type
+                    switch entry.metricType {
+                    case .weightReps:
+                        WeightRepsInputView(
+                            weight: $currentWeight,
+                            reps: $currentReps,
+                            pulse: logSuccessPulse,
+                            weightUnit: weightUnit
+                        )
+                    case .bodyweightReps:
+                        BodyweightRepsInputView(
+                            reps: $currentReps,
+                            pulse: logSuccessPulse
+                        )
+                    case .timeDistance:
+                        TimeDistanceInputView(
+                            durationSeconds: $currentDuration,
+                            distanceMeters: $currentDistance,
+                            pulse: logSuccessPulse
+                        )
+                    case .completion:
+                        CompletionInputView(pulse: logSuccessPulse)
+                    }
 
-                    // Show "Add Set" when all sets completed OR viewing a completed set
-                    if allSetsCompleted {
+                    // Button conditions (4-way):
+                    // 1. isEditingCompletedSet && isCompletedSetDirty → Update set
+                    // 2. allSetsCompleted && !isCompletedSetDirty → Add set
+                    // 3. isViewingCompletedSet → Go to current set
+                    // 4. else → Log set
+                    if isEditingCompletedSet && isCompletedSetDirty {
+                        // Update button (value changed on completed set)
                         Button(action: {
-                            onAddSet()
-                            ensureSelection()
-                        }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "plus")
-                                    .font(.subheadline.weight(.semibold))
-                                Text("workout_add_set")
-                            }
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.textPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(AppColors.accentBlue.opacity(0.18))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(AppColors.accentBlue.opacity(0.45), lineWidth: 1)
-                            )
-                            .cornerRadius(10)
-                            .shadow(color: AppColors.accentBlue.opacity(0.18), radius: 6, y: 2)
-                        }
-                    } else if isViewingCompletedSet {
-                        // Viewing a completed set - button navigates to active set
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedSetIndex = activeSetIndex
-                            }
-                        }) {
-                            HStack(spacing: 6) {
-                                Text("workout_go_to_current_set")
-                                Image(systemName: "arrow.right")
-                                    .font(.subheadline.weight(.semibold))
-                            }
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.textPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(AppColors.accentBlue.opacity(0.18))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(AppColors.accentBlue.opacity(0.45), lineWidth: 1)
-                            )
-                            .cornerRadius(10)
-                        }
-                    } else {
-                        Button(action: {
-                            let success = onLogSet()
-                            if success {
-                                // Trigger success animation
-                                withAnimation(.easeInOut(duration: 0.15)) {
-                                    logSuccessPulse = true
-                                }
-                                hapticTrigger += 1
-                                ensureSelection()
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                    withAnimation(.easeInOut(duration: 0.1)) {
-                                        logSuccessPulse = false
-                                    }
+                            if let set = selectedSet {
+                                if let onUpdate = onUpdateSet, onUpdate(set) {
+                                    navigateToCurrentSetOrStay()
                                 }
                             }
                         }) {
                             HStack(spacing: 6) {
-                                Image(systemName: "checkmark")
+                                Image(systemName: "pencil")
                                     .font(.subheadline.weight(.semibold))
-                                Text("workout_log_set")
+                                Text("workout_update_set")
                             }
                             .font(.headline)
                             .fontWeight(.semibold)
@@ -371,17 +440,123 @@ struct ExerciseEntryCardView: View {
                             .background(AppColors.accentBlue)
                             .cornerRadius(10)
                         }
-                        .sensoryFeedback(.success, trigger: hapticTrigger)
-                    }
+                    } else if allSetsCompleted && !isGrouped {
+                        // Add set button (all sets done, no pending edits)
+                        // Hidden for grouped exercises (set count controlled at group level)
+                        VStack(spacing: 8) {
+                            Button(action: {
+                                onAddSet()
+                                ensureSelection()
+                            }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "plus")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("workout_add_set")
+                                }
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(AppColors.accentBlue.opacity(0.18))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .stroke(AppColors.accentBlue.opacity(0.45), lineWidth: 1)
+                                )
+                                .cornerRadius(10)
+                                .shadow(color: AppColors.accentBlue.opacity(0.18), radius: 6, y: 2)
+                            }
 
-                    Button(action: {}) {
-                        HStack(spacing: 6) {
-                            Text("workout_rest_timer")
-                                .font(.subheadline)
-                                .foregroundColor(Color.white.opacity(0.52))
-                            Image(systemName: "play.fill")
-                                .font(.caption)
-                                .foregroundColor(Color.white.opacity(0.52))
+                            // Uncomplete set button (only for last completed set)
+                            if canUncompleteSelectedSet, let selectedSet = selectedSet {
+                                Button(action: {
+                                    onUncompleteSet?(selectedSet)
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "arrow.uturn.backward")
+                                            .font(.subheadline.weight(.semibold))
+                                        Text("workout_uncomplete_set")
+                                    }
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(AppColors.textSecondary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                }
+                            }
+                        }
+                    } else if isViewingCompletedSet {
+                        // Go to current set button (viewing completed, but there are incomplete sets)
+                        VStack(spacing: 8) {
+                            Button(action: {
+                                navigateToCurrentSet()
+                            }) {
+                                HStack(spacing: 6) {
+                                    Text("workout_go_to_current_set")
+                                    Image(systemName: "arrow.right")
+                                        .font(.subheadline.weight(.semibold))
+                                }
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(AppColors.accentBlue.opacity(0.18))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .stroke(AppColors.accentBlue.opacity(0.45), lineWidth: 1)
+                                )
+                                .cornerRadius(10)
+                            }
+
+                            // Uncomplete set button (only for last completed set)
+                            if canUncompleteSelectedSet, let selectedSet = selectedSet {
+                                Button(action: {
+                                    onUncompleteSet?(selectedSet)
+                                    navigateToCurrentSet()
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "arrow.uturn.backward")
+                                            .font(.subheadline.weight(.semibold))
+                                        Text("workout_uncomplete_set")
+                                    }
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(AppColors.textSecondary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                }
+                            }
+                        }
+                    } else {
+                        // Action dock for log + rest timer
+                        if supportsRestTimer, let manager = timerManager, !isGrouped {
+                            RestTimerActionDockView(
+                                isCombinationMode: isCombinationModeEnabled,
+                                restTimeSeconds: currentRestTimeSeconds,
+                                onLog: {
+                                    let success = onLogSet()
+                                    if success {
+                                        ensureSelection()
+                                    }
+                                    return success
+                                },
+                                onTimerStart: {
+                                    onTimerStart?(currentRestTimeSeconds)
+                                },
+                                onTimerCancel: {
+                                    onTimerCancel?()
+                                },
+                                onRestTimeChange: { newTime in
+                                    if let set = currentSetForRestTime {
+                                        onUpdateRestTime?(set, newTime)
+                                    }
+                                },
+                                timerManager: manager
+                            )
+                        } else {
+                            // Fallback: simple log button for non-timer exercises
+                            simpleLogButton
                         }
                     }
                 }
@@ -391,9 +566,32 @@ struct ExerciseEntryCardView: View {
         }
     }
 
+    /// Simple log button for exercises that don't support rest timer
+    private var simpleLogButton: some View {
+        Button(action: {
+            let success = onLogSet()
+            if success {
+                ensureSelection()
+            }
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark")
+                    .font(.subheadline.weight(.semibold))
+                Text("workout_log_set")
+            }
+            .font(.headline)
+            .fontWeight(.semibold)
+            .foregroundColor(AppColors.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(AppColors.accentBlue)
+            .cornerRadius(10)
+        }
+    }
+
     private var subtitleText: String? {
         let completed = entry.completedSetsCount
-        let total = max(entry.plannedSetCount, entry.activeSets.count)
+        let total = entry.activeSets.count
 
         guard total > 0 else { return nil }
 
@@ -439,12 +637,73 @@ struct ExerciseEntryCardView: View {
 
     private func handleCompletedSetTap(_ index: Int) {
         selectedSetIndex = index
+        // Show the completed set's actual logged values
+        if index < sortedSets.count {
+            let set = sortedSets[index]
+            updateCurrentValuesFromSet(set)
+        }
+    }
+
+    private func handleActiveSetTap(_ index: Int) {
+        selectedSetIndex = index
+        // Restore the active set's planned values
+        if index < sortedSets.count {
+            let set = sortedSets[index]
+            updateCurrentValuesFromSet(set)
+        }
     }
 
     private func handleFutureSetLongPress(_ index: Int) {
+        // Don't allow removing planned sets for grouped exercises
+        guard !isGrouped else { return }
         guard index < sortedSets.count else { return }
         let set = sortedSets[index]
         onRemovePlannedSet(set)
+    }
+
+    /// Navigate to the active (next incomplete) set and restore its values
+    private func navigateToCurrentSet() {
+        if let activeIndex = activeSetIndex {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedSetIndex = activeIndex
+            }
+            // Get values directly from sortedSets
+            if activeIndex < sortedSets.count {
+                let set = sortedSets[activeIndex]
+                updateCurrentValuesFromSet(set)
+            }
+        }
+    }
+
+    /// Updates current input values from a set based on its metric type
+    private func updateCurrentValuesFromSet(_ set: WorkoutSet) {
+        switch set.metricType {
+        case .weightReps:
+            currentWeight = set.weightDouble
+            currentReps = set.reps ?? 0
+        case .bodyweightReps:
+            currentReps = set.reps ?? 0
+        case .timeDistance:
+            currentDuration = set.durationSeconds ?? 60
+            currentDistance = set.distanceMeters
+        case .completion:
+            break
+        }
+    }
+
+    /// After a successful update: navigate to active set if available, otherwise stay
+    private func navigateToCurrentSetOrStay() {
+        if activeSetIndex != nil {
+            navigateToCurrentSet()
+        }
+        // If all sets are completed, stay at the current (just updated) set
+    }
+
+    /// Format rest time for display (e.g., "1:30")
+    private func formatRestTime(_ seconds: Int) -> String {
+        let mins = seconds / 60
+        let secs = seconds % 60
+        return String(format: "%d:%02d", mins, secs)
     }
 }
 
@@ -489,6 +748,7 @@ struct WeightRepsInputView: View {
     @Binding var weight: Double
     @Binding var reps: Int
     var pulse: Bool = false
+    var weightUnit: WeightUnit = .kg
 
     @State private var weightText = ""
     @State private var repsText = ""
@@ -504,10 +764,7 @@ struct WeightRepsInputView: View {
     private let unitFontSize: CGFloat = 14
 
     private func formatWeight(_ weight: Double) -> String {
-        if weight.truncatingRemainder(dividingBy: 1) == 0 {
-            return String(format: "%.0f", weight)
-        }
-        return String(format: "%.1f", weight)
+        Formatters.formatWeight(weight)
     }
 
     var body: some View {
@@ -532,6 +789,16 @@ struct WeightRepsInputView: View {
         }
         .scaleEffect(pulse ? 1.05 : 1.0)
         .animation(.easeInOut(duration: 0.15), value: pulse)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(L10n.tr("done")) {
+                    weightFieldFocused = false
+                    repsFieldFocused = false
+                }
+                .foregroundColor(AppColors.accentBlue)
+            }
+        }
     }
 
     // MARK: - Weight Input
@@ -546,6 +813,12 @@ struct WeightRepsInputView: View {
                     .frame(width: 70)
                     .multilineTextAlignment(.trailing)
                     .focused($weightFieldFocused)
+                    .onChange(of: weightText) { _, newValue in
+                        // Update binding immediately so logging works without dismissing keyboard
+                        if let value = Double(newValue) {
+                            weight = value
+                        }
+                    }
                     .onChange(of: weightFieldFocused) { _, focused in
                         if !focused {
                             if let value = Double(weightText) {
@@ -564,7 +837,7 @@ struct WeightRepsInputView: View {
                     .foregroundColor(AppColors.textPrimary)
             }
 
-            Text("unit_kg")
+            Text(weightUnit.symbol)
                 .font(.system(size: unitFontSize, weight: .medium, design: .rounded))
                 .foregroundColor(AppColors.textSecondary)
                 .baselineOffset((weightFontSize - unitFontSize) * 0.08)
@@ -583,6 +856,12 @@ struct WeightRepsInputView: View {
                     .frame(width: 55)
                     .multilineTextAlignment(.leading)
                     .focused($repsFieldFocused)
+                    .onChange(of: repsText) { _, newValue in
+                        // Update binding immediately so logging works without dismissing keyboard
+                        if let value = Int(newValue) {
+                            reps = value
+                        }
+                    }
                     .onChange(of: repsFieldFocused) { _, focused in
                         if !focused {
                             if let value = Int(repsText) {
@@ -616,6 +895,7 @@ struct SetDotsView: View {
     let activeSetIndex: Int?
     @Binding var selectedSetIndex: Int?
     let onCompletedSetTap: (Int) -> Void
+    let onActiveSetTap: (Int) -> Void
     let onFutureSetLongPress: (Int) -> Void
     var pulse: Bool = false
 
@@ -673,8 +953,8 @@ struct SetDotsView: View {
                             // Allow selecting completed sets anytime
                             onCompletedSetTap(index)
                         } else if index == activeSetIndex {
-                            // Tap on active set selects it
-                            selectedSetIndex = index
+                            // Tap on active set - update selection and restore values
+                            onActiveSetTap(index)
                         }
                         // Tap on future incomplete sets (beyond active) does nothing
                     }
@@ -739,6 +1019,297 @@ private struct SetDotView: View {
     }
 }
 
+// MARK: - Bodyweight Reps Input View
+
+struct BodyweightRepsInputView: View {
+    @Binding var reps: Int
+    var pulse: Bool = false
+
+    @State private var repsText = ""
+    @State private var isEditingReps = false
+
+    @FocusState private var repsFieldFocused: Bool
+
+    private let repsFontSize: CGFloat = 38
+    private let unitFontSize: CGFloat = 14
+
+    var body: some View {
+        HStack(spacing: 0) {
+            repsInputGroup
+                .onTapGesture {
+                    isEditingReps = true
+                }
+        }
+        .scaleEffect(pulse ? 1.05 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: pulse)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(L10n.tr("done")) {
+                    repsFieldFocused = false
+                }
+                .foregroundColor(AppColors.accentBlue)
+            }
+        }
+    }
+
+    private var repsInputGroup: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            if isEditingReps {
+                TextField("", text: $repsText)
+                    .keyboardType(.numberPad)
+                    .font(.system(size: repsFontSize, weight: .bold, design: .rounded))
+                    .foregroundColor(AppColors.textPrimary)
+                    .frame(width: 70)
+                    .multilineTextAlignment(.center)
+                    .focused($repsFieldFocused)
+                    .onChange(of: repsText) { _, newValue in
+                        if let value = Int(newValue) {
+                            reps = value
+                        }
+                    }
+                    .onChange(of: repsFieldFocused) { _, focused in
+                        if !focused {
+                            if let value = Int(repsText) {
+                                reps = value
+                            }
+                            isEditingReps = false
+                        }
+                    }
+                    .onAppear {
+                        repsText = "\(reps)"
+                        repsFieldFocused = true
+                    }
+            } else {
+                Text("\(reps)")
+                    .font(.system(size: repsFontSize, weight: .bold, design: .rounded))
+                    .foregroundColor(AppColors.textPrimary)
+            }
+
+            Text("unit_reps")
+                .font(.system(size: unitFontSize, weight: .medium, design: .rounded))
+                .foregroundColor(AppColors.textSecondary)
+                .baselineOffset((repsFontSize - unitFontSize) * 0.08)
+        }
+    }
+}
+
+// MARK: - Time/Distance Input View
+
+struct TimeDistanceInputView: View {
+    @Binding var durationSeconds: Int
+    @Binding var distanceMeters: Double?
+    var pulse: Bool = false
+
+    @State private var minutesText = ""
+    @State private var secondsText = ""
+    @State private var distanceText = ""
+    @State private var isEditingMinutes = false
+    @State private var isEditingSeconds = false
+    @State private var isEditingDistance = false
+
+    @FocusState private var minutesFieldFocused: Bool
+    @FocusState private var secondsFieldFocused: Bool
+    @FocusState private var distanceFieldFocused: Bool
+
+    private let valueFontSize: CGFloat = 32
+    private let unitFontSize: CGFloat = 14
+
+    private var minutes: Int {
+        durationSeconds / 60
+    }
+
+    private var seconds: Int {
+        durationSeconds % 60
+    }
+
+    private var distanceKm: Double? {
+        guard let meters = distanceMeters else { return nil }
+        return meters / 1000
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            // Time group (minutes : seconds)
+            HStack(spacing: 2) {
+                // Minutes value
+                timeValueView(
+                    value: minutes,
+                    text: $minutesText,
+                    isEditing: $isEditingMinutes,
+                    focused: $minutesFieldFocused,
+                    onUpdate: { newMinutes in
+                        durationSeconds = newMinutes * 60 + seconds
+                    }
+                )
+
+                Text(L10n.tr("unit_min"))
+                    .font(.system(size: unitFontSize, weight: .medium, design: .rounded))
+                    .foregroundColor(AppColors.textSecondary)
+                    .fixedSize()
+
+                Text(":")
+                    .font(.system(size: valueFontSize, weight: .semibold, design: .rounded))
+                    .foregroundColor(AppColors.textMuted)
+                    .padding(.horizontal, 2)
+
+                // Seconds value
+                timeValueView(
+                    value: seconds,
+                    text: $secondsText,
+                    isEditing: $isEditingSeconds,
+                    focused: $secondsFieldFocused,
+                    onUpdate: { newSeconds in
+                        durationSeconds = minutes * 60 + min(newSeconds, 59)
+                    }
+                )
+
+                Text(L10n.tr("unit_sec"))
+                    .font(.system(size: unitFontSize, weight: .medium, design: .rounded))
+                    .foregroundColor(AppColors.textSecondary)
+                    .fixedSize()
+            }
+            .fixedSize()
+
+            Spacer()
+
+            // Distance group
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                distanceValueView
+
+                Text(L10n.tr("unit_km"))
+                    .font(.system(size: unitFontSize, weight: .medium, design: .rounded))
+                    .foregroundColor(AppColors.textSecondary)
+                    .fixedSize()
+            }
+            .fixedSize()
+        }
+        .scaleEffect(pulse ? 1.05 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: pulse)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(L10n.tr("done")) {
+                    minutesFieldFocused = false
+                    secondsFieldFocused = false
+                    distanceFieldFocused = false
+                }
+                .foregroundColor(AppColors.accentBlue)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func timeValueView(
+        value: Int,
+        text: Binding<String>,
+        isEditing: Binding<Bool>,
+        focused: FocusState<Bool>.Binding,
+        onUpdate: @escaping (Int) -> Void
+    ) -> some View {
+        if isEditing.wrappedValue {
+            TextField("", text: text)
+                .keyboardType(.numberPad)
+                .font(.system(size: valueFontSize, weight: .semibold, design: .rounded))
+                .foregroundColor(AppColors.textPrimary)
+                .frame(width: 50)
+                .multilineTextAlignment(.center)
+                .focused(focused)
+                .onChange(of: text.wrappedValue) { _, newValue in
+                    if let intValue = Int(newValue) {
+                        onUpdate(intValue)
+                    }
+                }
+                .onChange(of: focused.wrappedValue) { _, isFocused in
+                    if !isFocused {
+                        if let intValue = Int(text.wrappedValue) {
+                            onUpdate(intValue)
+                        }
+                        isEditing.wrappedValue = false
+                    }
+                }
+                .onAppear {
+                    text.wrappedValue = "\(value)"
+                    focused.wrappedValue = true
+                }
+        } else {
+            Text(String(format: "%02d", value))
+                .font(.system(size: valueFontSize, weight: .semibold, design: .rounded))
+                .foregroundColor(AppColors.textPrimary)
+                .frame(minWidth: 50)
+                .onTapGesture {
+                    isEditing.wrappedValue = true
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var distanceValueView: some View {
+        if isEditingDistance {
+            TextField("", text: $distanceText)
+                .keyboardType(.decimalPad)
+                .font(.system(size: valueFontSize, weight: .semibold, design: .rounded))
+                .foregroundColor(AppColors.textPrimary)
+                .frame(width: 55)
+                .multilineTextAlignment(.center)
+                .focused($distanceFieldFocused)
+                .onChange(of: distanceText) { _, newValue in
+                    if newValue.isEmpty {
+                        distanceMeters = nil
+                    } else if let km = Double(newValue) {
+                        distanceMeters = km * 1000
+                    }
+                }
+                .onChange(of: distanceFieldFocused) { _, focused in
+                    if !focused {
+                        if distanceText.isEmpty {
+                            distanceMeters = nil
+                        } else if let km = Double(distanceText) {
+                            distanceMeters = km * 1000
+                        }
+                        isEditingDistance = false
+                    }
+                }
+                .onAppear {
+                    if let km = distanceKm {
+                        distanceText = String(format: "%.1f", km)
+                    } else {
+                        distanceText = ""
+                    }
+                    distanceFieldFocused = true
+                }
+        } else {
+            Text(distanceKm.map { String(format: "%.1f", $0) } ?? "--")
+                .font(.system(size: valueFontSize, weight: .semibold, design: .rounded))
+                .foregroundColor(distanceKm != nil ? AppColors.textPrimary : AppColors.textMuted)
+                .frame(minWidth: 55)
+                .onTapGesture {
+                    isEditingDistance = true
+                }
+        }
+    }
+}
+
+// MARK: - Completion Input View
+
+struct CompletionInputView: View {
+    var pulse: Bool = false
+
+    var body: some View {
+        HStack {
+            Image(systemName: "checkmark.circle")
+                .font(.system(size: 32, weight: .medium))
+                .foregroundColor(AppColors.textSecondary)
+
+            Text("workout_completion_ready")
+                .font(.system(size: 18, weight: .medium, design: .rounded))
+                .foregroundColor(AppColors.textSecondary)
+        }
+        .scaleEffect(pulse ? 1.05 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: pulse)
+    }
+}
+
 #Preview {
     let entry = WorkoutExerciseEntry(
         exerciseId: UUID(),
@@ -758,13 +1329,17 @@ private struct SetDotView: View {
         isExpanded: true,
         currentWeight: .constant(60),
         currentReps: .constant(8),
+        currentDuration: .constant(60),
+        currentDistance: .constant(nil),
         onTap: {},
         onLogSet: { true },
         onAddSet: {},
         onRemovePlannedSet: { _ in },
         onDeleteSet: { _ in },
         onDeleteEntry: {},
-        onChangeExercise: {}
+        onChangeExercise: {},
+        onUpdateSet: { _ in true },
+        onTimerStart: { _ in }
     )
     .padding()
     .background(AppColors.background)

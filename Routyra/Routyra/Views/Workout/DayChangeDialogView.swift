@@ -3,17 +3,21 @@
 //  Routyra
 //
 //  Confirmation dialog for changing the current workout day.
-//  Includes a toggle for skipping and advancing the progress pointer.
+//  When day is changed, the next workout will automatically use the following day.
 //
 
 import SwiftUI
 
 struct DayChangeDialogView: View {
     let targetDayIndex: Int
-    let onConfirm: (Bool) -> Void
+    let totalDays: Int
+    let onConfirm: () -> Void
     let onCancel: () -> Void
 
-    @State private var skipAndAdvance = false
+    /// The day that will be shown next time (after completing the target day)
+    private var nextDayIndex: Int {
+        (targetDayIndex % totalDays) + 1
+    }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -29,18 +33,21 @@ struct DayChangeDialogView: View {
                 .foregroundColor(AppColors.textSecondary)
                 .multilineTextAlignment(.center)
 
-            // Skip toggle
-            Toggle(isOn: $skipAndAdvance) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.tr("day_change_skip_toggle"))
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.textPrimary)
-                }
+            // Note about next day behavior
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle.fill")
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.accentBlue)
+
+                Text(L10n.tr("day_change_note", nextDayIndex))
+                    .font(.caption)
+                    .foregroundColor(AppColors.textSecondary)
+                    .multilineTextAlignment(.leading)
             }
-            .tint(AppColors.accentBlue)
-            .padding()
-            .background(AppColors.cardBackground)
-            .cornerRadius(12)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppColors.accentBlue.opacity(0.1))
+            .cornerRadius(10)
 
             // Buttons
             HStack(spacing: 12) {
@@ -59,7 +66,7 @@ struct DayChangeDialogView: View {
                 .buttonStyle(.plain)
 
                 Button {
-                    onConfirm(skipAndAdvance)
+                    onConfirm()
                 } label: {
                     Text(L10n.tr("day_change_confirm"))
                         .font(.subheadline)
@@ -74,9 +81,13 @@ struct DayChangeDialogView: View {
             }
         }
         .padding(24)
-        .background(AppColors.background)
+        .background(AppColors.cardBackground)
         .cornerRadius(20)
-        .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(AppColors.textMuted.opacity(0.3), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.4), radius: 24, x: 0, y: 12)
         .padding(.horizontal, 24)
     }
 }
@@ -88,8 +99,9 @@ struct DayChangeDialogView: View {
 
         DayChangeDialogView(
             targetDayIndex: 3,
-            onConfirm: { skip in
-                print("Confirmed with skip: \(skip)")
+            totalDays: 5,
+            onConfirm: {
+                print("Confirmed")
             },
             onCancel: {
                 print("Cancelled")

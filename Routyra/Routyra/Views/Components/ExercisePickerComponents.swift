@@ -231,7 +231,7 @@ struct ExerciseFilterChip: View {
                 Text(title)
                     .font(.system(size: 13, weight: isSelected ? .semibold : .regular, design: .rounded))
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(isSelected ? AppColors.accentBlue : AppColors.cardBackground)
             .foregroundColor(isSelected ? .white : AppColors.textSecondary)
@@ -245,6 +245,74 @@ struct ExerciseFilterChip: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Body Part Filter Bar
+
+/// Two-row filter bar for body parts, centered layout.
+/// Used by both ExercisePickerView (Plan) and WorkoutExercisePickerView (Workout).
+/// Can optionally include cardio (plans allow cardio exercises).
+struct BodyPartFilterBar: View {
+    let bodyParts: [BodyPart]
+    @Binding var selectedBodyPartId: UUID?
+    var includeCardio: Bool = false
+
+    /// Body parts filtered by cardio inclusion.
+    private var filteredBodyParts: [BodyPart] {
+        includeCardio ? bodyParts : bodyParts.filter { $0.code != "cardio" }
+    }
+
+    var body: some View {
+        let allItems = [Optional<BodyPart>.none] + filteredBodyParts.map { Optional($0) }
+        let midIndex = (allItems.count + 1) / 2
+        let firstRow = Array(allItems.prefix(midIndex))
+        let secondRow = Array(allItems.suffix(from: midIndex))
+
+        return VStack(spacing: 8) {
+            // First row
+            HStack(spacing: 8) {
+                ForEach(Array(firstRow.enumerated()), id: \.offset) { _, item in
+                    filterChip(for: item)
+                }
+            }
+
+            // Second row (if any)
+            if !secondRow.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(Array(secondRow.enumerated()), id: \.offset) { _, item in
+                        filterChip(for: item)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private func filterChip(for bodyPart: BodyPart?) -> some View {
+        if let bodyPart = bodyPart {
+            ExerciseFilterChip(
+                title: bodyPart.localizedName,
+                color: bodyPart.color,
+                isSelected: selectedBodyPartId == bodyPart.id
+            ) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedBodyPartId = bodyPart.id
+                }
+            }
+        } else {
+            ExerciseFilterChip(
+                title: L10n.tr("filter_all"),
+                isSelected: selectedBodyPartId == nil
+            ) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedBodyPartId = nil
+                }
+            }
+        }
     }
 }
 

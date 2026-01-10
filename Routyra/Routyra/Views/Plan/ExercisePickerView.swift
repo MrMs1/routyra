@@ -18,10 +18,27 @@ enum ExercisePickerDestination: Hashable {
 struct ExercisePickerView: View {
     let profile: LocalProfile
     let dayTitle: String
+    let autoDismiss: Bool
     let onSelect: (Exercise) -> Void
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+
+    /// Convenience initializer with autoDismiss = true (backward compatible)
+    init(profile: LocalProfile, dayTitle: String, onSelect: @escaping (Exercise) -> Void) {
+        self.profile = profile
+        self.dayTitle = dayTitle
+        self.autoDismiss = true
+        self.onSelect = onSelect
+    }
+
+    /// Full initializer with autoDismiss control
+    init(profile: LocalProfile, dayTitle: String, autoDismiss: Bool, onSelect: @escaping (Exercise) -> Void) {
+        self.profile = profile
+        self.dayTitle = dayTitle
+        self.autoDismiss = autoDismiss
+        self.onSelect = onSelect
+    }
 
     @State private var exercises: [Exercise] = []
     @State private var bodyParts: [BodyPart] = []
@@ -76,7 +93,9 @@ struct ExercisePickerView: View {
                             isCustom: exercise.scope == .user,
                             onTap: {
                                 onSelect(exercise)
-                                dismiss()
+                                if autoDismiss {
+                                    dismiss()
+                                }
                             }
                         )
                     }
@@ -108,41 +127,18 @@ struct ExercisePickerView: View {
     // MARK: - Body Part Filter Bar
 
     private var bodyPartFilterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                // All filter
-                ExerciseFilterChip(
-                    title: L10n.tr("filter_all"),
-                    isSelected: selectedBodyPartId == nil
-                ) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedBodyPartId = nil
-                    }
-                }
-
-                // Body part filters
-                ForEach(bodyParts, id: \.id) { bodyPart in
-                    ExerciseFilterChip(
-                        title: bodyPart.localizedName,
-                        color: bodyPart.color,
-                        isSelected: selectedBodyPartId == bodyPart.id
-                    ) {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedBodyPartId = bodyPart.id
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-        }
+        BodyPartFilterBar(
+            bodyParts: bodyParts,
+            selectedBodyPartId: $selectedBodyPartId,
+            includeCardio: true
+        )
     }
 
     // MARK: - Data Loading
 
     private func loadData() {
-        // Load body parts
-        ExerciseCreationService.seedSystemBodyPartsIfNeeded(modelContext: modelContext)
+        // Ensure system exercises are seeded (idempotent)
+        ExerciseCreationService.seedSystemDataIfNeeded(modelContext: modelContext)
         bodyParts = ExerciseCreationService.fetchBodyParts(for: profile, modelContext: modelContext)
 
         // Load exercises

@@ -27,22 +27,38 @@ struct CycleListView: View {
             List {
                 if profileCycles.isEmpty {
                     Section {
-                        VStack(spacing: 12) {
+                        VStack(spacing: 16) {
                             Image(systemName: "arrow.triangle.2.circlepath")
                                 .font(.system(size: 40))
                                 .foregroundColor(AppColors.textMuted)
 
-                            Text("cycle_empty_title")
+                            Text(L10n.tr("cycle_empty_title"))
                                 .font(.headline)
                                 .foregroundColor(AppColors.textSecondary)
 
-                            Text("cycle_empty_description")
+                            Text(L10n.tr("cycle_empty_description"))
                                 .font(.caption)
                                 .foregroundColor(AppColors.textMuted)
                                 .multilineTextAlignment(.center)
+
+                            // Primary CTA button
+                            Button {
+                                newCycleName = ""
+                                showNewCycleAlert = true
+                            } label: {
+                                Text(L10n.tr("cycle_create"))
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(AppColors.accentBlue)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(12)
+                            }
+                            .padding(.top, 8)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 40)
+                        .padding(.horizontal, 16)
                     }
                     .listRowBackground(Color.clear)
                 } else {
@@ -147,14 +163,7 @@ private struct CycleRowView: View {
                         .foregroundColor(AppColors.textPrimary)
 
                     if isActive {
-                        Text("active")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(AppColors.accentBlue)
-                            .foregroundColor(.white)
-                            .cornerRadius(4)
+                        ActiveBadge()
                     }
                 }
 
@@ -173,7 +182,7 @@ private struct CycleRowView: View {
                 }
             } label: {
                 Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 24))
+                    .font(.system(size: 22))
                     .foregroundColor(isActive ? AppColors.accentBlue : AppColors.textMuted)
             }
             .buttonStyle(.plain)

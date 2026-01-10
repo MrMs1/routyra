@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-1341591553764994~6465356400</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Routyra uses your workout data from Apple Health to display your cardio exercise history and track your fitness progress.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Routyra saves your workout data to Apple Health to help you track your fitness progress across all your health apps.</string>
+</dict>
+</plist>

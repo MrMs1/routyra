@@ -73,6 +73,7 @@ struct CyclePlanPickerView: View {
                         }
                     } header: {
                         Text("plan_available_section")
+                            .foregroundColor(AppColors.textPrimary)
                     }
                 }
             }

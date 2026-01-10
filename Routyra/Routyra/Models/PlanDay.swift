@@ -30,6 +30,10 @@ final class PlanDay {
     @Relationship(deleteRule: .cascade, inverse: \PlanExercise.planDay)
     var exercises: [PlanExercise]
 
+    /// Exercise groups for this day (supersets/giant sets).
+    @Relationship(deleteRule: .cascade, inverse: \PlanExerciseGroup.planDay)
+    var exerciseGroups: [PlanExerciseGroup]
+
     // MARK: - Initialization
 
     /// Creates a new plan day.
@@ -43,6 +47,7 @@ final class PlanDay {
         self.name = name
         self.note = note
         self.exercises = []
+        self.exerciseGroups = []
     }
 
     // MARK: - Computed Properties
@@ -92,11 +97,12 @@ final class PlanDay {
 
     /// Creates and adds a new exercise.
     @discardableResult
-    func createExercise(exerciseId: UUID, plannedSetCount: Int = 3) -> PlanExercise {
+    func createExercise(exerciseId: UUID, metricType: SetMetricType = .weightReps, plannedSetCount: Int = 3) -> PlanExercise {
         let nextOrder = (exercises.map(\.orderIndex).max() ?? -1) + 1
         let exercise = PlanExercise(
             exerciseId: exerciseId,
             orderIndex: nextOrder,
+            metricType: metricType,
             plannedSetCount: plannedSetCount
         )
         addExercise(exercise)
@@ -129,14 +135,19 @@ final class PlanDay {
             let exerciseCopy = PlanExercise(
                 exerciseId: exercise.exerciseId,
                 orderIndex: exercise.orderIndex,
+                metricType: exercise.metricType,
                 plannedSetCount: exercise.plannedSetCount
             )
-            // Copy planned sets
+            // Copy planned sets (preserve all properties including metric type and time/distance)
             for plannedSet in exercise.sortedPlannedSets {
                 let setCopy = PlannedSet(
                     orderIndex: plannedSet.orderIndex,
+                    metricType: plannedSet.metricType,
                     targetWeight: plannedSet.targetWeight,
-                    targetReps: plannedSet.targetReps
+                    targetReps: plannedSet.targetReps,
+                    targetDurationSeconds: plannedSet.targetDurationSeconds,
+                    targetDistanceMeters: plannedSet.targetDistanceMeters,
+                    restTimeSeconds: plannedSet.restTimeSeconds
                 )
                 exerciseCopy.addPlannedSet(setCopy)
             }

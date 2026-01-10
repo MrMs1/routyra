@@ -138,6 +138,21 @@ enum CycleService {
         cycle.isActive = false
     }
 
+    /// Deactivates all cycles for a profile.
+    /// - Parameters:
+    ///   - profileId: Owner profile ID.
+    ///   - modelContext: The SwiftData model context.
+    @MainActor
+    static func deactivateAllCycles(
+        profileId: UUID,
+        modelContext: ModelContext
+    ) {
+        let allCycles = getCycles(profileId: profileId, modelContext: modelContext)
+        for cycle in allCycles {
+            cycle.isActive = false
+        }
+    }
+
     // MARK: - Item Management
 
     /// Adds a plan to a cycle.
@@ -217,6 +232,32 @@ enum CycleService {
     @MainActor
     static func resetProgress(for cycle: PlanCycle) {
         cycle.progress?.reset()
+    }
+
+    /// Marks a cycle day as completed and advances progress if needed.
+    /// Used for backfilling past days - only advances if this is the most recent completion.
+    /// - Parameters:
+    ///   - cycle: The cycle.
+    ///   - completionDate: The date the workout was completed.
+    ///   - modelContext: The SwiftData model context.
+    @MainActor
+    static func markCycleDayCompleted(
+        cycle: PlanCycle,
+        completionDate: Date,
+        modelContext: ModelContext
+    ) {
+        guard let progress = cycle.progress else { return }
+
+        let normalized = DateUtilities.startOfDay(completionDate)
+
+        // Only update lastCompletedAt if this is the most recent completion
+        // Note: Don't advance here - let checkAndAutoAdvanceCycle handle advancement
+        // to prevent double-advancement when the app is opened the next day
+        if progress.lastCompletedAt == nil || normalized > progress.lastCompletedAt! {
+            progress.lastCompletedAt = normalized
+            try? modelContext.save()
+        }
+        // normalized <= lastCompletedAt: do nothing (old backfill doesn't affect progress)
     }
 
     // MARK: - Advancement Logic
@@ -409,13 +450,12 @@ enum CycleService {
         workoutDay.routineDayId = newPlanDay.id
 
         // Expand the new plan day
-        PlanService.expandPlanToWorkout(planDay: newPlanDay, workoutDay: workoutDay)
+        PlanService.expandPlanToWorkout(planDay: newPlanDay, workoutDay: workoutDay, modelContext: modelContext)
 
         // Update progress pointer if skip is enabled
         if skipAndAdvance {
-            // Set to next day after the selected one (wrapping around)
-            let totalDays = plan.dayCount
-            progress.currentDayIndex = newDayIndex % totalDays // This wraps: if newDayIndex==totalDays, goes to 0
+            // Set to the selected day (0-indexed, CycleService will advance after completion)
+            progress.currentDayIndex = newDayIndex - 1  // Convert 1-indexed UI value to 0-indexed
             progress.lastAdvancedAt = Date()
         }
 

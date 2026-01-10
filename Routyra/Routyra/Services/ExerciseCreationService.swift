@@ -169,39 +169,43 @@ enum ExerciseCreationService {
 
     // MARK: - Body Part Seeding
 
-    /// Seeds the database with system body parts if none exist.
+    /// Seeds the database with system body parts, adding any missing ones.
     @MainActor
     static func seedSystemBodyPartsIfNeeded(modelContext: ModelContext) {
-        let descriptor = FetchDescriptor<BodyPart>()
-
-        do {
-            let existingBodyParts = try modelContext.fetch(descriptor)
-            let hasSystemBodyParts = existingBodyParts.contains { $0.isSystem }
-
-            if !hasSystemBodyParts {
-                seedSystemBodyParts(modelContext: modelContext)
-            }
-        } catch {
-            print("Error checking body parts: \(error)")
-        }
+        seedSystemBodyParts(modelContext: modelContext)
     }
 
     /// Seeds the database with system body parts with translations.
+    /// Only adds body parts that don't already exist (by code).
     @MainActor
     private static func seedSystemBodyParts(modelContext: ModelContext) {
+        // Get existing body part codes
+        let descriptor = FetchDescriptor<BodyPart>()
+        let existingCodes: Set<String>
+        do {
+            let existingBodyParts = try modelContext.fetch(descriptor)
+            existingCodes = Set(existingBodyParts.compactMap { $0.code })
+        } catch {
+            print("Error fetching existing body parts: \(error)")
+            existingCodes = []
+        }
+
         let bodyPartsData: [(code: String, defaultName: String, sortOrder: Int, ja: String, en: String)] = [
             ("chest", "Chest", 1, "胸", "Chest"),
             ("back", "Back", 2, "背中", "Back"),
             ("shoulders", "Shoulders", 3, "肩", "Shoulders"),
             ("arms", "Arms", 4, "腕", "Arms"),
-            ("abs", "Abs", 5, "腹筋", "Abs"),
+            ("abs", "Abs", 5, "腹", "Abs"),
             ("legs", "Legs", 6, "脚", "Legs"),
-            ("glutes", "Glutes", 7, "お尻", "Glutes"),
+            ("glutes", "Glutes", 7, "尻", "Glutes"),
             ("full_body", "Full Body", 8, "全身", "Full Body"),
             ("cardio", "Cardio", 9, "有酸素", "Cardio"),
         ]
 
         for data in bodyPartsData {
+            // Skip if body part already exists
+            guard !existingCodes.contains(data.code) else { continue }
+
             let bodyPart = BodyPart.systemBodyPart(
                 code: data.code,
                 defaultName: data.defaultName,
@@ -215,29 +219,30 @@ enum ExerciseCreationService {
 
     // MARK: - Exercise Seeding
 
-    /// Seeds the database with system exercises if none exist.
+    /// Seeds the database with system exercises, adding any missing ones.
     @MainActor
     static func seedSystemExercisesIfNeeded(modelContext: ModelContext) {
-        let descriptor = FetchDescriptor<Exercise>()
-
-        do {
-            let existingExercises = try modelContext.fetch(descriptor)
-            let hasSystemExercises = existingExercises.contains { $0.isSystem }
-
-            if !hasSystemExercises {
-                seedSystemExercises(modelContext: modelContext)
-            }
-        } catch {
-            print("Error checking exercises: \(error)")
-        }
+        seedSystemExercises(modelContext: modelContext)
     }
 
     /// Seeds the database with system exercises with translations.
+    /// Only adds exercises that don't already exist (by code).
     @MainActor
     private static func seedSystemExercises(modelContext: ModelContext) {
+        // Get existing system exercise codes
+        let descriptor = FetchDescriptor<Exercise>()
+        let existingCodes: Set<String>
+        do {
+            let existingExercises = try modelContext.fetch(descriptor)
+            existingCodes = Set(existingExercises.compactMap { $0.code })
+        } catch {
+            print("Error fetching existing exercises: \(error)")
+            existingCodes = []
+        }
+
         // First, get all body parts to reference by code
-        let descriptor = FetchDescriptor<BodyPart>()
-        guard let bodyParts = try? modelContext.fetch(descriptor) else {
+        let bodyPartDescriptor = FetchDescriptor<BodyPart>()
+        guard let bodyParts = try? modelContext.fetch(bodyPartDescriptor) else {
             print("Error: Could not fetch body parts for exercise seeding")
             return
         }
@@ -254,6 +259,7 @@ enum ExerciseCreationService {
             ("decline_bench_press", "Decline Bench Press", "chest", "デクラインベンチプレス", "Decline Bench Press"),
             ("dumbbell_press", "Dumbbell Press", "chest", "ダンベルプレス", "Dumbbell Press"),
             ("dumbbell_fly", "Dumbbell Fly", "chest", "ダンベルフライ", "Dumbbell Fly"),
+            ("incline_dumbbell_fly", "Incline Dumbbell Fly", "chest", "インクラインダンベルフライ", "Incline Dumbbell Fly"),
             ("cable_fly", "Cable Fly", "chest", "ケーブルフライ", "Cable Fly"),
             ("push_up", "Push Up", "chest", "プッシュアップ", "Push Up"),
             ("chest_dip", "Chest Dip", "chest", "チェストディップ", "Chest Dip"),
@@ -266,9 +272,11 @@ enum ExerciseCreationService {
             ("lat_pulldown", "Lat Pulldown", "back", "ラットプルダウン", "Lat Pulldown"),
             ("pull_up", "Pull Up", "back", "プルアップ", "Pull Up"),
             ("chin_up", "Chin Up", "back", "チンアップ", "Chin Up"),
+            ("chinning", "Chinning", "back", "チンニング（懸垂）", "Chinning"),
             ("seated_row", "Seated Row", "back", "シーテッドロウ", "Seated Row"),
             ("t_bar_row", "T-Bar Row", "back", "Tバーロウ", "T-Bar Row"),
             ("face_pull", "Face Pull", "back", "フェイスプル", "Face Pull"),
+            ("incline_dumbbell_row", "Incline Dumbbell Row", "back", "インクラインダンベルローイング", "Incline Dumbbell Row"),
 
             // Shoulders
             ("overhead_press", "Overhead Press", "shoulders", "オーバーヘッドプレス", "Overhead Press"),
@@ -289,6 +297,9 @@ enum ExerciseCreationService {
             ("skull_crusher", "Skull Crusher", "arms", "スカルクラッシャー", "Skull Crusher"),
             ("close_grip_bench", "Close Grip Bench Press", "arms", "ナローベンチプレス", "Close Grip Bench Press"),
             ("dip", "Dip", "arms", "ディップ", "Dip"),
+            ("french_press", "French Press", "arms", "フレンチプレス", "French Press"),
+            ("dumbbell_kickback", "Dumbbell Kickback", "arms", "ダンベルキックバック", "Dumbbell Kickback"),
+            ("barbell_curl", "Barbell Curl", "arms", "バーベルカール", "Barbell Curl"),
 
             // Abs
             ("crunch", "Crunch", "abs", "クランチ", "Crunch"),
@@ -310,6 +321,8 @@ enum ExerciseCreationService {
             ("lunge", "Lunge", "legs", "ランジ", "Lunge"),
             ("calf_raise", "Calf Raise", "legs", "カーフレイズ", "Calf Raise"),
             ("hack_squat", "Hack Squat", "legs", "ハックスクワット", "Hack Squat"),
+            ("front_lunge", "Front Lunge", "legs", "フロントランジ", "Front Lunge"),
+            ("leg_deadlift", "Deadlift", "legs", "デッドリフト", "Deadlift"),
 
             // Glutes
             ("hip_thrust", "Hip Thrust", "glutes", "ヒップスラスト", "Hip Thrust"),
@@ -336,11 +349,18 @@ enum ExerciseCreationService {
         ]
 
         for data in exercisesData {
+            // Skip if exercise already exists
+            guard !existingCodes.contains(data.code) else { continue }
+
+            // Determine default metric type based on body part
+            let metricType: SetMetricType = data.bodyPartCode == "cardio" ? .timeDistance : .weightReps
+
             let exercise = Exercise.systemExercise(
                 code: data.code,
                 defaultName: data.defaultName,
                 bodyPartId: bodyPartId(for: data.bodyPartCode),
-                category: nil
+                category: nil,
+                defaultMetricType: metricType
             )
             exercise.addTranslation(locale: "ja", name: data.ja)
             exercise.addTranslation(locale: "en", name: data.en)
@@ -350,10 +370,138 @@ enum ExerciseCreationService {
 
     // MARK: - Combined Seeding
 
+    /// Current seed data version. Increment this when adding new exercises/body parts.
+    /// Version history:
+    /// - 1: Initial seed
+    /// - 2: Added more exercises
+    /// - 3: Fixed cardio exercises defaultMetricType to .timeDistance
+    /// - 4: Shortened body part names (腹筋→腹, お尻→尻)
+    /// - 5: Fixed PlanExercise/PlannedSet metricType for cardio exercises
+    private static let currentSeedVersion = 5
+
+    /// UserDefaults key for tracking seed version
+    private static let seedVersionKey = "SystemDataSeedVersion"
+
     /// Seeds all system data (body parts and exercises) if needed.
+    /// Only runs when seed version changes (new exercises added).
     @MainActor
     static func seedSystemDataIfNeeded(modelContext: ModelContext) {
+        let lastSeedVersion = UserDefaults.standard.integer(forKey: seedVersionKey)
+
+        // Skip if already seeded with current version
+        guard lastSeedVersion < currentSeedVersion else { return }
+
         seedSystemBodyPartsIfNeeded(modelContext: modelContext)
         seedSystemExercisesIfNeeded(modelContext: modelContext)
+
+        // Run migrations for existing data
+        if lastSeedVersion < 3 {
+            migrateCardioExercisesMetricType(modelContext: modelContext)
+        }
+        if lastSeedVersion < 4 {
+            migrateBodyPartNames(modelContext: modelContext)
+        }
+        if lastSeedVersion < 5 {
+            migratePlanExercisesMetricType(modelContext: modelContext)
+        }
+
+        // Update seed version
+        UserDefaults.standard.set(currentSeedVersion, forKey: seedVersionKey)
+    }
+
+    // MARK: - Migrations
+
+    /// Migrates existing cardio exercises to use .timeDistance metric type.
+    /// This fixes exercises created before version 3 that incorrectly defaulted to .weightReps.
+    @MainActor
+    private static func migrateCardioExercisesMetricType(modelContext: ModelContext) {
+        // Get cardio body part
+        let bodyPartDescriptor = FetchDescriptor<BodyPart>()
+        guard let bodyParts = try? modelContext.fetch(bodyPartDescriptor),
+              let cardioBodyPart = bodyParts.first(where: { $0.code == "cardio" }) else {
+            return
+        }
+
+        // Get all exercises for cardio body part
+        let exerciseDescriptor = FetchDescriptor<Exercise>()
+        guard let exercises = try? modelContext.fetch(exerciseDescriptor) else {
+            return
+        }
+
+        // Update cardio exercises that have wrong metric type
+        for exercise in exercises {
+            if exercise.bodyPartId == cardioBodyPart.id && exercise.defaultMetricType == .weightReps {
+                exercise.defaultMetricType = .timeDistance
+            }
+        }
+    }
+
+    /// Migrates body part names to shortened versions.
+    /// This updates existing translations: 腹筋→腹, お尻→尻
+    @MainActor
+    private static func migrateBodyPartNames(modelContext: ModelContext) {
+        let descriptor = FetchDescriptor<BodyPart>()
+        guard let bodyParts = try? modelContext.fetch(descriptor) else {
+            return
+        }
+
+        let updates: [String: String] = [
+            "腹筋": "腹",
+            "お尻": "尻"
+        ]
+
+        for bodyPart in bodyParts {
+            for translation in bodyPart.translations {
+                if translation.locale == "ja",
+                   let newName = updates[translation.name] {
+                    translation.name = newName
+                }
+            }
+        }
+    }
+
+    /// Migrates existing PlanExercise and PlannedSet records to use correct metricType for cardio exercises.
+    /// This fixes plan exercises created before Exercise.defaultMetricType was properly set for cardio.
+    @MainActor
+    private static func migratePlanExercisesMetricType(modelContext: ModelContext) {
+        // Get cardio body part
+        let bodyPartDescriptor = FetchDescriptor<BodyPart>()
+        guard let bodyParts = try? modelContext.fetch(bodyPartDescriptor),
+              let cardioBodyPart = bodyParts.first(where: { $0.code == "cardio" }) else {
+            return
+        }
+
+        // Get all exercises to build a lookup
+        let exerciseDescriptor = FetchDescriptor<Exercise>()
+        guard let exercises = try? modelContext.fetch(exerciseDescriptor) else {
+            return
+        }
+
+        // Find cardio exercise IDs
+        let cardioExerciseIds = Set(
+            exercises
+                .filter { $0.bodyPartId == cardioBodyPart.id }
+                .map(\.id)
+        )
+
+        guard !cardioExerciseIds.isEmpty else { return }
+
+        // Get all plan exercises
+        let planExerciseDescriptor = FetchDescriptor<PlanExercise>()
+        guard let planExercises = try? modelContext.fetch(planExerciseDescriptor) else {
+            return
+        }
+
+        // Update cardio plan exercises that have wrong metric type
+        for planExercise in planExercises {
+            if cardioExerciseIds.contains(planExercise.exerciseId) && planExercise.metricType == .weightReps {
+                planExercise.metricType = .timeDistance
+
+                // Also fix any planned sets
+                for plannedSet in planExercise.plannedSets where plannedSet.metricType == .weightReps {
+                    plannedSet.metricType = .timeDistance
+                }
+            }
+        }
     }
 }

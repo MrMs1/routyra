@@ -14,9 +14,12 @@ struct PlanExerciseRowView: View {
     let exercise: Exercise?
     let bodyPart: BodyPart?
     let isExpanded: Bool
+    var isGrouped: Bool = false
     let onToggleExpand: () -> Void
     let onDelete: () -> Void
     let onDuplicate: () -> Void
+    var onEditSets: (() -> Void)? = nil
+    var weightUnit: WeightUnit = .kg
 
     @Environment(\.modelContext) private var modelContext
 
@@ -31,7 +34,7 @@ struct PlanExerciseRowView: View {
                     .transition(.opacity.animation(.easeOut(duration: 1)))
             }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, isGrouped ? 8 : 12)
         .padding(.horizontal, 12)
         .background(AppColors.cardBackground)
         .cornerRadius(12)
@@ -43,10 +46,19 @@ struct PlanExerciseRowView: View {
                 Label("duplicate", systemImage: "doc.on.doc")
             }
 
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label("delete", systemImage: "trash")
+            if isGrouped {
+                // For grouped exercises, show "Remove from Group" instead of delete
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
+                    Label(L10n.tr("remove_from_group"), systemImage: "rectangle.stack.badge.minus")
+                }
+            } else {
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
+                    Label("delete", systemImage: "trash")
+                }
             }
         }
     }
@@ -93,7 +105,7 @@ struct PlanExerciseRowView: View {
                         }
 
                         // Summary
-                        Text(planExercise.setsSummary)
+                        Text(planExercise.setsSummary(weightUnit: weightUnit))
                             .font(.subheadline)
                             .foregroundColor(AppColors.textSecondary)
                     }
@@ -110,61 +122,40 @@ struct PlanExerciseRowView: View {
 
     private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Set list (mini card rows)
+            // Set list (read-only, tappable for editing)
             let sets = planExercise.sortedPlannedSets
-            ForEach(Array(sets.enumerated()), id: \.element.id) { index, plannedSet in
-                PlannedSetCardRowView(
-                    plannedSet: plannedSet,
-                    setIndex: index + 1,
-                    onDelete: {
-                        planExercise.removePlannedSet(plannedSet)
-                        planExercise.reindexPlannedSets()
+            if sets.isEmpty {
+                Text("no_sets_configured")
+                    .font(.caption)
+                    .foregroundColor(AppColors.textMuted)
+                    .padding(.vertical, 4)
+            } else {
+                Button {
+                    onEditSets?()
+                } label: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(sets.enumerated()), id: \.element.id) { index, plannedSet in
+                            PlannedSetDisplayRow(
+                                plannedSet: plannedSet,
+                                setIndex: index + 1,
+                                weightUnit: weightUnit
+                            )
+
+                            // Thin separator line (not after last row)
+                            if index < sets.count - 1 {
+                                Color.white.opacity(0.08)
+                                    .frame(height: 1)
+                                    .padding(.leading, 56)
+                                    .padding(.trailing, 16)
+                                    .padding(.vertical, 4)
+                            }
+                        }
                     }
-                )
-
-                // Thin separator line (not after last row)
-                if index < sets.count - 1 {
-                    Color.white.opacity(0.08)
-                        .frame(height: 1)
-                        .padding(.leading, 56)
-                        .padding(.trailing, 16)
-                        .padding(.vertical, 4)
                 }
+                .buttonStyle(.plain)
             }
-
-            // Add set button (card-style)
-            addSetButton
-                .padding(.top, 8)
         }
         .padding(.top, 10)
-    }
-
-    // MARK: - Add Set Button
-
-    private var addSetButton: some View {
-        Button {
-            // Copy weight/reps from last set if available
-            let lastSet = planExercise.sortedPlannedSets.last
-            planExercise.createPlannedSet(
-                weight: lastSet?.targetWeight,
-                reps: lastSet?.targetReps ?? 10
-            )
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(AppColors.accentBlue)
-
-                Text("add_set")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(AppColors.accentBlue)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 

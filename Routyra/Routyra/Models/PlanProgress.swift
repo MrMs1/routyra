@@ -29,6 +29,10 @@ final class PlanProgress {
     /// Nil means this is the first time using this plan.
     var lastOpenedDate: Date?
 
+    /// The last workout date that completed a routine day (normalized to local start-of-day).
+    /// Used to advance progress when backfilling past days.
+    var lastCompletedDate: Date?
+
     // MARK: - Initialization
 
     /// Creates a new plan progress tracker.
@@ -46,6 +50,7 @@ final class PlanProgress {
         self.planId = planId
         self.currentDayIndex = startDayIndex
         self.lastOpenedDate = nil
+        self.lastCompletedDate = nil
     }
 
     // MARK: - Methods

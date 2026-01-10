@@ -9,15 +9,13 @@ struct BottomStatusBarView: View {
     let sets: Int
     let exercises: Int
     let volume: Double
+    var weightUnit: WeightUnit = .kg
 
-    private let labelColor = Color.white.opacity(0.42)
-    private let unitColor = Color.white.opacity(0.62)
+    private var labelColor: Color { AppColors.textMuted }
+    private var unitColor: Color { AppColors.textSecondary }
 
     private var formattedVolume: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: volume)) ?? "0"
+        Formatters.decimal0.string(from: NSNumber(value: volume)) ?? "0"
     }
 
     var body: some View {
@@ -29,7 +27,7 @@ struct BottomStatusBarView: View {
             VolumeStatItemView(
                 label: L10n.tr("bottom_status_total_volume"),
                 value: formattedVolume,
-                unit: L10n.tr("unit_kg"),
+                unit: weightUnit.symbol,
                 labelColor: labelColor,
                 unitColor: unitColor
             )
@@ -53,7 +51,7 @@ struct BottomStatusBarView: View {
 struct StatItemView: View {
     let label: String
     let value: String
-    var labelColor: Color = Color.white.opacity(0.42)
+    var labelColor: Color = AppColors.textMuted
 
     var body: some View {
         VStack(spacing: 1) {

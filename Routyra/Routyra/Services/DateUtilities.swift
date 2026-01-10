@@ -89,6 +89,17 @@ enum DateUtilities {
         return calendar.date(from: components)
     }
 
+    /// Gets the start of the week (Monday) containing the given date.
+    /// Always uses Monday as the first day of the week (ISO 8601).
+    /// - Parameter date: A date within the week.
+    /// - Returns: The Monday at 00:00:00 of the week containing the date.
+    nonisolated static func startOfWeekMonday(containing date: Date) -> Date? {
+        var calendar = Calendar(identifier: .iso8601)
+        calendar.timeZone = TimeZone.current
+        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
+        return calendar.date(from: components)
+    }
+
     /// Gets the weekday index (0 = Monday, 6 = Sunday in ISO calendar).
     /// Adjusted for display where Monday = 0.
     /// - Parameter date: The date to check.
@@ -158,17 +169,25 @@ enum DateUtilities {
     /// - Parameter date: The date to format.
     /// - Returns: Formatted date string.
     nonisolated static func formatShort(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.setLocalizedDateFormatFromTemplate("EEE MMM d")
-        return formatter.string(from: date)
+        Formatters.shortDate.string(from: date)
     }
 
     /// Formats a date for full display (e.g., "December 15, 2024").
     /// - Parameter date: The date to format.
     /// - Returns: Formatted date string.
     nonisolated static func formatFull(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .long
-        return formatter.string(from: date)
+        Formatters.fullDate.string(from: date)
+    }
+
+    // MARK: - Month Utilities
+
+    /// Gets the start of the month for the given date.
+    /// - Parameters:
+    ///   - date: A date within the month.
+    ///   - calendar: The calendar to use (defaults to current).
+    /// - Returns: The first day of the month at 00:00:00.
+    nonisolated static func startOfMonth(for date: Date, calendar: Calendar = .current) -> Date {
+        let components = calendar.dateComponents([.year, .month], from: date)
+        return calendar.date(from: components) ?? date
     }
 }

@@ -2,156 +2,193 @@
 //  WeeklyActivityStripView.swift
 //  Routyra
 //
+//  Week strip showing weekday + date + workout indicator.
+//  Displays Monday-Sunday with selection and today states.
+//
 
 import SwiftUI
 
+// MARK: - Workout Day State
+
+enum WorkoutDayState {
+    case none       // No workout
+    case incomplete // Started but not finished
+    case complete   // All exercises completed
+}
+
+// MARK: - Weekly Activity Strip View
+
 struct WeeklyActivityStripView: View {
-    let dayProgress: [Int: Double]
-    let selectedDayIndex: Int
+    let weekStart: Date                        // Week start date (Monday)
+    let selectedDayIndex: Int                  // Selected day (0-6, Monday = 0)
+    let workoutStates: [Int: WorkoutDayState]  // dayIndex -> state
     let onDayTap: (Int) -> Void
 
-    private let barWidth: CGFloat = 14
-    private let baseBarHeight: CGFloat = 32
-    private let selectedBarHeight: CGFloat = 38
-
     private var todayIndex: Int {
-        let weekday = Calendar.current.component(.weekday, from: Date())
-        return (weekday + 5) % 7
+        DateUtilities.weekdayIndex(for: Date())
+    }
+
+    private var weekdays: [String] {
+        let symbols = Calendar.current.shortStandaloneWeekdaySymbols
+        guard symbols.count == 7 else {
+            return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        }
+        // Shift Sunday (index 0) to end: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
+        return Array(symbols[1...]) + [symbols[0]]
     }
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 0) {
             ForEach(0..<7, id: \.self) { index in
-                VStack(spacing: 6) {
-                    ProgressBar(
-                        progress: dayProgress[index],
-                        hasWorkout: dayProgress[index] != nil,
-                        isSelected: index == selectedDayIndex,
-                        isToday: index == todayIndex,
-                        width: barWidth,
-                        height: barHeight(for: index)
-                    )
-
-                    Text(weekdays[index])
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundColor(labelColor(for: index))
-                }
+                DayCell(
+                    weekday: weekdays[index],
+                    dayNumber: dayNumber(for: index),
+                    isSelected: index == selectedDayIndex,
+                    isToday: index == todayIndex,
+                    workoutState: workoutStates[index] ?? .none,
+                    dayIndex: index
+                )
                 .contentShape(Rectangle())
                 .onTapGesture {
                     onDayTap(index)
                 }
-            }
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 12)
-    }
 
-    private func barHeight(for index: Int) -> CGFloat {
-        index == selectedDayIndex ? selectedBarHeight : baseBarHeight
-    }
-
-    private func labelColor(for index: Int) -> Color {
-        if let weekendColor = weekendColor(for: index) {
-            return weekendColor
-        }
-        return AppColors.textSecondary
-    }
-
-    private func weekendColor(for index: Int) -> Color? {
-        switch index {
-        case 5:
-            return AppColors.weekendSaturday
-        case 6:
-            return AppColors.weekendSunday
-        default:
-            return nil
-        }
-    }
-}
-
-struct ProgressBar: View {
-    let progress: Double?
-    let hasWorkout: Bool
-    let isSelected: Bool
-    let isToday: Bool
-    let width: CGFloat
-    let height: CGFloat
-
-    private var backgroundColor: Color {
-        if isSelected {
-            return AppColors.dotEmpty.opacity(0.6)
-        } else if isToday {
-            return AppColors.dotEmpty.opacity(0.5)
-        } else {
-            return AppColors.dotEmpty.opacity(0.3)
-        }
-    }
-
-    private var fillColor: Color {
-        if isSelected {
-            return AppColors.accentBlue
-        } else if isToday {
-            return AppColors.accentBlue.opacity(0.8)
-        } else {
-            return AppColors.mutedBlue
-        }
-    }
-
-    /// Minimum fill height when workout exists but 0% complete
-    private var minFillHeight: CGFloat {
-        width * 0.6
-    }
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            Capsule()
-                .fill(backgroundColor)
-                .frame(width: width, height: height)
-
-            if let progress = progress {
-                if progress > 0 {
-                    // Show actual progress
-                    Capsule()
-                        .fill(fillColor)
-                        .frame(width: width, height: max(width, height * CGFloat(min(progress, 1.0))))
-                } else if hasWorkout {
-                    // Show minimum indicator for planned but not started workout
-                    Capsule()
-                        .fill(fillColor.opacity(0.4))
-                        .frame(width: width, height: minFillHeight)
+                if index < 6 {
+                    Spacer()
                 }
             }
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private func dayNumber(for index: Int) -> Int {
+        let calendar = Calendar.current
+        guard let date = calendar.date(byAdding: .day, value: index, to: weekStart) else {
+            return 1
+        }
+        return calendar.component(.day, from: date)
     }
 }
 
+// MARK: - Day Cell
+
+private struct DayCell: View {
+    let weekday: String           // "月", "Mon"
+    let dayNumber: Int            // 23
+    let isSelected: Bool
+    let isToday: Bool
+    let workoutState: WorkoutDayState
+    let dayIndex: Int             // 0-6 (Sat=5, Sun=6)
+
+    private var weekdayColor: Color {
+        switch dayIndex {
+        case 5: return AppColors.weekendSaturday
+        case 6: return AppColors.weekendSunday
+        default: return AppColors.textSecondary
+        }
+    }
+
+    /// Border style: selected = strong, today (non-selected) = weak
+    private var borderStyle: (color: Color, lineWidth: CGFloat)? {
+        if isSelected {
+            // Selected: strong border
+            return (AppColors.accentBlue.opacity(0.8), 2)
+        } else if isToday {
+            // Today (non-selected): weak border
+            return (AppColors.accentBlue.opacity(0.35), 1)
+        }
+        return nil
+    }
+
+    /// Dot color based on workout state
+    private var dotColor: Color? {
+        switch workoutState {
+        case .complete: return AppColors.accentBlue
+        case .incomplete: return AppColors.textSecondary
+        case .none: return nil
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 2) {
+            // Weekday label
+            Text(weekday)
+                .font(.caption2)
+                .foregroundColor(weekdayColor)
+
+            // Date number + selection background
+            Text("\(dayNumber)")
+                .font(.subheadline)
+                .fontWeight(isSelected ? .semibold : .regular)
+                .foregroundColor(AppColors.textPrimary)
+                .frame(width: 32, height: 32)
+                .background(
+                    isSelected
+                        ? RoundedRectangle(cornerRadius: 8)
+                            .fill(AppColors.cardBackground.opacity(0.5))
+                        : nil
+                )
+
+            // Workout indicator dot (3 states)
+            Circle()
+                .fill(dotColor ?? Color.clear)
+                .frame(width: 4, height: 4)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        // Border (selected or today)
+        .overlay(
+            Group {
+                if let style = borderStyle {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(style.color, lineWidth: style.lineWidth)
+                }
+            }
+        )
+    }
+}
+
+// MARK: - Preview
+
 #Preview {
+    let calendar = Calendar.current
+    let today = Date()
+    let weekStart = DateUtilities.startOfWeekMonday(containing: today) ?? today
+    let todayIndex = DateUtilities.weekdayIndex(for: today)
+
+    // Sample workout states
+    let workoutStates: [Int: WorkoutDayState] = [
+        todayIndex: .incomplete,
+        max(0, todayIndex - 1): .complete,
+        max(0, todayIndex - 2): .complete
+    ]
+
     VStack(spacing: 20) {
+        // Today selected
         WeeklyActivityStripView(
-            dayProgress: [0: 1.0, 1: 0.6, 2: 0.2, 3: 0, 4: 0.8, 5: 0, 6: 0.4],
+            weekStart: weekStart,
+            selectedDayIndex: todayIndex,
+            workoutStates: workoutStates,
+            onDayTap: { _ in }
+        )
+
+        // Different day selected (showing today border)
+        WeeklyActivityStripView(
+            weekStart: weekStart,
             selectedDayIndex: 0,
+            workoutStates: workoutStates,
             onDayTap: { _ in }
         )
 
+        // Empty workouts
         WeeklyActivityStripView(
-            dayProgress: [0: 1.0, 1: 1.0, 2: 1.0, 3: 0.5, 4: 0, 5: 0, 6: 0],
+            weekStart: weekStart,
             selectedDayIndex: 3,
-            onDayTap: { _ in }
-        )
-
-        WeeklyActivityStripView(
-            dayProgress: [:],
-            selectedDayIndex: 6,
+            workoutStates: [:],
             onDayTap: { _ in }
         )
     }
     .background(AppColors.background)
     .preferredColorScheme(.dark)
 }
-    private var weekdays: [String] {
-        let symbols = Calendar.current.shortStandaloneWeekdaySymbols
-        guard symbols.count == 7 else {
-            return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        }
-        return Array(symbols[1...]) + [symbols[0]]
-    }

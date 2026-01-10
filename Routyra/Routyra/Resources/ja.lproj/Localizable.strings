@@ -10,38 +10,53 @@
 "none" = "なし";
 "active" = "アクティブ";
 "not_set" = "未設定";
+"today" = "今日";
+"day_compact" = "Day %d/%d";
+"day_selector_title" = "Day変更";
+"current_operation" = "現在の運用";
+"library" = "ライブラリ";
+"current_operation_empty_hint" = "作成または選択してください";
 
 // MARK: - Workout Plans Screen
-"workout_plans" = "ワークアウトプラン";
+"workout_plans" = "トレーニングプラン";
 "execution_mode" = "実行方法";
-"single_plan" = "単体プラン";
+"single_plan" = "単体トレーニングプラン";
 "cycle" = "サイクル";
-"active_plan" = "有効なプラン";
-"select_active_plan" = "有効なプランを選択";
+"active_plan" = "有効なトレーニングプラン";
+"select_active_plan" = "トレーニングプランを選択";
+"execution_mode_single_hint" = "1つのトレーニングプランでトレーニングします";
+"execution_mode_cycle_hint" = "複数のトレーニングプランを順番に回します";
+"active_cycle" = "有効なサイクル";
 "no_active_cycle" = "アクティブなサイクルがありません";
-"no_plans_in_cycle" = "プランがありません";
+"no_plans_in_cycle" = "トレーニングプランがありません";
 "edit_cycles" = "サイクルを編集";
-"plans" = "プラン一覧";
-"add_plan" = "プランを追加";
-"add_plan_subtitle" = "新しいワークアウトプランを作成";
-"no_plans" = "プランがありません";
-"create_plan_hint" = "上のカードからプランを作成しましょう";
-"new_plan" = "新しいプラン";
-"plan_name" = "プラン名";
-"enter_plan_name" = "プラン名を入力してください";
+"select_or_create_cycle" = "サイクルを作成/選択";
+"select_or_create_cycle_subtitle" = "複数のトレーニングプランを順番に回すサイクルを設定";
+"cycle_plan_count" = "%dトレーニングプラン";
+"cycle_create" = "サイクルを作成";
+"plans" = "トレーニングプラン一覧";
+"cycles" = "サイクル一覧";
+"add_plan" = "トレーニングプランを追加";
+"add_plan_subtitle" = "新しいトレーニングプランを作成";
+"no_plans" = "トレーニングプランがありません";
+"create_plan_hint" = "上のカードからトレーニングプランを作成しましょう";
+"new_plan" = "新しいトレーニングプラン";
+"plan_name" = "トレーニングプラン名";
+"enter_plan_name" = "トレーニングプラン名を入力してください";
 
 // MARK: - Plan Card
 "days_unit" = "日";
 "exercises_unit" = "種目";
 
 // MARK: - Delete Plan
-"delete_plan" = "プランを削除";
+"delete_plan" = "トレーニングプランを削除";
 "delete_plan_confirm" = "「%@」を削除しますか？この操作は取り消せません。";
-"delete_active_plan" = "有効なプランを削除";
-"delete_active_plan_warning" = "このプランは現在有効に設定されています。削除すると有効なプランがなくなります。";
+"delete_active_plan" = "有効なトレーニングプランを削除";
+"delete_active_plan_warning" = "このトレーニングプランは現在有効に設定されています。削除すると有効なトレーニングプランがなくなります。";
 
 // MARK: - General
 "done" = "完了";
+"back" = "戻る";
 "edit" = "編集";
 "save" = "保存";
 "ok" = "OK";
@@ -49,6 +64,9 @@
 "duplicate" = "複製";
 "reorder" = "並び替え";
 "add_day" = "Dayを追加";
+"new_day" = "新しいDay";
+"day_name" = "Day名";
+"enter_day_name" = "Day名を入力してください";
 "duplicate_day" = "Dayを複製";
 "delete_day" = "Dayを削除";
 "rename_day" = "名前を変更";
@@ -79,6 +97,40 @@
 "routines" = "プラン";
 "settings" = "設定";
 "history_subtitle" = "週間・月間のワークアウト履歴";
+"history_day_summary_with_date" = "%@のサマリー";
+"history_month_summary_with_date" = "%@のサマリー";
+"history_day_summary" = "選択日のサマリー";
+"history_month_summary" = "月のサマリー";
+"history_exercise_summary" = "種目別";
+"history_workout_days" = "ワークアウト日数";
+"history_total_sets" = "総セット";
+"history_total_volume" = "総ボリューム";
+"history_weekly_total_volume" = "週ごとの総ボリューム";
+"history_weekday_average_volume" = "曜日別平均ボリューム";
+"history_summary" = "サマリー";
+"history_weekly_avg_workouts" = "週平均ワークアウト数";
+"history_avg_volume_per_workout" = "1回あたり平均ボリューム";
+"history_max_weight" = "最高重量";
+"history_estimated_1rm" = "推定1RM";
+"history_range_month" = "月";
+"history_range_year" = "年";
+"history_range_all" = "全期間";
+"history_no_workouts_month" = "この期間の記録はありません";
+"history_no_workouts_day" = "この日は記録がありません";
+"history_session_list" = "記録一覧";
+"history_date" = "日付";
+"history_detail" = "詳細";
+"history_completed" = "完了";
+"history_set_label" = "セット %d";
+"history_total_reps" = "総レップ";
+"history_total_time" = "合計時間";
+"history_total_distance" = "合計距離";
+"history_personal_records" = "自己ベスト";
+"history_all_time" = "全期間";
+"history_max_volume" = "最高ボリューム";
+"history_progress_this_month" = "今月の進捗";
+"history_progress_this_year" = "今年の進捗";
+"history_progress_all_time" = "全体の進捗";
 
 // MARK: - Settings
 "settings_title" = "設定";
@@ -87,18 +139,28 @@
 "settings_app_info" = "アプリ情報";
 "settings_version" = "バージョン";
 "settings_day_transition_time" = "日付切り替え時刻";
+"settings_plan_update_section" = "トレーニングプラン更新";
+"settings_plan_update_footer" = "確認をオフにすると自動でトレーニングプランを更新します。";
+"settings_plan_update_confirm_toggle" = "トレーニングプラン更新前に確認する";
+"settings_plan_update_increase" = "上がったとき";
+"settings_plan_update_decrease" = "下がったとき";
+"plan_update_policy_confirm" = "毎回確認";
+"plan_update_policy_auto" = "自動で更新";
 
 // MARK: - Workout
 "workout_change_exercise" = "変更";
 "workout_change_exercise_title" = "種目を変更";
 "workout_add_set" = "次のセットを追加";
 "workout_log_set" = "このセットを記録";
+"workout_log_round" = "このラウンドを記録";
 "workout_go_to_current_set" = "最新セットへ";
+"workout_uncomplete_set" = "未完了に戻す";
+"workout_completion_ready" = "完了準備OK";
 "workout_rest_timer" = "レストタイマー";
 "workout_sets_completed" = "%dセット完了";
 "workout_sets_progress" = "%d/%dセット";
 "workout_add_another_set" = "もう1セット";
-"workout_add_to_workout" = "ワークアウトに追加";
+"workout_add_to_workout" = "追加";
 "workout_add_sets_title" = "セットを追加";
 "workout_unknown_exercise" = "不明な種目";
 "workout_advanced_to_next" = "次のワークアウトに進みました";
@@ -106,16 +168,30 @@
 "workout_set_deleted" = "セットを削除: %@kg × %d回";
 "workout_delete_entry_title" = "種目を削除";
 "workout_delete_entry_message" = "「%@」をこのワークアウトから削除しますか？";
+"workout_update_set" = "このセットを修正";
+"workout_invalid_input" = "重量と回数を入力してください";
+"workout_plan_updated" = "トレーニングプランを更新しました";
+"plan_update_title" = "トレーニングプランを更新しますか？";
+"plan_update_message" = "「%@」のトレーニングプランを更新しますか？";
+"plan_update_confirm" = "更新する";
+"plan_update_cancel" = "しない";
+"plan_update_skip_confirm_toggle" = "次回から%@ときは確認しない";
+"plan_update_direction_increase" = "上がった";
+"plan_update_direction_decrease" = "下がった";
+"workout_reorder_plan_title" = "トレーニングプランの並び替えを反映しますか？";
+"workout_reorder_plan_message" = "この並びをこの日のトレーニングプランにも反映します。";
+"workout_reorder_plan_confirm" = "反映する";
+"workout_reorder_plan_cancel" = "今回はしない";
 
 // MARK: - Empty State (Onboarding)
-"empty_state_headline" = "プランで自動表示、すぐ記録";
-"empty_state_description" = "ワークアウトプランを設定すると、毎回種目選択しなくても今日のメニューが表示されます。";
+"empty_state_headline" = "トレーニングプランで自動表示、すぐ記録";
+"empty_state_description" = "トレーニングプランを設定すると、毎回種目選択しなくても今日のメニューが表示されます。";
 "empty_state_headline_other" = "この日のワークアウトを作成";
-"empty_state_description_other" = "プランを作ると自動で表示できます。手動でも追加して始められます。";
+"empty_state_description_other" = "トレーニングプランを作ると自動で表示できます。手動でも追加して始められます。";
 "empty_state_recommended" = "おすすめ";
-"empty_state_create_plan_title" = "ワークアウトプランを作成";
+"empty_state_create_plan_title" = "トレーニングプランを作成";
 "empty_state_create_plan_subtitle" = "テンプレから最短1分で設定";
-"empty_state_create_plan_button" = "プランを作成";
+"empty_state_create_plan_button" = "トレーニングプランを作成";
 "empty_state_manual_title" = "今すぐ手動で記録";
 "empty_state_manual_subtitle" = "種目を選んでこのまま始める";
 "empty_state_manual_button" = "種目を追加";
@@ -161,39 +237,45 @@
 
 // MARK: - Cycle
 "cycle_empty_title" = "サイクルがありません";
-"cycle_empty_description" = "複数のプランを順番に回すサイクルを作成できます";
+"cycle_empty_description" = "複数のトレーニングプランを順番に回すサイクルを作成できます";
 "cycle_list_title" = "サイクル一覧";
 "cycle_navigation_title" = "サイクル";
 "cycle_new_title" = "新しいサイクル";
 "cycle_name_placeholder" = "サイクル名";
 "cycle_name_required" = "サイクル名を入力してください";
-"cycle_plan_count" = "%dプラン";
+"cycle_plan_count" = "%dトレーニングプラン";
 "cycle_info_section" = "サイクル情報";
-"cycle_current_plan" = "現在のプラン";
+"cycle_current_plan" = "現在のトレーニングプラン";
 "cycle_current_day" = "現在のDay";
 "cycle_reset_progress" = "進捗をリセット";
 "cycle_progress_section" = "進捗状況";
-"cycle_no_plans" = "プランがありません";
-"cycle_add_plans_help" = "プランを追加してサイクルを構成してください";
-"cycle_add_plan" = "プランを追加";
-"cycle_plans_section" = "プラン";
+"cycle_no_plans" = "トレーニングプランがありません";
+"cycle_add_plans_help" = "トレーニングプランを追加してサイクルを構成してください";
+"cycle_add_plan" = "トレーニングプランを追加";
+"cycle_plans_section" = "トレーニングプラン";
 "cycle_edit_title" = "サイクル編集";
-"plan_not_found" = "プランが見つかりません";
+"plan_not_found" = "トレーニングプランが見つかりません";
 "cycle_day_progress" = "Day %d / %d";
+"no_cycles" = "サイクルがありません";
+"create_cycle_hint" = "複数のトレーニングプランをローテーションするサイクルを作成してください";
+"delete_cycle" = "サイクルを削除";
+"delete_cycle_confirm" = "「%@」を削除しますか？";
+"delete_active_cycle" = "アクティブなサイクルを削除";
+"delete_active_cycle_warning" = "これはアクティブなサイクルです。削除するとローテーションが停止します。";
 
 // MARK: - Plans
-"plan_available_section" = "利用可能なプラン";
-"plan_add_title" = "プランを追加";
-"plan_search_placeholder" = "プランを検索";
+"plan_available_section" = "利用可能なトレーニングプラン";
+"plan_add_title" = "トレーニングプランを追加";
+"plan_search_placeholder" = "トレーニングプランを検索";
 "plan_already_added" = "追加済み";
-"plan_empty_title" = "プランがありません";
-"plan_create_first" = "先にプランを作成してください";
+"plan_empty_title" = "トレーニングプランがありません";
+"plan_create_first" = "先にトレーニングプランを作成してください";
 "plan_summary_days_exercises" = "%d日間 / %d種目";
 "plan_name_example" = "例: Push/Pull";
 "plan_note_example" = "例: 週3回のトレーニングプラン";
-"edit_plan" = "プランを編集";
-"plan_info" = "プラン情報";
-"plan_set_name" = "プラン名を設定";
+"edit_plan" = "トレーニングプランを編集";
+"plan_info" = "トレーニングプラン情報";
+"plan_set_name" = "トレーニングプラン名を設定";
 "no_memo" = "メモなし";
 "memo" = "メモ";
 "memo_optional" = "メモ（任意）";
@@ -206,28 +288,363 @@
 "plan_day_add_exercise_hint" = "種目を追加してトレーニング内容を設定しましょう";
 "plan_day_add_from_edit" = "編集ボタンから追加";
 "plan_add_to_day" = "%@に追加";
-"unknown_plan" = "不明なプラン";
-"plans_count" = "プラン";
+"plan_add_sets_title" = "セットを追加";
+"plan_edit_sets_title" = "セットを編集";
+"plan_add_exercise_confirm" = "追加";
+"exercise_not_found" = "種目が見つかりません";
+"unknown_plan" = "不明なトレーニングプラン";
+"plans_count" = "トレーニングプラン";
 "activate" = "アクティブに設定";
 "deactivate" = "アクティブを解除";
 
 // MARK: - Units & Formats
 "unit_kg" = "kg";
+"unit_lb" = "lb";
+"unit_t" = "t";
+"unit_klb" = "klb";
+"unit_kt" = "kt";
+"unit_mlb" = "Mlb";
+"unit_mt" = "Mt";
+"unit_glb" = "Glb";
+"unit_gt" = "Gt";
+"unit_tlb" = "Tlb";
 "unit_reps" = "回";
 "weight_with_unit" = "%@kg";
+"weight_with_unit_lb" = "%@lb";
 "weight_range_with_unit" = "%@–%@kg";
+"weight_range_with_unit_lb" = "%@–%@lb";
 "weight_placeholder" = "—kg";
+"weight_placeholder_lb" = "—lb";
 "reps_with_unit" = "%d回";
 "reps_range_with_unit" = "%d–%d回";
 "reps_placeholder" = "—回";
 "sets_with_unit" = "%dセット";
 
+// MARK: - Weight Unit
+"weight_unit_kg" = "キログラム (kg)";
+"weight_unit_lb" = "ポンド (lb)";
+"settings_weight_unit" = "重量の単位";
+"settings_display_section" = "表示";
+"settings_display_footer" = "情報の表示方法をカスタマイズします。";
+"theme_group_dark" = "ダーク";
+"theme_group_light" = "ライト";
+
+// MARK: - Theme
+"settings_theme" = "テーマ";
+"theme_dark" = "ミッドナイト";
+"theme_midnight" = "ダーク";
+"theme_light" = "ライト";
+"theme_gruvbox_light" = "Gruvbox ライト";
+"theme_gruvbox_dark" = "Gruvbox ダーク";
+"theme_serenity" = "セレニティ";
+"theme_blossom" = "ブロッサム";
+"theme_kuromi" = "ノワール";
+"theme_lime" = "ライム";
+"theme_lavender_dusk" = "ラベンダー・ダスク";
+"theme_rose_tea" = "ローズティー";
+"theme_matcha_cream" = "抹茶クリーム";
+"theme_apricot_sand" = "アプリコットサンド";
+"theme_powder_blue" = "パウダーブルー";
+"theme_ocean" = "オーシャン";
+
 // MARK: - Day Context & Change
-"day_context_plan_label" = "プラン";
+"day_context_plan_label" = "トレーニングプラン";
 "day_progress" = "Day %d / %d";
 "day_started_badge" = "開始済み";
 "day_change_title" = "Dayを変更";
 "day_change_message" = "Day %d に変更します。現在の未完了セットは置き換えられます。";
-"day_change_skip_toggle" = "このDayをスキップして、明日から次のDayに進める";
+"day_change_note" = "次回のワークアウトはDay %dから始まります";
 "day_change_confirm" = "変更する";
 "day_changed_success" = "Day %d に変更しました";
+
+// MARK: - Copy Candidates
+"copy_candidates" = "コピー元";
+"copy_from_plan" = "トレーニングプランからコピー";
+"last_workout_candidate" = "前回のワークアウト";
+"other_copy_sources" = "他のコピー元...";
+"select_copy_source" = "コピー元を選択";
+"copy_tab_plan" = "トレーニングプラン";
+"copy_tab_workout" = "ワークアウト";
+"copy_section_this_plan" = "このトレーニングプラン";
+"copy_section_other_plans" = "他のトレーニングプラン";
+"copy_section_workout_history" = "ワークアウト履歴";
+"no_plan_candidates" = "トレーニングプラン候補がありません";
+"no_workout_candidates" = "ワークアウト履歴がありません";
+"sets_applied" = "%dセットを適用しました";
+
+// MARK: - Metric Types
+"metric_type_label" = "入力タイプ";
+"metric_type_weight_reps" = "重量";
+"metric_type_bodyweight_reps" = "自重";
+"metric_type_time_distance" = "時間";
+"metric_type_completion" = "完了";
+"body_part_cardio_name" = "有酸素";
+"bodyweight_label" = "自重";
+"completion_only_hint" = "タップして完了";
+"completion_only_label" = "完了のみ";
+"unit_min" = "分";
+"unit_sec" = "秒";
+"unit_km" = "km";
+"unit_m" = "m";
+
+// MARK: - Plan-Workout Sync
+"add_to_workout_title" = "今日のワークアウトにも追加しますか？";
+"add_to_workout_message" = "この種目を今日のワークアウトにも追加しますか？";
+"add_to_workout_confirm" = "ワークアウトにも追加";
+"add_to_plan_only" = "トレーニングプランのみ";
+
+// MARK: - Plan Creation Wizard
+
+// MARK: - Plan Start Picker
+"plan_start_title" = "いつから始める？";
+"plan_start_subtitle" = "%@から開始";
+"plan_start_today" = "今日から始める";
+"plan_start_next_workout" = "次のワークアウトから";
+"plan_start_scheduled" = "日付を指定して開始";
+"plan_start_date_label" = "開始日";
+"plan_start_scheduled_summary" = "開始予定: %@";
+"plan_start_day_label" = "開始Day";
+"plan_start_day_picker_title" = "開始Dayを選択";
+"plan_start_warning_replace_today" = "今日のワークアウトはこのトレーニングプランに置き換わります";
+
+// MARK: - Cycle Start Picker
+"cycle_start_title" = "いつから始める？";
+"cycle_start_subtitle" = "%@から開始";
+"cycle_start_position_label" = "開始位置";
+"cycle_start_position_picker_title" = "開始位置を選択";
+"cycle_start_plan_label" = "トレーニングプラン%d: %@";
+"cycle_start_day_label" = "Day %d";
+
+// MARK: - Past Day Rescue & Future Preview
+"workout_rescue_from_plan" = "トレーニングプランから記録";
+"workout_rescue_from_plan_subtitle" = "有効なトレーニングプランからこの日のワークアウトを追加";
+"workout_rescue_from_plan_button" = "トレーニングプランから記録";
+"workout_future_plan_preview" = "メニュー確認（閲覧のみ）";
+
+// MARK: - Plan Guide
+"plan_guide_step1_title" = "トレーニングプランを設定すると";
+"plan_guide_step1_body" = "種目を毎回選ばなくても、今日のメニューが自動で出ます";
+"plan_guide_step2_title" = "トレーニングプランは複数の1日メニュー";
+"plan_guide_step2_body" = "Day 1 / Day 2 / Day 3 が入ります";
+"plan_guide_step3_title" = "1日メニューには種目が入る";
+"plan_guide_step3_body" = "1日分の中に複数の種目を登録できます";
+"plan_guide_step4_title" = "使い方は2種類";
+"plan_guide_single" = "単体トレーニングプラン：1つのトレーニングプランを使う";
+"plan_guide_cycle" = "サイクル：複数のトレーニングプランを順に回す";
+"plan_guide_next" = "次へ";
+"plan_guide_back" = "戻る";
+"plan_guide_close" = "閉じる";
+"plan_guide_node_plan" = "トレーニングプラン";
+"plan_guide_node_day" = "1日メニュー";
+"plan_guide_node_exercise" = "種目";
+"plan_guide_exercise_bench_press" = "ベンチプレス";
+"plan_guide_exercise_incline_press" = "インクラインプレス";
+"plan_guide_exercise_bench" = "ベンチ";
+"plan_guide_exercise_squat" = "スクワット";
+
+// MARK: - Spotlight
+"spotlight_create_plan_hint" = "ここから作成できます";
+"spotlight_add_day_hint" = "ここからDayを追加";
+"spotlight_add_exercise_hint" = "ここから種目を追加しましょう";
+"spotlight_next_day_hint" = "種目を追加し終わったらここから次のDayへ";
+
+// MARK: - Rest Timer Settings
+"settings_rest_timer_section" = "レストタイマー";
+"settings_rest_timer_footer" = "セット間のレストタイマーの動作を設定します。";
+"settings_default_rest_time" = "デフォルトのレスト時間";
+"settings_combine_record_timer" = "記録時に自動でタイマー開始";
+"settings_combine_record_timer_hint" = "セットを記録すると自動的にタイマーが開始します";
+"settings_reshow_announcement" = "タイマーのお知らせを再表示";
+
+// MARK: - Rest Timer
+"rest_timer_complete_title" = "レスト終了";
+"rest_timer_complete_body" = "次のセットを始めましょう！";
+"rest_timer_start" = "レスト開始";
+"rest_timer_running" = "計測中...";
+"rest_timer_add_30s" = "+30秒";
+"rest_timer_conflict_title" = "タイマー実行中";
+"rest_timer_conflict_message" = "レストタイマーが既に実行中です。";
+"rest_timer_conflict_continue" = "現在のまま";
+"rest_timer_conflict_switch" = "切り替える";
+"rest_timer_label" = "REST";
+"rest_timer_log_set" = "セットを記録";
+"rest_timer_log_and_start" = "記録 → レスト";
+"rest_timer_cancel" = "キャンセル";
+"rest_timer_remaining" = "残り";
+
+// MARK: - Rest Time Picker
+"rest_time_picker_title" = "レスト時間";
+"rest_time_minutes" = "分";
+"rest_time_seconds" = "秒";
+
+// MARK: - Combination Mode Announcement
+"combination_announcement_title" = "レストタイマーを自動開始しますか？";
+"combination_announcement_message" = "セット記録と同時にタイマーを開始できます。";
+"combination_enable_and_run" = "連動を有効にして実行";
+"combination_run_without_link" = "連動せずに実行";
+"combination_dont_show" = "今後は表示しない";
+
+// MARK: - Exercise Groups
+"group_label" = "グループ";
+"group_exercises" = "グループ化";
+"create_group" = "グループ作成";
+"dissolve_group" = "グループ解除";
+"group_set_count" = "%dラウンド";
+"set_count" = "セット数";
+"sets_unit" = "セット";
+"group_round_rest" = "ラウンド間休憩";
+"select_exercises_to_group" = "グループ化するエクササイズを選択";
+"set_count_mismatch_title" = "セット数の不一致";
+"use_maximum" = "最大値を使用 (%d)";
+"use_minimum" = "最小値を使用 (%d)";
+"specify_manually" = "手動で指定";
+"group_requires_two" = "グループには2種目以上が必要です";
+"round_label" = "ラウンド %d/%d";
+"remove_from_group" = "グループから外す";
+"add_to_group" = "グループに追加";
+"group_rest_seconds" = "グループ休憩";
+
+// MARK: - Premium
+"settings_premium_section" = "プレミアム";
+"premium_remove_ads_title" = "広告を削除";
+"premium_remove_ads_description" = "アプリ内の全ての広告を非表示にします";
+"premium_purchased" = "広告削除済み";
+"premium_restore_button" = "購入を復元";
+"premium_restore_success" = "購入を復元しました！";
+"premium_restore_no_products" = "復元できる購入がありません";
+"purchase_error_verification" = "購入の検証に失敗しました";
+"purchase_error_not_found" = "商品が見つかりません";
+"purchase_error_failed" = "購入に失敗しました";
+"purchase_error_cancelled" = "購入がキャンセルされました";
+"purchase_error_pending" = "購入の承認待ちです";
+"purchase_error_load_failed" = "商品の読み込みに失敗しました";
+"purchase_error_restore_failed" = "購入の復元に失敗しました";
+
+// MARK: - Notification Settings
+"settings_notification_section" = "通知";
+"settings_notification_footer" = "通知を有効にすると、ワークアウトのリマインダーを受け取れます。";
+"settings_open_system_notifications" = "端末の通知設定を開く";
+"settings_enable_notifications" = "通知を有効にする";
+
+// MARK: - Other Settings
+"settings_other_section" = "その他";
+"settings_terms_of_service" = "利用規約";
+"settings_privacy_policy" = "プライバシーポリシー";
+"settings_feedback" = "ご意見・ご要望";
+
+// MARK: - Data Management
+"settings_data_management_section" = "データ管理";
+"settings_delete_all_data" = "全データを削除";
+"settings_delete_all_footer" = "ワークアウト履歴、トレーニングプラン、サイクルの全てのデータが完全に削除されます。";
+"settings_delete_all_confirm_title" = "全データを削除しますか？";
+"settings_delete_all_confirm_message" = "この操作は取り消せません。ワークアウト履歴、トレーニングプラン、サイクルの全てのデータが完全に削除されます。";
+
+// MARK: - Common (additional)
+"common_cancel" = "キャンセル";
+"common_delete" = "削除";
+"common_ok" = "OK";
+"next" = "次へ";
+
+// MARK: - Ads
+"ad_badge" = "広告";
+"ad_cta_button" = "詳細";
+
+// MARK: - Cardio
+"cardio_history_title" = "有酸素";
+"cardio_activity_type" = "アクティビティ";
+"cardio_date" = "日時";
+"cardio_duration" = "時間";
+"cardio_distance" = "距離";
+"cardio_distance_optional" = "距離（任意）";
+"cardio_hours_short" = "時間";
+"cardio_minutes_short" = "分";
+"cardio_seconds_short" = "秒";
+"cardio_add_workout" = "有酸素ワークアウトを追加";
+"cardio_no_workouts" = "有酸素ワークアウトなし";
+"cardio_no_workouts_hint" = "ヘルスケアから同期するか手動で追加";
+"cardio_sync_health" = "ヘルスケアと同期";
+"cardio_add_manual" = "手動で追加";
+"cardio_sync_complete" = "同期完了";
+"cardio_sync_imported" = "%d件のワークアウトを取り込みました";
+"cardio_sync_no_new" = "新しいワークアウトはありません";
+"cardio_sync_error" = "同期に失敗しました: %@";
+"cardio_health_not_available" = "このデバイスではヘルスケアが利用できません";
+"cardio_health_permission_title" = "許可が必要です";
+"cardio_health_permission_message" = "設定 > プライバシー > ヘルスケアでワークアウトデータへのアクセスを許可してください。";
+"cardio_record_button" = "有酸素を記録";
+"cardio_record_subtitle" = "ランニング、サイクリング、水泳などを記録";
+"cardio_monthly_summary" = "有酸素";
+"cardio_no_workouts_month" = "今月の有酸素ワークアウトなし";
+"cardio_total_sessions" = "%d回";
+"cardio_max_heart_rate" = "最高心拍 %d bpm";
+"cardio_avg_heart_rate" = "平均心拍 %d bpm";
+"cardio_energy_burned" = "消費 %d kcal";
+"cardio_start_time" = "開始 %@";
+"cardio_max_heart_rate_label" = "最高心拍";
+"cardio_avg_heart_rate_label" = "平均心拍";
+"cardio_energy_burned_label" = "消費";
+"cardio_other" = "その他";
+"cardio_detail_duration_label" = "ワークアウト時間";
+"cardio_detail_distance_label" = "距離";
+"cardio_detail_max_heart_rate_label" = "最大心拍数";
+"cardio_detail_avg_heart_rate_label" = "平均心拍数";
+"cardio_detail_energy_burned_label" = "アクティブキロカロリー";
+"cardio_mark_complete" = "完了にする";
+"cardio_mark_incomplete" = "未完了に戻す";
+"cardio_completed" = "完了";
+"cardio_delete_message" = "%@を削除しますか？";
+
+// MARK: - Cardio Activity Types
+"activity_running" = "ランニング";
+"activity_walking" = "ウォーキング";
+"activity_cycling" = "サイクリング";
+"activity_swimming" = "水泳";
+"activity_hiking" = "ハイキング";
+"activity_elliptical" = "エリプティカル";
+"activity_rowing" = "ローイング";
+"activity_stair_climbing" = "階段昇降";
+"activity_stairs" = "階段";
+"activity_hiit" = "HIIT";
+"activity_mixed_cardio" = "ミックスカーディオ";
+"activity_jump_rope" = "縄跳び";
+"activity_dance" = "ダンス";
+"activity_cardio_dance" = "カーディオダンス";
+"activity_social_dance" = "ソーシャルダンス";
+"activity_yoga" = "ヨガ";
+"activity_pilates" = "ピラティス";
+"activity_core_training" = "体幹トレーニング";
+"activity_functional_strength" = "ファンクショナルトレーニング";
+"activity_traditional_strength" = "筋力トレーニング";
+"activity_cross_training" = "クロストレーニング";
+"activity_kickboxing" = "キックボクシング";
+"activity_martial_arts" = "格闘技";
+"activity_boxing" = "ボクシング";
+"activity_climbing" = "クライミング";
+"activity_cross_country_skiing" = "クロスカントリースキー";
+"activity_downhill_skiing" = "ダウンヒルスキー";
+"activity_snow_sports" = "スノースポーツ";
+"activity_snowboarding" = "スノーボード";
+"activity_skating" = "スケート";
+"activity_surfing" = "サーフィン";
+"activity_water_fitness" = "水中フィットネス";
+"activity_tennis" = "テニス";
+"activity_badminton" = "バドミントン";
+"activity_table_tennis" = "卓球";
+"activity_squash" = "スカッシュ";
+"activity_racquetball" = "ラケットボール";
+"activity_golf" = "ゴルフ";
+"activity_baseball" = "野球";
+"activity_softball" = "ソフトボール";
+"activity_basketball" = "バスケットボール";
+"activity_soccer" = "サッカー";
+"activity_volleyball" = "バレーボール";
+"activity_american_football" = "アメリカンフットボール";
+"activity_australian_football" = "オーストラリアンフットボール";
+"activity_rugby" = "ラグビー";
+"activity_hockey" = "ホッケー";
+"activity_lacrosse" = "ラクロス";
+"activity_handball" = "ハンドボール";
+"activity_cricket" = "クリケット";
+"activity_other" = "その他";
+"ok" = "OK";
+"save" = "保存";

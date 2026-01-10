@@ -11,20 +11,41 @@ import SwiftData
 
 /// Service for local profile management.
 enum ProfileService {
+    // MARK: - Profile Cache
+
+    /// Cached profile reference to avoid repeated DB fetches within app session
+    private static var cachedProfile: LocalProfile?
+
+    /// Invalidates the cached profile (call when profile is deleted or on logout)
+    static func invalidateCache() {
+        cachedProfile = nil
+    }
+
     // MARK: - Profile Management
 
     /// Gets the existing profile or creates one if none exists.
     /// This should be called on app launch to ensure a profile exists.
+    /// Uses session cache to avoid repeated DB fetches.
     /// - Parameter modelContext: The SwiftData model context.
     /// - Returns: The local profile (existing or newly created).
     @MainActor
     static func getOrCreateProfile(modelContext: ModelContext) -> LocalProfile {
+        // Return cached profile if available
+        if let cached = cachedProfile {
+            return cached
+        }
+
+        // Seed system data (body parts and exercises) only on first call per session
+        // This ensures new exercises are added when app is updated
+        ExerciseCreationService.seedSystemDataIfNeeded(modelContext: modelContext)
+
         // Try to fetch existing profile
         let descriptor = FetchDescriptor<LocalProfile>()
 
         do {
             let profiles = try modelContext.fetch(descriptor)
             if let existingProfile = profiles.first {
+                cachedProfile = existingProfile
                 return existingProfile
             }
         } catch {
@@ -35,9 +56,7 @@ enum ProfileService {
         // Create new profile
         let newProfile = LocalProfile()
         modelContext.insert(newProfile)
-
-        // Seed system data (body parts and exercises) on first launch
-        ExerciseCreationService.seedSystemDataIfNeeded(modelContext: modelContext)
+        cachedProfile = newProfile
 
         return newProfile
     }
@@ -66,11 +85,17 @@ enum ProfileService {
     ///   - planId: The workout plan ID to set as active, or nil for free mode.
     static func setActivePlan(_ profile: LocalProfile, planId: UUID?) {
         profile.activePlanId = planId
+        profile.scheduledPlanStartDate = nil
+        profile.scheduledPlanStartDayIndex = nil
+        profile.scheduledPlanId = nil
     }
 
     /// Clears the active plan (switches to free mode).
     /// - Parameter profile: The profile to update.
     static func clearActivePlan(_ profile: LocalProfile) {
         profile.activePlanId = nil
+        profile.scheduledPlanStartDate = nil
+        profile.scheduledPlanStartDayIndex = nil
+        profile.scheduledPlanId = nil
     }
 }

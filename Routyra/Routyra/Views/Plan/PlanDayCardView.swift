@@ -16,8 +16,50 @@ struct PlanDayCardView<Destination: Hashable>: View {
     let isExpanded: Bool
     let editDestination: Destination
     let onToggleExpand: () -> Void
+    var onEditExerciseSets: ((PlanExercise) -> Void)? = nil
+    var weightUnit: WeightUnit = .kg
 
     @State private var expandedExerciseIds: Set<UUID> = []
+
+    // MARK: - Display Item
+
+    /// Unified display item for groups and ungrouped exercises
+    private enum DayDisplayItem: Identifiable {
+        case group(PlanExerciseGroup)
+        case exercise(PlanExercise)
+
+        var id: String {
+            switch self {
+            case .group(let group): return "group-\(group.id)"
+            case .exercise(let exercise): return "exercise-\(exercise.id)"
+            }
+        }
+
+        var orderIndex: Int {
+            switch self {
+            case .group(let group): return group.orderIndex
+            case .exercise(let exercise): return exercise.orderIndex
+            }
+        }
+    }
+
+    /// Build unified display items from groups and ungrouped exercises
+    private var displayItems: [DayDisplayItem] {
+        var items: [DayDisplayItem] = []
+
+        // Add all groups
+        for group in day.exerciseGroups {
+            items.append(.group(group))
+        }
+
+        // Add ungrouped exercises
+        for exercise in day.sortedExercises where !exercise.isGrouped {
+            items.append(.exercise(exercise))
+        }
+
+        // Sort by orderIndex
+        return items.sorted { $0.orderIndex < $1.orderIndex }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -103,9 +145,7 @@ struct PlanDayCardView<Destination: Hashable>: View {
 
     private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 8) {
-            let sortedExercises = day.sortedExercises
-
-            if sortedExercises.isEmpty {
+            if displayItems.isEmpty {
                 // Empty state
                 HStack {
                     Spacer()
@@ -124,23 +164,29 @@ struct PlanDayCardView<Destination: Hashable>: View {
             } else {
                 // Exercise cards
                 VStack(spacing: 8) {
-                    ForEach(sortedExercises, id: \.id) { planExercise in
-                        let exercise = exercises[planExercise.exerciseId]
-                        let bodyPartId = exercise?.bodyPartId
-                        let bodyPart = bodyPartId.flatMap { bodyParts[$0] }
+                    ForEach(displayItems) { item in
+                        switch item {
+                        case .group(let group):
+                            VStack(alignment: .leading, spacing: 6) {
+                                groupHeaderView(group)
 
-                        PlanExerciseCardView(
-                            planExercise: planExercise,
-                            exercise: exercise,
-                            bodyPart: bodyPart,
-                            isExpanded: expandedExerciseIds.contains(planExercise.id),
-                            onToggle: {
-                                toggleExercise(planExercise.id)
+                                ForEach(group.sortedExercises, id: \.id) { planExercise in
+                                    exerciseRow(for: planExercise)
+                                        .padding(.leading, 12)
+                                }
                             }
-                        )
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 8)
+                            .background(AppColors.background.opacity(0.5))
+                            .cornerRadius(10)
+
+                        case .exercise(let planExercise):
+                            exerciseRow(for: planExercise)
+                        }
                     }
                 }
-                .padding(.horizontal, 12)
+                .padding(.leading, 28)
+                .padding(.trailing, 12)
                 .padding(.bottom, 12)
             }
         }
@@ -153,6 +199,42 @@ struct PlanDayCardView<Destination: Hashable>: View {
             expandedExerciseIds.remove(id)
         } else {
             expandedExerciseIds.insert(id)
+        }
+    }
+
+    // MARK: - Row Builders
+
+    private func exerciseRow(for planExercise: PlanExercise) -> some View {
+        let exercise = exercises[planExercise.exerciseId]
+        let bodyPartId = exercise?.bodyPartId
+        let bodyPart = bodyPartId.flatMap { bodyParts[$0] }
+
+        return PlanExerciseCardView(
+            planExercise: planExercise,
+            exercise: exercise,
+            bodyPart: bodyPart,
+            isExpanded: expandedExerciseIds.contains(planExercise.id),
+            onToggle: {
+                toggleExercise(planExercise.id)
+            },
+            onEditSets: {
+                onEditExerciseSets?(planExercise)
+            },
+            weightUnit: weightUnit
+        )
+    }
+
+    private func groupHeaderView(_ group: PlanExerciseGroup) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "rectangle.stack")
+                .font(.caption)
+                .foregroundColor(AppColors.accentBlue)
+
+            Text(group.summary)
+                .font(.caption)
+                .foregroundColor(AppColors.textSecondary)
+
+            Spacer()
         }
     }
 

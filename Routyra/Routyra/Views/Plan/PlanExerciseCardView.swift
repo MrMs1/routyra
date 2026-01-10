@@ -15,6 +15,8 @@ struct PlanExerciseCardView: View {
     let bodyPart: BodyPart?
     let isExpanded: Bool
     let onToggle: () -> Void
+    var onEditSets: (() -> Void)? = nil
+    var weightUnit: WeightUnit = .kg
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -71,7 +73,7 @@ struct PlanExerciseCardView: View {
                     }
 
                     // Summary
-                    Text(planExercise.setsSummary)
+                    Text(planExercise.setsSummary(weightUnit: weightUnit))
                         .font(.subheadline)
                         .foregroundColor(AppColors.textSecondary)
                 }
@@ -87,7 +89,7 @@ struct PlanExerciseCardView: View {
 
     private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Set list (mini card rows - read-only)
+            // Set list (mini card rows - tappable for editing)
             let sets = planExercise.sortedPlannedSets
             if sets.isEmpty {
                 Text("no_sets_configured")
@@ -95,21 +97,29 @@ struct PlanExerciseCardView: View {
                     .foregroundColor(AppColors.textMuted)
                     .padding(.vertical, 4)
             } else {
-                ForEach(Array(sets.enumerated()), id: \.element.id) { index, plannedSet in
-                    PlannedSetDisplayRow(
-                        plannedSet: plannedSet,
-                        setIndex: index + 1
-                    )
+                Button {
+                    onEditSets?()
+                } label: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(sets.enumerated()), id: \.element.id) { index, plannedSet in
+                            PlannedSetDisplayRow(
+                                plannedSet: plannedSet,
+                                setIndex: index + 1,
+                                weightUnit: weightUnit
+                            )
 
-                    // Thin separator line (not after last row)
-                    if index < sets.count - 1 {
-                        Color.white.opacity(0.08)
-                            .frame(height: 1)
-                            .padding(.leading, 56)
-                            .padding(.trailing, 16)
-                            .padding(.vertical, 4)
+                            // Thin separator line (not after last row)
+                            if index < sets.count - 1 {
+                                Color.white.opacity(0.08)
+                                    .frame(height: 1)
+                                    .padding(.leading, 56)
+                                    .padding(.trailing, 16)
+                                    .padding(.vertical, 4)
+                            }
+                        }
                     }
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(.top, 10)
