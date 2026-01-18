@@ -108,9 +108,9 @@ final class WorkoutPlan {
 
     /// Creates a new day and adds it to this plan.
     @discardableResult
-    func createDay(name: String? = nil, note: String? = nil) -> PlanDay {
+    func createDay(name: String? = nil, note: String? = nil, isRestDay: Bool = false) -> PlanDay {
         let nextIndex = (days.map(\.dayIndex).max() ?? 0) + 1
-        let day = PlanDay(dayIndex: nextIndex, name: name, note: note)
+        let day = PlanDay(dayIndex: nextIndex, name: name, note: note, isRestDay: isRestDay)
         addDay(day)
         return day
     }

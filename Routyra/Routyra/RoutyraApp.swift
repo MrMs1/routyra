@@ -31,6 +31,15 @@ final class WatchSyncCoordinator: ObservableObject {
                 self?.handleSyncRequest()
             }
             .store(in: &cancellables)
+
+        // Push updates when the user changes theme on iPhone,
+        // so Watch can pick up the latest accent immediately.
+        NotificationCenter.default.publisher(for: .themeDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.handleSyncRequest()
+            }
+            .store(in: &cancellables)
     }
 
     func configure(with container: ModelContainer) {
@@ -47,11 +56,15 @@ final class WatchSyncCoordinator: ObservableObject {
         // Fetch profile
         let profile = ProfileService.getOrCreateProfile(modelContext: context)
 
-        // Fetch today's workout day
-        let today = DateUtilities.startOfDay(Date())
-        let workoutDay = WorkoutService.getOrCreateWorkoutDay(
+        // Calculate workout date (respects transition hour)
+        let workoutDate = DateUtilities.todayWorkoutDate(transitionHour: profile.dayTransitionHour)
+
+        // Get existing WorkoutDay (do NOT create or advance day here)
+        // Day advancement and workout creation are handled by WorkoutView.onAppear
+        // If workoutDay is nil, we send empty data to Watch
+        let workoutDay = WorkoutService.getWorkoutDay(
             profileId: profile.id,
-            date: today,
+            date: workoutDate,
             modelContext: context
         )
 
@@ -80,11 +93,17 @@ final class WatchSyncCoordinator: ObservableObject {
 
 @main
 struct RoutyraApp: App {
-    @StateObject private var watchSyncCoordinator = WatchSyncCoordinator()
+    @StateObject private var watchSyncCoordinator: WatchSyncCoordinator
 
     init() {
+        let coordinator = WatchSyncCoordinator()
+        _watchSyncCoordinator = StateObject(wrappedValue: coordinator)
+
         // Initialize Google Mobile Ads SDK
         MobileAds.shared.start(completionHandler: nil)
+
+        // Configure watch sync as early as possible to handle background sync requests.
+        coordinator.configure(with: sharedModelContainer)
     }
 
     var sharedModelContainer: ModelContainer = {
@@ -131,7 +150,6 @@ struct RoutyraApp: App {
         WindowGroup {
             MainTabView()
                 .onAppear {
-                    watchSyncCoordinator.configure(with: sharedModelContainer)
                     // Run cardio data migration
                     let context = ModelContext(sharedModelContainer)
                     CardioMigrationService.migrateIfNeeded(modelContext: context)

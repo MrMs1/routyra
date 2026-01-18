@@ -9,11 +9,11 @@
 import SwiftUI
 
 struct GroupSetCountResolverSheet: View {
+    @Binding var isPresented: Bool
     let exercises: [PlanExercise]
     let exercisesMap: [UUID: Exercise]
     let onResolve: (Int) -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @State private var manualSetCount: Int = 3
     @State private var showManualPicker = false
 
@@ -30,81 +30,130 @@ struct GroupSetCountResolverSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                // Explanation
-                VStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                        .foregroundColor(.orange)
+        GeometryReader { proxy in
+            ZStack {
+                Color.black.opacity(0.5)
+                    .ignoresSafeArea()
 
-                    Text(L10n.tr("set_count_mismatch_title"))
-                        .font(.headline)
-
-                    Text(setCountDescription)
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.textSecondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.top, 10)
-
-                Divider()
-
-                // Options
-                VStack(spacing: 12) {
-                    // Use maximum
-                    OptionButton(
-                        title: L10n.tr("use_maximum", maxCount),
-                        subtitle: "\(maxCount) \(L10n.tr("sets_unit"))",
-                        action: {
-                            onResolve(maxCount)
-                            dismiss()
+                // Centered card (scrollable)
+                VStack(spacing: 0) {
+                    HStack {
+                        Spacer()
+                        Button {
+                            close()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(AppColors.textSecondary)
+                                .frame(width: 32, height: 32)
+                                .background(AppColors.cardBackground)
+                                .clipShape(Circle())
                         }
-                    )
+                    }
+                    .padding(.bottom, 8)
 
-                    // Use minimum
-                    OptionButton(
-                        title: L10n.tr("use_minimum", minCount),
-                        subtitle: "\(minCount) \(L10n.tr("sets_unit"))",
-                        action: {
-                            onResolve(minCount)
-                            dismiss()
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            // Explanation
+                            VStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .font(.largeTitle)
+                                    .foregroundColor(.orange)
+
+                                Text(L10n.tr("set_count_mismatch_title"))
+                                    .font(.headline)
+                                    .foregroundColor(AppColors.textPrimary)
+
+                                Text(setCountDescription)
+                                    .font(.subheadline)
+                                    .foregroundColor(AppColors.textSecondary)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+
+                            Divider()
+
+                            // Options
+                            VStack(spacing: 12) {
+                                OptionButton(
+                                    title: L10n.tr("use_maximum_title"),
+                                    subtitle: L10n.tr("align_to_sets", maxCount),
+                                    action: {
+                                        onResolve(maxCount)
+                                        close()
+                                    }
+                                )
+
+                                OptionButton(
+                                    title: L10n.tr("use_minimum_title"),
+                                    subtitle: L10n.tr("align_to_sets", minCount),
+                                    action: {
+                                        onResolve(minCount)
+                                        close()
+                                    }
+                                )
+
+                                OptionButton(
+                                    title: L10n.tr("specify_manually"),
+                                    subtitle: nil,
+                                    action: {
+                                        manualSetCount = maxCount
+                                        withAnimation(.easeInOut(duration: 0.15)) {
+                                            showManualPicker = true
+                                        }
+                                    }
+                                )
+                            }
+
+                            if showManualPicker {
+                                VStack(spacing: 10) {
+                                    Text("\(manualSetCount) \(L10n.tr("sets_unit"))")
+                                        .font(.title3.weight(.semibold))
+                                        .foregroundColor(AppColors.textPrimary)
+
+                                    Stepper(value: $manualSetCount, in: 1...20) {
+                                        EmptyView()
+                                    }
+                                    .labelsHidden()
+                                    .frame(width: 140)
+
+                                    Button {
+                                        onResolve(manualSetCount)
+                                        close()
+                                    } label: {
+                                        Text(L10n.tr("done"))
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.white)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 12)
+                                            .background(AppColors.accentBlue)
+                                            .cornerRadius(10)
+                                    }
+                                    .padding(.top, 6)
+                                }
+                                .padding(14)
+                                .background(AppColors.cardBackground)
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(AppColors.textMuted.opacity(0.2), lineWidth: 1)
+                                )
+                            }
                         }
-                    )
-
-                    // Specify manually
-                    OptionButton(
-                        title: L10n.tr("specify_manually"),
-                        subtitle: nil,
-                        action: {
-                            manualSetCount = maxCount
-                            showManualPicker = true
-                        }
-                    )
-                }
-                .padding(.horizontal)
-
-                Spacer()
-            }
-            .background(AppColors.background)
-            .navigationTitle(L10n.tr("set_count"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.tr("cancel")) {
-                        dismiss()
+                        .padding(.top, 4)
                     }
                 }
-            }
-            .sheet(isPresented: $showManualPicker) {
-                ManualSetCountPicker(
-                    setCount: $manualSetCount,
-                    onConfirm: {
-                        onResolve(manualSetCount)
-                        dismiss()
-                    }
+                .padding(20)
+                .contentShape(Rectangle())
+                .background(AppColors.cardBackground)
+                .cornerRadius(16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(AppColors.textMuted.opacity(0.3), lineWidth: 1)
                 )
-                .presentationDetents([.height(200)])
+                .frame(maxWidth: min(360, proxy.size.width * 0.9))
+                .frame(maxHeight: proxy.size.height * 0.85)
             }
         }
     }
@@ -114,7 +163,13 @@ struct GroupSetCountResolverSheet: View {
             guard let ex = exercisesMap[exercise.exerciseId] else { return nil }
             return "\(ex.localizedName): \(exercise.effectiveSetCount)"
         }
-        return details.joined(separator: ", ")
+        return details.joined(separator: "\n")
+    }
+
+    private func close() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            isPresented = false
+        }
     }
 }
 
@@ -130,7 +185,7 @@ private struct OptionButton: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.body)
+                        .font(.body.weight(.semibold))
                         .foregroundColor(AppColors.textPrimary)
 
                     if let subtitle = subtitle {
@@ -141,56 +196,15 @@ private struct OptionButton: View {
                 }
 
                 Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(AppColors.textMuted)
             }
             .padding()
             .background(AppColors.cardBackground)
             .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(AppColors.textMuted.opacity(0.2), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Manual Set Count Picker
-
-private struct ManualSetCountPicker: View {
-    @Binding var setCount: Int
-    let onConfirm: () -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                Text("\(setCount) \(L10n.tr("sets_unit"))")
-                    .font(.title.weight(.semibold))
-
-                Stepper(value: $setCount, in: 1...20) {
-                    EmptyView()
-                }
-                .labelsHidden()
-                .frame(width: 120)
-
-                Spacer()
-            }
-            .padding(.top, 30)
-            .background(AppColors.background)
-            .navigationTitle(L10n.tr("set_count"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.tr("cancel")) {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.tr("done")) {
-                        onConfirm()
-                    }
-                }
-            }
-        }
     }
 }

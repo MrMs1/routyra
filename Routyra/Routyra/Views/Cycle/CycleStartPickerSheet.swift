@@ -22,6 +22,7 @@ struct CycleStartPickerSheet: View {
     @State private var selectedPlanIndex: Int = 0  // 0-indexed
     @State private var selectedDayIndex: Int = 0   // 0-indexed
     @State private var showPositionPicker: Bool = false
+    @State private var selectedTiming: PlanStartTiming = .today
     @State private var scheduledStartDate: Date = DateUtilities.today
 
     private var sortedItems: [PlanCycleItem] {
@@ -57,31 +58,20 @@ struct CycleStartPickerSheet: View {
 
                 // Main content: Buttons + Position selector
                 VStack(spacing: 16) {
-                    // Start timing buttons
-                    VStack(spacing: 12) {
-                        primaryButton(timing: .today, title: L10n.tr("plan_start_today"))
-                        if todayHasWorkoutData {
-                            Text(L10n.tr("plan_start_warning_replace_today"))
-                                .font(.caption)
-                                .foregroundColor(AppColors.textMuted)
-                                .multilineTextAlignment(.center)
-                        }
-
-                        VStack(spacing: 10) {
-                            DatePicker(
-                                L10n.tr("plan_start_date_label"),
-                                selection: $scheduledStartDate,
-                                in: DateUtilities.today...,
-                                displayedComponents: .date
-                            )
-                            .datePickerStyle(.compact)
-
-                            secondaryButton(title: L10n.tr("plan_start_scheduled"))
-                        }
-                    }
+                    StartTimingSection(
+                        selectedTiming: $selectedTiming,
+                        scheduledStartDate: $scheduledStartDate,
+                        todayHasWorkoutData: todayHasWorkoutData
+                    )
 
                     // Start Position selector
                     startPositionSelector
+
+                    KeyValueSummaryCard(rows: [
+                        .init(label: L10n.tr("plan_start_mode_label"), value: startModeValueText),
+                        .init(label: L10n.tr("cycle_start_position_label"), value: positionDisplayText),
+                    ])
+                    confirmButton
                 }
                 .padding(.horizontal)
 
@@ -107,14 +97,15 @@ struct CycleStartPickerSheet: View {
         }
     }
 
-    // MARK: - Primary Button
+    // MARK: - Confirm
 
-    private func primaryButton(timing: PlanStartTiming, title: String) -> some View {
+    private var confirmButton: some View {
         Button {
-            onConfirm(timing, selectedPlanIndex, selectedDayIndex, nil)
+            let startDate = selectedTiming == .scheduled ? scheduledStartDate : nil
+            onConfirm(selectedTiming, selectedPlanIndex, selectedDayIndex, startDate)
             dismiss()
         } label: {
-            Text(title)
+            Text(L10n.tr("plan_start_confirm"))
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding()
@@ -124,20 +115,14 @@ struct CycleStartPickerSheet: View {
         }
     }
 
-    // MARK: - Secondary Button
-
-    private func secondaryButton(title: String) -> some View {
-        Button {
-            onConfirm(.scheduled, selectedPlanIndex, selectedDayIndex, scheduledStartDate)
-            dismiss()
-        } label: {
-            Text(title)
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(AppColors.cardBackground)
-                .foregroundColor(AppColors.textPrimary)
-                .cornerRadius(12)
+    private var startModeValueText: String {
+        switch selectedTiming {
+        case .today:
+            return L10n.tr("today")
+        case .nextWorkout:
+            return L10n.tr("plan_start_next_workout")
+        case .scheduled:
+            return DateFormatter.localizedString(from: scheduledStartDate, dateStyle: .short, timeStyle: .none)
         }
     }
 
@@ -184,13 +169,17 @@ struct CycleStartPickerSheet: View {
         let planName = plan.name.isEmpty ? L10n.tr("new_plan") : plan.name
 
         let sortedDays = plan.sortedDays
+        let baseDay = L10n.tr("day_label", dayNumber)
+
         if selectedDayIndex < sortedDays.count,
-           let dayName = sortedDays[selectedDayIndex].name,
-           !dayName.isEmpty {
-            return "\(planName) - Day \(dayNumber) (\(dayName))"
+           let rawName = sortedDays[selectedDayIndex].name?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !rawName.isEmpty,
+           rawName != baseDay,
+           rawName != "Day \(dayNumber)" {
+            return "\(planName) - \(baseDay) (\(rawName))"
         }
 
-        return "\(planName) - Day \(dayNumber)"
+        return "\(planName) - \(baseDay)"
     }
 }
 

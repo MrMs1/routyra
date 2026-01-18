@@ -46,8 +46,12 @@ enum GroupService {
     ) -> PlanExerciseGroup? {
         guard exercises.count >= 2 else { return nil }
 
+        // Keep input order (caller may pass selection order). De-dupe defensively.
+        var seen: Set<UUID> = []
+        let orderedExercises = exercises.filter { seen.insert($0.id).inserted }
+
         // Determine orderIndex from the minimum of selected exercises
-        let minOrderIndex = exercises.map(\.orderIndex).min() ?? 0
+        let minOrderIndex = orderedExercises.map(\.orderIndex).min() ?? 0
 
         // Create the group
         let group = PlanExerciseGroup(
@@ -60,9 +64,8 @@ enum GroupService {
         planDay.exerciseGroups.append(group)
         modelContext.insert(group)
 
-        // Sort exercises by original orderIndex and assign groupOrderIndex
-        let sortedExercises = exercises.sorted { $0.orderIndex < $1.orderIndex }
-        for (index, exercise) in sortedExercises.enumerated() {
+        // Assign group order based on provided order (e.g. selection order)
+        for (index, exercise) in orderedExercises.enumerated() {
             exercise.group = group
             exercise.groupOrderIndex = index
             exercise.plannedSetCount = setCount

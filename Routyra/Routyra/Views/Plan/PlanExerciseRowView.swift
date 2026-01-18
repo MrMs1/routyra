@@ -138,7 +138,8 @@ struct PlanExerciseRowView: View {
                             PlannedSetDisplayRow(
                                 plannedSet: plannedSet,
                                 setIndex: index + 1,
-                                weightUnit: weightUnit
+                                weightUnit: weightUnit,
+                                showsRestTime: !isGrouped
                             )
 
                             // Thin separator line (not after last row)

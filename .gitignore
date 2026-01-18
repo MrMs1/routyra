@@ -1,5 +1,6 @@
 # Xcode
 .derivedData/
+.derivedData-watch/
 build/
 DerivedData/
 *.xcodeproj/project.xcworkspace/xcuserdata/

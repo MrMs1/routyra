@@ -26,6 +26,10 @@ final class CardioWorkout {
     /// Examples: 37 = running, 52 = walking, 13 = cycling, 46 = swimming.
     var activityType: Int
 
+    /// Optional manual activity code for finer-grained labeling (e.g., indoor vs outdoor running).
+    /// Only set for manual entries when we need to distinguish beyond HKWorkoutActivityType.
+    var manualExerciseCode: String?
+
     /// The start date and time of the workout.
     var startDate: Date
 
@@ -75,6 +79,7 @@ final class CardioWorkout {
     /// Creates a new cardio workout record.
     /// - Parameters:
     ///   - activityType: HKWorkoutActivityType raw value.
+    ///   - manualExerciseCode: Optional manual exercise code for label/icon differentiation.
     ///   - startDate: When the workout started.
     ///   - duration: Duration in seconds.
     ///   - totalDistance: Distance in meters (optional).
@@ -89,6 +94,7 @@ final class CardioWorkout {
     ///   - profile: The user's profile.
     init(
         activityType: Int,
+        manualExerciseCode: String? = nil,
         startDate: Date,
         duration: Double,
         totalDistance: Double? = nil,
@@ -104,6 +110,7 @@ final class CardioWorkout {
     ) {
         self.id = UUID()
         self.activityType = activityType
+        self.manualExerciseCode = manualExerciseCode
         self.startDate = startDate
         self.duration = duration
         self.totalDistance = totalDistance

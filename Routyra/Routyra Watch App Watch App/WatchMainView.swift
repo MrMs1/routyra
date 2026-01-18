@@ -23,6 +23,7 @@ enum WatchScreenState {
 // MARK: - Watch Main View
 
 struct WatchMainView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var connectivityManager: WatchConnectivityManager
     @StateObject private var timerManager = WatchRestTimerManager.shared
     @StateObject private var themeManager = WatchThemeManager.shared
@@ -40,7 +41,41 @@ struct WatchMainView: View {
         connectivityManager.workoutData
     }
 
-    private var nextIncompleteSet: (exercise: WatchExerciseData, set: WatchSetData, setNumber: Int, totalSets: Int)? {
+    // MARK: - Next Item (Group-first)
+
+    private func completedSetsCount(in exercise: WatchExerciseData) -> Int {
+        exercise.sets.filter { $0.isCompleted }.count
+    }
+
+    private func roundsCompleted(in group: WatchExerciseGroupData) -> Int {
+        guard group.setCount > 0 else { return 0 }
+        guard !group.exercises.isEmpty else { return 0 }
+        let minCompleted = group.exercises.map { completedSetsCount(in: $0) }.min() ?? 0
+        return min(minCompleted, group.setCount)
+    }
+
+    private func activeRound(in group: WatchExerciseGroupData) -> Int {
+        let completed = roundsCompleted(in: group)
+        return min(completed + 1, max(group.setCount, 1))
+    }
+
+    private func isAllRoundsComplete(_ group: WatchExerciseGroupData) -> Bool {
+        roundsCompleted(in: group) >= group.setCount
+    }
+
+    private func isRoundComplete(_ group: WatchExerciseGroupData, round: Int) -> Bool {
+        guard round > 0 else { return true }
+        return group.exercises.allSatisfy { completedSetsCount(in: $0) >= round }
+    }
+
+    private var nextIncompleteGroup: WatchExerciseGroupData? {
+        guard let data = workoutData else { return nil }
+        return data.exerciseGroups
+            .sorted { $0.orderIndex < $1.orderIndex }
+            .first { !isAllRoundsComplete($0) }
+    }
+
+    private var nextIncompleteUngroupedSet: (exercise: WatchExerciseData, set: WatchSetData, setNumber: Int, totalSets: Int)? {
         guard let data = workoutData else { return nil }
 
         for exercise in data.exercises.sorted(by: { $0.orderIndex < $1.orderIndex }) {
@@ -52,6 +87,42 @@ struct WatchMainView: View {
             }
         }
         return nil
+    }
+
+    private enum NextIncompleteItem {
+        case group(WatchExerciseGroupData)
+        case ungrouped(exercise: WatchExerciseData, set: WatchSetData, setNumber: Int, totalSets: Int)
+    }
+
+    private var nextIncompleteItem: NextIncompleteItem? {
+        let group = nextIncompleteGroup
+        let ungrouped = nextIncompleteUngroupedSet
+
+        switch (group, ungrouped) {
+        case (nil, nil):
+            return nil
+        case (let group?, nil):
+            return .group(group)
+        case (nil, let ungrouped?):
+            return .ungrouped(
+                exercise: ungrouped.exercise,
+                set: ungrouped.set,
+                setNumber: ungrouped.setNumber,
+                totalSets: ungrouped.totalSets
+            )
+        case (let group?, let ungrouped?):
+            let groupIndex = group.orderIndex
+            let exerciseIndex = ungrouped.exercise.orderIndex
+            if groupIndex < exerciseIndex {
+                return .group(group)
+            }
+            return .ungrouped(
+                exercise: ungrouped.exercise,
+                set: ungrouped.set,
+                setNumber: ungrouped.setNumber,
+                totalSets: ungrouped.totalSets
+            )
+        }
     }
 
     private var screenState: WatchScreenState {
@@ -69,10 +140,12 @@ struct WatchMainView: View {
             guard let data = workoutData else {
                 return .loading
             }
-            if !data.isRoutineMode {
+            // Allow both routine and non-routine workouts.
+            // Show "no workout" only when there's nothing to record.
+            if data.exercises.isEmpty && data.exerciseGroups.isEmpty {
                 return .noPlan
             }
-            if nextIncompleteSet == nil {
+            if nextIncompleteItem == nil {
                 return .completed
             }
             return .currentSet
@@ -82,78 +155,141 @@ struct WatchMainView: View {
     // MARK: - Body
 
     var body: some View {
-        Group {
-            switch screenState {
-            case .loading:
-                LoadingView(isReachable: connectivityManager.isReachable, themeManager: themeManager)
+        ZStack {
+            themeManager.background
+                .ignoresSafeArea()
 
-            case .noPlan:
-                NoPlanView(themeManager: themeManager)
+            Group {
+                switch screenState {
+                case .loading:
+                    LoadingView(isReachable: connectivityManager.isReachable, themeManager: themeManager)
 
-            case .currentSet:
-                if let next = nextIncompleteSet {
-                    CurrentSetView(
-                        exercise: next.exercise,
-                        set: next.set,
-                        setNumber: next.setNumber,
-                        totalSets: next.totalSets,
-                        themeManager: themeManager,
-                        onComplete: { completeSet(next.set, restTime: next.set.restTimeSeconds) }
-                    )
-                }
+                case .noPlan:
+                    NoPlanView(themeManager: themeManager)
 
-            case .confirmTimer:
-                TimerConfirmationView(
-                    restTime: pendingRestTime,
-                    themeManager: themeManager,
-                    onStartTimer: {
-                        showingTimerConfirmation = false
-                        timerManager.start(duration: pendingRestTime)
-                    },
-                    onSkip: {
-                        showingTimerConfirmation = false
+                case .currentSet:
+                    if let item = nextIncompleteItem {
+                        switch item {
+                        case .group(let group):
+                            let round = activeRound(in: group)
+                            GroupRoundView(
+                                group: group,
+                                activeRound: round,
+                                themeManager: themeManager,
+                                onLogRound: {
+                                    let setIds = setIdsToLogForRound(group: group, round: round)
+                                    guard !setIds.isEmpty else { return }
+                                    for setId in setIds {
+                                        recordSet(setId: setId)
+                                    }
+                                    // Group spec: no rest after the final round.
+                                    if round < group.setCount {
+                                        startRestTimerIfNeeded(restTimeSeconds: group.roundRestSeconds)
+                                    }
+                                }
+                            )
+                        case .ungrouped(let exercise, let set, let setNumber, let totalSets):
+                            CurrentSetView(
+                                exercise: exercise,
+                                set: set,
+                                setNumber: setNumber,
+                                totalSets: totalSets,
+                                themeManager: themeManager,
+                                onComplete: {
+                                    recordSet(setId: set.id)
+                                    startRestTimerIfNeeded(restTimeSeconds: set.restTimeSeconds)
+                                }
+                            )
+                        }
                     }
-                )
 
-            case .timer:
-                TimerView(
-                    timerManager: timerManager,
-                    themeManager: themeManager,
-                    onSkip: { timerManager.skip() }
-                )
+                case .confirmTimer:
+                    TimerConfirmationView(
+                        restTime: pendingRestTime,
+                        themeManager: themeManager,
+                        onStartTimer: {
+                            showingTimerConfirmation = false
+                            timerManager.start(duration: pendingRestTime)
+                        },
+                        onSkip: {
+                            showingTimerConfirmation = false
+                        }
+                    )
 
-            case .alarm:
-                AlarmView(
-                    themeManager: themeManager,
-                    onDismiss: { timerManager.dismissAlarm() }
-                )
+                case .timer:
+                    TimerView(
+                        timerManager: timerManager,
+                        themeManager: themeManager,
+                        onSkip: { timerManager.skip() }
+                    )
 
-            case .completed:
-                CompletionView(themeManager: themeManager)
+                case .alarm:
+                    AlarmView(
+                        themeManager: themeManager,
+                        onDismiss: { timerManager.dismissAlarm() }
+                    )
+
+                case .completed:
+                    CompletionView(themeManager: themeManager)
+                }
             }
         }
-        .background(themeManager.background)
         .onAppear {
             connectivityManager.requestSync()
             themeManager.refreshTheme()
         }
-        .onChange(of: connectivityManager.workoutData?.defaultRestTimeSeconds) { _, _ in
-            // Refresh theme when new data arrives (in case theme changed on iPhone)
+        .onChange(of: connectivityManager.lastSyncDate) { _, _ in
+            // Refresh theme when any payload arrives (theme is stored in App Groups).
+            themeManager.refreshTheme()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .background:
+                timerManager.handleEnterBackground()
+            case .active:
+                themeManager.refreshTheme()
+                timerManager.handleEnterForeground()
+            default:
+                break
+            }
+        }
+        .onChange(of: timerManager.state) { _, _ in
+            // Refresh theme when transitioning between main screens (idle ↔ timer ↔ alarm).
+            // This helps pick up theme changes made on iPhone while Watch app stays active.
             themeManager.refreshTheme()
         }
     }
 
     // MARK: - Actions
 
-    private func completeSet(_ set: WatchSetData, restTime: Int?) {
+    private func setIdsToLogForRound(group: WatchExerciseGroupData, round: Int) -> [UUID] {
+        let index = max(round - 1, 0)
+        let sortedExercises = group.exercises.sorted { ($0.groupOrderIndex ?? 0) < ($1.groupOrderIndex ?? 0) }
+        var ids: [UUID] = []
+        ids.reserveCapacity(sortedExercises.count)
+
+        for exercise in sortedExercises {
+            let sortedSets = exercise.sets.sorted { $0.setIndex < $1.setIndex }
+            guard index < sortedSets.count else { continue }
+            let set = sortedSets[index]
+            if !set.isCompleted {
+                ids.append(set.id)
+            }
+        }
+        return ids
+    }
+
+    private func recordSet(setId: UUID) {
         // Update local state immediately
-        connectivityManager.markSetCompleted(setId: set.id)
+        connectivityManager.markSetCompleted(setId: setId)
 
         // Send completion to iPhone
-        connectivityManager.sendSetCompletion(setId: set.id)
+        connectivityManager.sendSetCompletion(setId: setId)
+    }
 
+    private func startRestTimerIfNeeded(restTimeSeconds: Int?) {
         // Calculate effective rest time
-        let effectiveRestTime = restTime ?? workoutData?.defaultRestTimeSeconds ?? 0
+        let effectiveRestTime = restTimeSeconds ?? workoutData?.defaultRestTimeSeconds ?? 0
 
         // Check if combination mode is enabled
         let combineMode = workoutData?.combineRecordAndTimerStart ?? false
@@ -315,14 +451,16 @@ private struct TimerConfirmationView: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "timer")
-                .font(.system(size: 32))
-                .foregroundColor(themeManager.accentBlue)
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "timer")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(themeManager.accentBlue)
 
-            Text("レストタイマー")
-                .font(.headline)
-                .foregroundColor(themeManager.textPrimary)
+                Text("レストタイマー")
+                    .font(.headline)
+                    .foregroundColor(themeManager.textPrimary)
+            }
 
             Text(formattedTime)
                 .font(.title3)
@@ -334,21 +472,29 @@ private struct TimerConfirmationView: View {
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 8)
                     .background(themeManager.accentBlue)
                     .cornerRadius(10)
             }
             .buttonStyle(.plain)
-
-            // Skip button
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        // Keep skip always visible at the bottom
+        .safeAreaInset(edge: .bottom) {
             Button(action: onSkip) {
                 Text("スキップ")
                     .font(.footnote)
                     .foregroundColor(themeManager.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(themeManager.cardBackground)
+                    .cornerRadius(12)
             }
             .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 6)
         }
-        .padding()
     }
 }
 
@@ -381,16 +527,22 @@ private struct TimerView: View {
             }
             .frame(height: 8)
             .padding(.horizontal)
-
-            // Skip button
+        }
+        .padding()
+        .safeAreaInset(edge: .bottom) {
             Button(action: onSkip) {
                 Text("スキップ")
                     .font(.footnote)
                     .foregroundColor(themeManager.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(themeManager.cardBackground)
+                    .cornerRadius(12)
             }
             .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 6)
         }
-        .padding()
     }
 }
 
@@ -399,6 +551,8 @@ private struct TimerView: View {
 private struct AlarmView: View {
     @ObservedObject var themeManager: WatchThemeManager
     let onDismiss: () -> Void
+
+    @State private var crownValue: Double = 0.0
 
     var body: some View {
         VStack(spacing: 16) {
@@ -422,6 +576,11 @@ private struct AlarmView: View {
             .buttonStyle(.plain)
         }
         .padding()
+        .focusable()
+        .digitalCrownRotation($crownValue)
+        .onChange(of: crownValue) { _, _ in
+            onDismiss()
+        }
     }
 }
 

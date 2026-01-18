@@ -23,6 +23,7 @@ struct ExerciseEntryCardView: View {
     let onDeleteEntry: () -> Void
     let onChangeExercise: () -> Void
     var onUpdateSet: ((WorkoutSet) -> Bool)?
+    var onApplySet: ((WorkoutSet) -> Bool)?
     var onUncompleteSet: ((WorkoutSet) -> Void)?
     var onTimerStart: ((Int) -> Void)?
     var onTimerCancel: (() -> Void)?
@@ -44,6 +45,11 @@ struct ExerciseEntryCardView: View {
 
     private var activeSetIndex: Int? {
         sortedSets.firstIndex { !$0.isCompleted }
+    }
+
+    private var activeSet: WorkoutSet? {
+        guard let index = activeSetIndex, index < sortedSets.count else { return nil }
+        return sortedSets[index]
     }
 
     private var sortedSets: [WorkoutSet] {
@@ -142,6 +148,31 @@ struct ExerciseEntryCardView: View {
     /// Whether the input values differ from the selected completed set's values
     private var isCompletedSetDirty: Bool {
         guard let set = selectedSet, set.isCompleted else { return false }
+
+        switch set.metricType {
+        case .weightReps:
+            let weightDiff = abs(currentWeight - set.weightDouble) >= 0.01
+            let repsDiff = currentReps != (set.reps ?? 0)
+            return weightDiff || repsDiff
+        case .bodyweightReps:
+            return currentReps != (set.reps ?? 0)
+        case .timeDistance:
+            let durationDiff = currentDuration != (set.durationSeconds ?? 0)
+            let distanceDiff: Bool
+            if let setDistance = set.distanceMeters, let currentDist = currentDistance {
+                distanceDiff = abs(currentDist - setDistance) >= 0.01
+            } else {
+                distanceDiff = (set.distanceMeters != nil) != (currentDistance != nil)
+            }
+            return durationDiff || distanceDiff
+        case .completion:
+            return false
+        }
+    }
+
+    /// Whether the input values differ from the active (next incomplete) set's values
+    private var isActiveSetDirty: Bool {
+        guard let set = activeSet, !set.isCompleted else { return false }
 
         switch set.metricType {
         case .weightReps:
@@ -529,34 +560,67 @@ struct ExerciseEntryCardView: View {
                             }
                         }
                     } else {
-                        // Action dock for log + rest timer
-                        if supportsRestTimer, let manager = timerManager, !isGrouped {
-                            RestTimerActionDockView(
-                                isCombinationMode: isCombinationModeEnabled,
-                                restTimeSeconds: currentRestTimeSeconds,
-                                onLog: {
-                                    let success = onLogSet()
-                                    if success {
-                                        ensureSelection()
-                                    }
-                                    return success
-                                },
-                                onTimerStart: {
-                                    onTimerStart?(currentRestTimeSeconds)
-                                },
-                                onTimerCancel: {
-                                    onTimerCancel?()
-                                },
-                                onRestTimeChange: { newTime in
-                                    if let set = currentSetForRestTime {
-                                        onUpdateRestTime?(set, newTime)
-                                    }
-                                },
-                                timerManager: manager
-                            )
+                        if isActiveSetDirty, let set = activeSet {
+                            // Apply input values to the active set without completing it.
+                            if supportsRestTimer, let manager = timerManager, !isGrouped {
+                                RestTimerActionDockView(
+                                    isCombinationMode: isCombinationModeEnabled,
+                                    restTimeSeconds: currentRestTimeSeconds,
+                                    onLog: {
+                                        let success = onApplySet?(set) ?? false
+                                        if success {
+                                            ensureSelection()
+                                        }
+                                        return success
+                                    },
+                                    onTimerStart: {
+                                        onTimerStart?(currentRestTimeSeconds)
+                                    },
+                                    onTimerCancel: {
+                                        onTimerCancel?()
+                                    },
+                                    onRestTimeChange: { newTime in
+                                        if let set = currentSetForRestTime {
+                                            onUpdateRestTime?(set, newTime)
+                                        }
+                                    },
+                                    timerManager: manager,
+                                    logTitleKey: "workout_apply_set",
+                                    logIconName: "square.and.arrow.down"
+                                )
+                            } else {
+                                applyToSetButton(set: set)
+                            }
                         } else {
-                            // Fallback: simple log button for non-timer exercises
-                            simpleLogButton
+                            // Action dock for log + rest timer
+                            if supportsRestTimer, let manager = timerManager, !isGrouped {
+                                RestTimerActionDockView(
+                                    isCombinationMode: isCombinationModeEnabled,
+                                    restTimeSeconds: currentRestTimeSeconds,
+                                    onLog: {
+                                        let success = onLogSet()
+                                        if success {
+                                            ensureSelection()
+                                        }
+                                        return success
+                                    },
+                                    onTimerStart: {
+                                        onTimerStart?(currentRestTimeSeconds)
+                                    },
+                                    onTimerCancel: {
+                                        onTimerCancel?()
+                                    },
+                                    onRestTimeChange: { newTime in
+                                        if let set = currentSetForRestTime {
+                                            onUpdateRestTime?(set, newTime)
+                                        }
+                                    },
+                                    timerManager: manager
+                                )
+                            } else {
+                                // Fallback: simple log button for non-timer exercises
+                                simpleLogButton
+                            }
                         }
                     }
                 }
@@ -578,6 +642,29 @@ struct ExerciseEntryCardView: View {
                 Image(systemName: "checkmark")
                     .font(.subheadline.weight(.semibold))
                 Text("workout_log_set")
+            }
+            .font(.headline)
+            .fontWeight(.semibold)
+            .foregroundColor(AppColors.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(AppColors.accentBlue)
+            .cornerRadius(10)
+        }
+    }
+
+    /// Apply current inputs to the active set (without completing it)
+    private func applyToSetButton(set: WorkoutSet) -> some View {
+        Button(action: {
+            let success = onApplySet?(set) ?? false
+            if success {
+                ensureSelection()
+            }
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: "square.and.arrow.down")
+                    .font(.subheadline.weight(.semibold))
+                Text("workout_apply_set")
             }
             .font(.headline)
             .fontWeight(.semibold)

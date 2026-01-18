@@ -2,7 +2,7 @@
 //  PlanGuideOverlayView.swift
 //  Routyra
 //
-//  4-step guide overlay explaining the workout plan concept.
+//  3-step guide overlay explaining the workout plan concept.
 //  Displayed as a centered card with semi-transparent background.
 //
 
@@ -13,7 +13,7 @@ struct PlanGuideOverlayView: View {
     @Binding var hasSeenGuide: Bool
     @State private var currentStep = 0
 
-    private let totalSteps = 4
+    private let totalSteps = 3
 
     var body: some View {
         ZStack {
@@ -44,8 +44,7 @@ struct PlanGuideOverlayView: View {
                     switch currentStep {
                     case 0: step1View
                     case 1: step2View
-                    case 2: step3View
-                    default: step4View
+                    default: step3View
                     }
                 }
                 .frame(minHeight: 200)
@@ -105,11 +104,18 @@ struct PlanGuideOverlayView: View {
                 }
             }
             .padding(20)
+            .contentShape(Rectangle())
             .background(AppColors.cardBackground)
             .cornerRadius(16)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(AppColors.textMuted.opacity(0.3), lineWidth: 1)
+            )
+            .gesture(
+                DragGesture(minimumDistance: 20)
+                    .onEnded { value in
+                        handleSwipe(translation: value.translation.width)
+                    }
             )
             .frame(maxWidth: min(360, UIScreen.main.bounds.width * 0.9))
         }
@@ -119,6 +125,19 @@ struct PlanGuideOverlayView: View {
         hasSeenGuide = true
         withAnimation(.easeOut(duration: 0.2)) {
             isPresented = false
+        }
+    }
+
+    private func handleSwipe(translation: CGFloat) {
+        let threshold: CGFloat = 40
+        if translation < -threshold, currentStep < totalSteps - 1 {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                currentStep += 1
+            }
+        } else if translation > threshold, currentStep > 0 {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                currentStep -= 1
+            }
         }
     }
 
@@ -173,7 +192,7 @@ struct PlanGuideOverlayView: View {
         }
     }
 
-    // MARK: - Step 2: Plan → Multiple Days
+    // MARK: - Step 2: Plan → Exercises Per Day
 
     private var step2View: some View {
         VStack(spacing: 16) {
@@ -190,56 +209,25 @@ struct PlanGuideOverlayView: View {
                 .foregroundColor(AppColors.textSecondary)
                 .multilineTextAlignment(.center)
 
-            // Diagram: Plan with multiple days
+            // Diagram: Day list with exercises
             VStack(spacing: 10) {
-                nodeCard(text: L10n.tr("plan_guide_node_plan"), icon: "doc.text")
-                arrowDown
-                HStack(spacing: 8) {
-                    dayChip(text: "Day 1")
-                    dayChip(text: "Day 2")
-                    Text("...")
-                        .font(.caption)
-                        .foregroundColor(AppColors.textMuted)
-                }
+                dayExerciseRow(dayText: "Day 1", exerciseText: L10n.tr("plan_guide_exercise_bench"))
+                dayExerciseRow(dayText: "Day 2", exerciseText: L10n.tr("plan_guide_exercise_squat"))
+                dayExerciseRow(dayText: "Day 3", exerciseText: "...")
             }
+            .padding(14)
+            .background(AppColors.cardBackground)
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(AppColors.textMuted.opacity(0.2), lineWidth: 1)
+            )
         }
     }
 
-    // MARK: - Step 3: Day → Multiple Exercises
+    // MARK: - Step 3: Usage Types
 
     private var step3View: some View {
-        VStack(spacing: 16) {
-            // Title
-            Text(L10n.tr("plan_guide_step3_title"))
-                .font(.title3)
-                .fontWeight(.bold)
-                .foregroundColor(AppColors.textPrimary)
-                .multilineTextAlignment(.center)
-
-            // Subtitle
-            Text(L10n.tr("plan_guide_step3_body"))
-                .font(.subheadline)
-                .foregroundColor(AppColors.textSecondary)
-                .multilineTextAlignment(.center)
-
-            // Diagram: Day with exercises
-            VStack(spacing: 10) {
-                nodeCard(text: "Day 1", icon: "calendar")
-                arrowDown
-                HStack(spacing: 8) {
-                    exerciseChip(text: L10n.tr("plan_guide_exercise_bench"))
-                    exerciseChip(text: L10n.tr("plan_guide_exercise_squat"))
-                    Text("...")
-                        .font(.caption)
-                        .foregroundColor(AppColors.textMuted)
-                }
-            }
-        }
-    }
-
-    // MARK: - Step 4: Usage Types
-
-    private var step4View: some View {
         VStack(spacing: 16) {
             // Title
             Text(L10n.tr("plan_guide_step4_title"))
@@ -258,58 +246,27 @@ struct PlanGuideOverlayView: View {
 
     // MARK: - Shared Components
 
-    private func nodeCard(text: String, icon: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 16))
-            Text(text)
-                .font(.subheadline)
+    private func dayExerciseRow(dayText: String, exerciseText: String) -> some View {
+        HStack(spacing: 10) {
+            Text(dayText)
+                .font(.caption)
                 .fontWeight(.medium)
+                .foregroundColor(AppColors.textPrimary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(AppColors.cardBackground)
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(AppColors.textMuted.opacity(0.3), lineWidth: 1)
+                )
+
+            Text(exerciseText)
+                .font(.subheadline)
+                .foregroundColor(AppColors.textSecondary)
+
+            Spacer()
         }
-        .foregroundColor(AppColors.textPrimary)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(AppColors.cardBackground)
-        .cornerRadius(10)
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(AppColors.textMuted.opacity(0.3), lineWidth: 1)
-        )
-    }
-
-    private func dayChip(text: String) -> some View {
-        Text(text)
-            .font(.caption)
-            .fontWeight(.medium)
-            .foregroundColor(AppColors.textPrimary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(AppColors.cardBackground)
-            .cornerRadius(8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(AppColors.textMuted.opacity(0.3), lineWidth: 1)
-            )
-    }
-
-    private func exerciseChip(text: String) -> some View {
-        Text(text)
-            .font(.caption)
-            .foregroundColor(AppColors.textSecondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(AppColors.cardBackground)
-            .cornerRadius(8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(AppColors.textMuted.opacity(0.2), lineWidth: 1)
-            )
-    }
-
-    private var arrowDown: some View {
-        Image(systemName: "arrow.down")
-            .font(.system(size: 14))
-            .foregroundColor(AppColors.textMuted)
     }
 
     private func usageCard(icon: String, title: String) -> some View {

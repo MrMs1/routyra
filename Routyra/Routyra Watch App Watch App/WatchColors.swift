@@ -81,6 +81,31 @@ protocol WatchColorTheme {
     var alertRed: Color { get }
 }
 
+// MARK: - Accent-derived Watch Theme (fallback)
+
+/// Fallback theme that keeps Watch-optimized dark surfaces, but derives accent colors
+/// from the iPhone-selected theme so users can still recognize their theme choice.
+struct AccentDerivedWatchTheme: WatchColorTheme {
+    let background: Color
+    let cardBackground: Color
+    let accentBlue: Color
+    let textPrimary: Color
+    let textSecondary: Color
+    let successGreen: Color
+    let alertRed: Color
+
+    init(accentBlue: Color) {
+        let base = DarkWatchTheme()
+        self.background = base.background
+        self.cardBackground = base.cardBackground
+        self.textPrimary = base.textPrimary
+        self.textSecondary = base.textSecondary
+        self.accentBlue = accentBlue
+        self.successGreen = base.successGreen
+        self.alertRed = base.alertRed
+    }
+}
+
 // MARK: - Theme Type Extension for Watch
 
 extension ThemeType {
@@ -100,8 +125,10 @@ extension ThemeType {
             return GruvboxDarkWatchTheme()
         case .light, .gruvboxLight, .serenity, .blossom, .lavenderDusk,
              .roseTea, .matchaCream, .apricotSand, .powderBlue:
-            // Light themes default to dark on Watch for better readability
-            return DarkWatchTheme()
+            // Keep dark surfaces for readability on Watch, but reflect the selected theme's accent.
+            // (If the iPhone theme is light, using it verbatim on Watch can reduce legibility.)
+            let t = self.theme
+            return AccentDerivedWatchTheme(accentBlue: t.accentBlue)
         }
     }
 }
@@ -133,13 +160,16 @@ struct MidnightWatchTheme: WatchColorTheme {
 // MARK: - Kuromi Theme
 
 struct KuromiWatchTheme: WatchColorTheme {
-    let background = Color(hex: "1C1822")
-    let cardBackground = Color(hex: "261E2B")
-    let accentBlue = Color(hex: "FEC3EB")
-    let textPrimary = Color(hex: "F4F0F8")
-    let textSecondary = Color(hex: "C7BDD8")
-    let successGreen = Color(hex: "646590")
-    let alertRed = Color(hex: "FEC3EB")
+    // Align with iPhone KuromiTheme (vivid purple accent) while keeping Watch readability.
+    let background = Color(hex: "17161A")
+    let cardBackground = Color(hex: "201E25")
+    let accentBlue = Color(hex: "AA5EF8")
+    let textPrimary = Color(hex: "F3EEFD")
+    let textSecondary = Color(hex: "C0B7D2")
+    // Use accent for "success" to keep the palette cohesive on Watch.
+    let successGreen = Color(hex: "AA5EF8")
+    // Keep a true alert color for timer/alarm.
+    let alertRed = Color(hex: "ED4245")
 }
 
 // MARK: - Lime Theme

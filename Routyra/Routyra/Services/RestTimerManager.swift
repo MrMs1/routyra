@@ -65,6 +65,7 @@ final class RestTimerManager: ObservableObject {
 
     private var timer: Timer?
     private var notificationId: String?
+    private var notificationDetail: String?
 
     // MARK: - Initialization
 
@@ -75,7 +76,7 @@ final class RestTimerManager: ObservableObject {
     /// Starts a new timer with the specified duration.
     /// - Parameter duration: Duration in seconds.
     /// - Returns: true if started, false if timer already running.
-    func start(duration: Int) -> Bool {
+    func start(duration: Int, notificationDetail: String? = nil) -> Bool {
         guard !isRunning else { return false }
 
         let now = Date()
@@ -83,6 +84,7 @@ final class RestTimerManager: ObservableObject {
         endDate = now.addingTimeInterval(TimeInterval(duration))
         totalDuration = duration
         isRunning = true
+        self.notificationDetail = notificationDetail
 
         requestNotificationPermissionIfNeeded()
         scheduleNotification(in: duration)
@@ -106,6 +108,7 @@ final class RestTimerManager: ObservableObject {
         startDate = nil
         endDate = nil
         totalDuration = 0
+        notificationDetail = nil
         cancelNotification()
     }
 
@@ -125,6 +128,7 @@ final class RestTimerManager: ObservableObject {
             startDate = nil
             endDate = nil
             totalDuration = 0
+            notificationDetail = nil
         }
     }
 
@@ -160,7 +164,12 @@ final class RestTimerManager: ObservableObject {
     private func scheduleNotification(in seconds: Int) {
         let content = UNMutableNotificationContent()
         content.title = L10n.tr("rest_timer_complete_title")
-        content.body = L10n.tr("rest_timer_complete_body")
+        if let detail = notificationDetail, !detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            content.body = detail
+        } else {
+            // Keep empty body to avoid redundant messaging.
+            content.body = ""
+        }
         content.sound = .default
 
         let trigger = UNTimeIntervalNotificationTrigger(

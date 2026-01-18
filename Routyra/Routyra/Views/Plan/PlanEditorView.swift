@@ -99,10 +99,12 @@ struct PlanEditorView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .contextMenu {
-                        Button {
-                            editingDay = day
-                        } label: {
-                            Label("rename_day", systemImage: "pencil")
+                        if !day.isRestDay {
+                            Button {
+                                editingDay = day
+                            } label: {
+                                Label("rename_day", systemImage: "pencil")
+                            }
                         }
 
                         Button {
@@ -125,12 +127,14 @@ struct PlanEditorView: View {
                         }
                     }
                     .swipeActions(edge: .leading) {
-                        Button {
-                            editingDay = day
-                        } label: {
-                            Label("rename_day", systemImage: "pencil")
+                        if !day.isRestDay {
+                            Button {
+                                editingDay = day
+                            } label: {
+                                Label("rename_day", systemImage: "pencil")
+                            }
+                            .tint(AppColors.accentBlue)
                         }
-                        .tint(AppColors.accentBlue)
                     }
                 }
                 .onMove(perform: moveDays)
@@ -152,6 +156,21 @@ struct PlanEditorView: View {
                                         }
                                 }
                             )
+                    }
+                    .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
+                    // Add rest day button
+                    Button {
+                        createRestDay()
+                    } label: {
+                        ActionCardButton(
+                            title: L10n.tr("add_rest_day"),
+                            icon: "bed.double",
+                            showChevron: false
+                        )
                     }
                     .buttonStyle(.plain)
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -276,6 +295,7 @@ struct PlanEditorView: View {
                 planExercise: planExercise,
                 exercisesMap: exercisesMap,
                 bodyPartsMap: bodyPartsMap,
+                candidateMode: .planEditor,
                 onSave: {
                     syncDays()
                     saveChanges()
@@ -378,6 +398,14 @@ struct PlanEditorView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             navigateToDayId = day.id
         }
+    }
+
+    private func createRestDay() {
+        let day = plan.createDay(name: L10n.tr("rest_day"), isRestDay: true)
+        modelContext.insert(day)
+        syncDays()
+        saveChanges()
+        syncFutureWorkoutsForPlanChanges()
     }
 
     private func deleteDay(_ day: PlanDay) {
@@ -553,187 +581,6 @@ struct PlanEditorView: View {
             }
             return plan.day(at: info.dayIndex)
         }
-    }
-}
-
-// MARK: - Plan Exercise Set Editor Sheet
-
-/// Sheet for editing sets of an existing exercise in a plan
-private struct PlanExerciseSetEditorSheet: View {
-    let planExercise: PlanExercise
-    let exercisesMap: [UUID: Exercise]
-    let bodyPartsMap: [UUID: BodyPart]
-    let onSave: () -> Void
-
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
-    @State private var profile: LocalProfile?
-
-    private var exercise: Exercise? {
-        exercisesMap[planExercise.exerciseId]
-    }
-
-    private var bodyPart: BodyPart? {
-        guard let bodyPartId = exercise?.bodyPartId else { return nil }
-        return bodyPartsMap[bodyPartId]
-    }
-
-    private var existingSets: [SetInputData] {
-        planExercise.sortedPlannedSets.map { plannedSet in
-            SetInputData(
-                metricType: plannedSet.metricType,
-                weight: plannedSet.targetWeight,
-                reps: plannedSet.targetReps,
-                durationSeconds: plannedSet.targetDurationSeconds,
-                distanceMeters: plannedSet.targetDistanceMeters
-            )
-        }
-    }
-
-    var body: some View {
-        NavigationStack {
-            if let exercise = exercise {
-                SetEditorView(
-                    exercise: exercise,
-                    bodyPart: bodyPart,
-                    metricType: planExercise.metricType,
-                    existingSets: existingSets.isEmpty
-                        ? [SetInputData(metricType: planExercise.metricType, weight: 60, reps: 10)]
-                        : existingSets,
-                    config: .planEdit,
-                    candidateCollection: buildCandidateCollection(),
-                    onConfirm: { newSets in
-                        updateSets(newSets)
-                        onSave()
-                        dismiss()
-                    }
-                )
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("cancel") {
-                            dismiss()
-                        }
-                    }
-                }
-            } else {
-                Text("exercise_not_found")
-                    .foregroundColor(AppColors.textMuted)
-            }
-        }
-        .onAppear {
-            if profile == nil {
-                profile = ProfileService.getOrCreateProfile(modelContext: modelContext)
-            }
-        }
-    }
-
-    private func buildCandidateCollection() -> CopyCandidateCollection {
-        let exerciseId = planExercise.exerciseId
-        guard let currentDay = planExercise.planDay,
-              let currentPlan = currentDay.plan else {
-            return .empty
-        }
-
-        var planCandidates: [PlanCopyCandidate] = []
-        var workoutCandidates: [WorkoutCopyCandidate] = []
-
-        // 1. Collect all plan candidates from current plan
-        for day in currentPlan.sortedDays {
-            let matchingExercises = day.sortedExercises
-                .filter { $0.exerciseId == exerciseId && $0.id != planExercise.id }
-
-            for planEx in matchingExercises {
-                let sets = planEx.sortedPlannedSets.map {
-                    CopyableSetData(weight: $0.targetWeight ?? 60.0, reps: $0.targetReps ?? 10, restTimeSeconds: $0.restTimeSeconds)
-                }
-                if !sets.isEmpty {
-                    planCandidates.append(PlanCopyCandidate(
-                        planId: currentPlan.id,
-                        planName: currentPlan.name,
-                        dayId: day.id,
-                        dayName: day.fullTitle,
-                        sets: sets,
-                        updatedAt: currentPlan.updatedAt,
-                        isCurrentPlan: true
-                    ))
-                }
-            }
-        }
-
-        // 2. Collect plan candidates from other plans
-        let descriptor = FetchDescriptor<WorkoutPlan>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
-        if let allPlans = try? modelContext.fetch(descriptor) {
-            for plan in allPlans where plan.id != currentPlan.id {
-                for day in plan.sortedDays {
-                    let matchingExercises = day.sortedExercises.filter { $0.exerciseId == exerciseId }
-                    for planEx in matchingExercises {
-                        let sets = planEx.sortedPlannedSets.map {
-                            CopyableSetData(weight: $0.targetWeight ?? 60.0, reps: $0.targetReps ?? 10, restTimeSeconds: $0.restTimeSeconds)
-                        }
-                        if !sets.isEmpty {
-                            planCandidates.append(PlanCopyCandidate(
-                                planId: plan.id,
-                                planName: plan.name,
-                                dayId: day.id,
-                                dayName: day.fullTitle,
-                                sets: sets,
-                                updatedAt: plan.updatedAt,
-                                isCurrentPlan: false
-                            ))
-                        }
-                    }
-                }
-            }
-        }
-
-        // Sort: current plan first, then by updatedAt desc
-        planCandidates.sort { lhs, rhs in
-            if lhs.isCurrentPlan != rhs.isCurrentPlan {
-                return lhs.isCurrentPlan
-            }
-            return lhs.updatedAt > rhs.updatedAt
-        }
-
-        // Limit to 20 candidates
-        planCandidates = Array(planCandidates.prefix(20))
-
-        // 3. Collect workout history candidates
-        if let profile = profile {
-            workoutCandidates = WorkoutService.getWorkoutHistorySets(
-                profileId: profile.id,
-                exerciseId: exerciseId,
-                limit: 20,
-                modelContext: modelContext
-            )
-        }
-
-        return CopyCandidateCollection(
-            planCandidates: planCandidates,
-            workoutCandidates: workoutCandidates
-        )
-    }
-
-    private func updateSets(_ newSets: [SetInputData]) {
-        // Remove existing sets
-        let existingSets = planExercise.sortedPlannedSets
-        for set in existingSets {
-            planExercise.removePlannedSet(set)
-        }
-
-        // Add new sets with individual metricType and rest time
-        for setData in newSets {
-            let weight: Double? = setData.metricType == .bodyweightReps ? nil : setData.weight
-            planExercise.createPlannedSet(
-                metricType: setData.metricType,
-                weight: weight,
-                reps: setData.reps,
-                durationSeconds: setData.durationSeconds,
-                distanceMeters: setData.distanceMeters,
-                restTimeSeconds: setData.restTimeSeconds
-            )
-        }
-
-        planExercise.plannedSetCount = newSets.count
     }
 }
 

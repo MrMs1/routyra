@@ -82,38 +82,34 @@ enum WorkoutService {
         }
     }
 
-    /// Gets today's workout day for the profile.
-    /// - Parameters:
-    ///   - profileId: The owner profile ID.
-    ///   - modelContext: The SwiftData model context.
-    /// - Returns: Today's workout day if it exists, nil otherwise.
-    @MainActor
-    static func getTodayWorkout(profileId: UUID, modelContext: ModelContext) -> WorkoutDay? {
-        getWorkoutDay(profileId: profileId, date: Date(), modelContext: modelContext)
-    }
-
-    /// Checks if today's workout is linked to the specified plan day.
+    /// Checks if the workout for the specified date is linked to the specified plan day.
     /// - Parameters:
     ///   - profileId: The owner profile ID.
     ///   - planDayId: The plan day ID to check.
+    ///   - workoutDate: The date to check (should be calculated with transitionHour consideration).
     ///   - modelContext: The SwiftData model context.
     /// - Returns: The linked workout day if found, nil otherwise.
     @MainActor
-    static func getTodayWorkoutLinkedToPlanDay(
+    static func getWorkoutLinkedToPlanDay(
         profileId: UUID,
         planDayId: UUID,
+        workoutDate: Date,
         modelContext: ModelContext
     ) -> WorkoutDay? {
-        guard let todayWorkout = getTodayWorkout(profileId: profileId, modelContext: modelContext) else {
+        guard let workout = getWorkoutDay(
+            profileId: profileId,
+            date: workoutDate,
+            modelContext: modelContext
+        ) else {
             return nil
         }
 
-        guard todayWorkout.mode == .routine,
-              todayWorkout.routineDayId == planDayId else {
+        guard workout.mode == .routine,
+              workout.routineDayId == planDayId else {
             return nil
         }
 
-        return todayWorkout
+        return workout
     }
 
     // MARK: - Exercise Entry Management

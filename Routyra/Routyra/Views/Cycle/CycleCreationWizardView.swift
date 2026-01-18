@@ -3,7 +3,7 @@
 //  Routyra
 //
 //  Wizard for creating a new cycle.
-//  Creates a cycle with default name immediately and shows plan picker.
+//  Creates a cycle with the provided name immediately and shows plan picker.
 //  Flow: Create cycle → Add plans → Complete
 //
 
@@ -15,6 +15,7 @@ struct CycleCreationWizardView: View {
     @Environment(\.dismiss) private var dismiss
 
     let profile: LocalProfile
+    let cycleName: String
     let onComplete: (PlanCycle) -> Void
 
     @Query(sort: \WorkoutPlan.createdAt, order: .reverse) private var allPlans: [WorkoutPlan]
@@ -127,7 +128,7 @@ struct CycleCreationWizardView: View {
 
     private func createDraftCycle() {
         guard draftCycle == nil else { return }
-        let cycle = PlanCycle(profileId: profile.id, name: L10n.tr("cycle_new_title"))
+        let cycle = PlanCycle(profileId: profile.id, name: cycleName)
         modelContext.insert(cycle)
         draftCycle = cycle
     }
@@ -299,6 +300,7 @@ private struct EmptyPlansView: View {
 
     return CycleCreationWizardView(
         profile: profile,
+        cycleName: L10n.tr("cycle_new_title"),
         onComplete: { _ in }
     )
     .modelContainer(container)

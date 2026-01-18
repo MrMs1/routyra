@@ -346,6 +346,8 @@ enum ExerciseCreationService {
             ("elliptical", "Elliptical", "cardio", "エリプティカル", "Elliptical"),
             ("jump_rope", "Jump Rope", "cardio", "縄跳び", "Jump Rope"),
             ("stair_climber", "Stair Climber", "cardio", "ステアクライマー", "Stair Climber"),
+            ("stepper", "Stepper", "cardio", "ステッパー", "Stepper"),
+            ("hiit", "HIIT", "cardio", "HIIT", "HIIT"),
         ]
 
         for data in exercisesData {
@@ -377,7 +379,10 @@ enum ExerciseCreationService {
     /// - 3: Fixed cardio exercises defaultMetricType to .timeDistance
     /// - 4: Shortened body part names (腹筋→腹, お尻→尻)
     /// - 5: Fixed PlanExercise/PlannedSet metricType for cardio exercises
-    private static let currentSeedVersion = 5
+    /// - 6: Added HIIT cardio exercise
+    /// - 7: Added Stepper + Indoor/Outdoor Running cardio exercises
+    /// - 8: Align manual cardio with HealthKit (remove Indoor/Outdoor Running split)
+    private static let currentSeedVersion = 8
 
     /// UserDefaults key for tracking seed version
     private static let seedVersionKey = "SystemDataSeedVersion"
@@ -403,6 +408,9 @@ enum ExerciseCreationService {
         }
         if lastSeedVersion < 5 {
             migratePlanExercisesMetricType(modelContext: modelContext)
+        }
+        if lastSeedVersion < 8 {
+            migrateRemoveIndoorOutdoorRunningExercisesIfUnused(modelContext: modelContext)
         }
 
         // Update seed version
@@ -502,6 +510,47 @@ enum ExerciseCreationService {
                     plannedSet.metricType = .timeDistance
                 }
             }
+        }
+    }
+
+    /// Removes previously-added "indoor_running"/"outdoor_running" system exercises when they are unused.
+    /// This keeps the app aligned with HealthKit where running is represented as a single activity type.
+    @MainActor
+    private static func migrateRemoveIndoorOutdoorRunningExercisesIfUnused(modelContext: ModelContext) {
+        let exercisesDescriptor = FetchDescriptor<Exercise>()
+        guard let exercises = try? modelContext.fetch(exercisesDescriptor) else { return }
+
+        let targets = exercises.filter { ex in
+            ex.isSystem && (ex.code == "indoor_running" || ex.code == "outdoor_running")
+        }
+        guard !targets.isEmpty else { return }
+
+        // Collect all referenced exercise IDs from plans/workouts.
+        var usedExerciseIds = Set<UUID>()
+
+        let planDescriptor = FetchDescriptor<PlanExercise>()
+        if let planExercises = try? modelContext.fetch(planDescriptor) {
+            for planEx in planExercises {
+                usedExerciseIds.insert(planEx.exerciseId)
+            }
+        }
+
+        let entryDescriptor = FetchDescriptor<WorkoutExerciseEntry>()
+        if let entries = try? modelContext.fetch(entryDescriptor) {
+            for entry in entries {
+                usedExerciseIds.insert(entry.exerciseId)
+            }
+        }
+
+        var didChange = false
+        for ex in targets {
+            guard !usedExerciseIds.contains(ex.id) else { continue }
+            modelContext.delete(ex)
+            didChange = true
+        }
+
+        if didChange {
+            try? modelContext.save()
         }
     }
 }

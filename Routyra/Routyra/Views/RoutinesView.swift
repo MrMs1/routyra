@@ -36,6 +36,9 @@ struct RoutinesView: View {
     @State private var cycleToDelete: PlanCycle?
     @State private var showNewPlanAlert: Bool = false
     @State private var newPlanName: String = ""
+    @State private var showNewCycleAlert: Bool = false
+    @State private var newCycleName: String = ""
+    @State private var cycleDraftName: String = ""
     @State private var showCycleWizard: Bool = false
     @State private var showActivePlanPicker: Bool = false
     @State private var showCyclePicker: Bool = false
@@ -109,7 +112,7 @@ struct RoutinesView: View {
 
     private var navigationStackContent: some View {
         let base = AnyView(
-            scrollContent
+            listContent
                 .background(AppColors.background)
                 .navigationBarTitleDisplayMode(.inline)
         )
@@ -208,13 +211,23 @@ struct RoutinesView: View {
                         createPlanFromAlert()
                     }
                 }
+                .alert("cycle_create", isPresented: $showNewCycleAlert) {
+                    TextField(L10n.tr("cycle_new_title"), text: $newCycleName)
+                    Button("cancel", role: .cancel) {}
+                    Button("create") {
+                        createCycleFromAlert()
+                    }
+                }
         )
 
         let sheets = AnyView(
             alerts
                 .fullScreenCover(isPresented: $showCycleWizard) {
                     if let profile = profile {
-                        CycleCreationWizardView(profile: profile) { cycle in
+                        CycleCreationWizardView(
+                            profile: profile,
+                            cycleName: cycleDraftName
+                        ) { cycle in
                             loadCycles()
                             loadActiveCycle()
                             // Navigate to CycleEditorView after wizard completes
@@ -299,44 +312,60 @@ struct RoutinesView: View {
         return sheets
     }
 
-    private var scrollContent: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // Header with guide button
+    private var listContent: some View {
+        List {
+            headerRow
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 0, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
+            executionModeSection
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
+            currentOperationSection
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 2, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
+            Text(L10n.tr("library"))
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(AppColors.textSecondary)
+                .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 0, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
+            librarySection
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+    }
+
+    private var headerRow: some View {
+        HStack {
+            Spacer()
+
+            HStack(spacing: 6) {
                 Text("workout_plans")
                     .font(.headline)
                     .fontWeight(.semibold)
                     .foregroundColor(AppColors.textPrimary)
-                    .background(alignment: .trailing) {
-                        Button {
-                            showPlanGuide = true
-                        } label: {
-                            Image(systemName: "questionmark.circle")
-                                .font(.system(size: 14))
-                                .foregroundColor(AppColors.textSecondary)
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .alignmentGuide(.trailing) { d in d[.leading] - 2 }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal)
-                    .padding(.top, 8)
 
-                // Content
-                LazyVStack(spacing: 12) {
-                    // Execution mode section
-                    executionModeSection
-
-                    // Current operation section (unified)
-                    currentOperationSection
-
-                    // Library section (unified)
-                    librarySection
+                Button {
+                    showPlanGuide = true
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(AppColors.textSecondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
                 }
-                .padding(.horizontal)
+                .buttonStyle(.plain)
             }
-            .padding(.bottom, 20)
+
+            Spacer()
         }
     }
 
@@ -497,95 +526,109 @@ struct RoutinesView: View {
 
     // MARK: - Library Section (Unified)
 
+    @ViewBuilder
     private var librarySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Section header
-            Text(L10n.tr("library"))
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(AppColors.textSecondary)
-
-            // CTA card (mode-specific action, same style)
-            if profile?.executionMode == .cycle {
-                Button {
-                    showCycleWizard = true
-                } label: {
-                    ActionCardButton(
-                        title: L10n.tr("cycle_create"),
-                        subtitle: L10n.tr("cycle_empty_description"),
-                        icon: "plus",
-                        showChevron: true
-                    )
-                }
-                .buttonStyle(.plain)
-            } else {
-                Button {
-                    newPlanName = ""
-                    showNewPlanAlert = true
-                } label: {
-                    ActionCardButton(
-                        title: L10n.tr("add_plan"),
-                        subtitle: L10n.tr("add_plan_subtitle"),
-                        icon: "plus",
-                        showChevron: true
-                    )
-                }
-                .buttonStyle(.plain)
-                .overlay(
-                    GeometryReader { proxy in
-                        Color.clear
-                            .onAppear {
-                                planAddButtonFrame = proxy.frame(in: .global)
-                            }
-                            .onChange(of: proxy.frame(in: .global)) { _, newFrame in
-                                planAddButtonFrame = newFrame
-                            }
-                    }
+        // CTA card (mode-specific action, same style)
+        if profile?.executionMode == .cycle {
+            Button {
+                newCycleName = ""
+                showNewCycleAlert = true
+            } label: {
+                ActionCardButton(
+                    title: L10n.tr("cycle_create"),
+                    subtitle: L10n.tr("cycle_empty_description"),
+                    icon: "plus",
+                    showChevron: true
                 )
             }
-
-            // List (mode-specific content)
-            if profile?.executionMode == .cycle {
-                cycleListContent
-            } else {
-                planListContent
+            .buttonStyle(.plain)
+            .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 6, trailing: 16))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+        } else {
+            Button {
+                newPlanName = ""
+                showNewPlanAlert = true
+            } label: {
+                ActionCardButton(
+                    title: L10n.tr("add_plan"),
+                    subtitle: L10n.tr("add_plan_subtitle"),
+                    icon: "plus",
+                    showChevron: true
+                )
             }
+            .buttonStyle(.plain)
+            .overlay(
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear {
+                            planAddButtonFrame = proxy.frame(in: .global)
+                        }
+                        .onChange(of: proxy.frame(in: .global)) { _, newFrame in
+                            planAddButtonFrame = newFrame
+                        }
+                }
+            )
+            .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 6, trailing: 16))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+        }
+
+        // List (mode-specific content)
+        if profile?.executionMode == .cycle {
+            cycleListContent
+        } else {
+            planListContent
         }
     }
 
+    @ViewBuilder
     private var planListContent: some View {
-        Group {
-            if plans.isEmpty {
-                emptyPlansMessage
+        if plans.isEmpty {
+            emptyPlansMessage
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
 
-                // Show ad below empty message
-                if shouldShowPlanAd {
-                    NativeAdCardView(nativeAd: adManager.nativeAds[0])
-                }
-            } else {
-                ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
-                    PlanCardView(
-                        plan: plan,
-                        isActive: isActivePlan(plan),
-                        onTap: {
-                            navigationPath.append(plan)
-                        },
-                        onDelete: {
-                            requestDeletePlan(plan)
-                        }
-                    )
-
-                    // Show ad after every 4 plans (only if more than 3 plans)
-                    if let adIndex = shouldShowPlanAdAfterIndex(index),
-                       adIndex < adManager.nativeAds.count {
-                        NativeAdCardView(nativeAd: adManager.nativeAds[adIndex])
+            // Show ad below empty message
+            if shouldShowPlanAd {
+                NativeAdCardView(nativeAd: adManager.nativeAds[0])
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+        } else {
+            ForEach(Array(plans.enumerated()), id: \.element.id) { index, plan in
+                PlanCardView(
+                    plan: plan,
+                    isActive: isActivePlan(plan),
+                    onTap: {
+                        navigationPath.append(plan)
+                    },
+                    onDelete: {
+                        requestDeletePlan(plan)
                     }
-                }
+                )
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
 
-                // Show ad at bottom for 3 or fewer plans
-                if plans.count <= 3, shouldShowPlanAd {
-                    NativeAdCardView(nativeAd: adManager.nativeAds[0])
+                // Show ad after every 4 plans (only if more than 3 plans)
+                if let adIndex = shouldShowPlanAdAfterIndex(index),
+                   adIndex < adManager.nativeAds.count {
+                    NativeAdCardView(nativeAd: adManager.nativeAds[adIndex])
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
+            }
+
+            // Show ad at bottom for 3 or fewer plans
+            if plans.count <= 3, shouldShowPlanAd {
+                NativeAdCardView(nativeAd: adManager.nativeAds[0])
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
         }
     }
@@ -604,39 +647,53 @@ struct RoutinesView: View {
         return adIndex
     }
 
+    @ViewBuilder
     private var cycleListContent: some View {
-        Group {
-            if cycles.isEmpty {
-                emptyCyclesMessage
+        if cycles.isEmpty {
+            emptyCyclesMessage
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
 
-                // Show ad below empty message
-                if shouldShowCycleAd {
-                    NativeAdCardView(nativeAd: adManager.nativeAds[0])
-                }
-            } else {
-                ForEach(Array(cycles.enumerated()), id: \.element.id) { index, cycle in
-                    CycleCardView(
-                        cycle: cycle,
-                        isActive: isActiveCycle(cycle),
-                        onTap: {
-                            navigationPath.append(cycle)
-                        },
-                        onDelete: {
-                            requestDeleteCycle(cycle)
-                        }
-                    )
-
-                    // Show ad after every 4 cycles (only if more than 3 cycles)
-                    if let adIndex = shouldShowCycleAdAfterIndex(index),
-                       adIndex < adManager.nativeAds.count {
-                        NativeAdCardView(nativeAd: adManager.nativeAds[adIndex])
+            // Show ad below empty message
+            if shouldShowCycleAd {
+                NativeAdCardView(nativeAd: adManager.nativeAds[0])
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+        } else {
+            ForEach(Array(cycles.enumerated()), id: \.element.id) { index, cycle in
+                CycleCardView(
+                    cycle: cycle,
+                    isActive: isActiveCycle(cycle),
+                    onTap: {
+                        navigationPath.append(cycle)
+                    },
+                    onDelete: {
+                        requestDeleteCycle(cycle)
                     }
-                }
+                )
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
 
-                // Show ad at bottom for 3 or fewer cycles
-                if cycles.count <= 3, shouldShowCycleAd {
-                    NativeAdCardView(nativeAd: adManager.nativeAds[0])
+                // Show ad after every 4 cycles (only if more than 3 cycles)
+                if let adIndex = shouldShowCycleAdAfterIndex(index),
+                   adIndex < adManager.nativeAds.count {
+                    NativeAdCardView(nativeAd: adManager.nativeAds[adIndex])
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
+            }
+
+            // Show ad at bottom for 3 or fewer cycles
+            if cycles.count <= 3, shouldShowCycleAd {
+                NativeAdCardView(nativeAd: adManager.nativeAds[0])
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
         }
     }
@@ -791,6 +848,12 @@ struct RoutinesView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             navigationPath.append(plan)
         }
+    }
+
+    private func createCycleFromAlert() {
+        let trimmedName = newCycleName.trimmingCharacters(in: .whitespacesAndNewlines)
+        cycleDraftName = trimmedName.isEmpty ? L10n.tr("cycle_new_title") : trimmedName
+        showCycleWizard = true
     }
 
     private func setActivePlan(_ plan: WorkoutPlan) {

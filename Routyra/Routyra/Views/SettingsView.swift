@@ -58,14 +58,111 @@ struct SettingsView: View {
     }
 
     var body: some View {
+        NavigationStack {
+            List {
+                // Premium Section
+                premiumSection
+
+                // Notification Section
+                notificationSection
+
+                // Workout Settings Navigation
+                Section {
+                    NavigationLink {
+                        workoutSettingsDetailView
+                    } label: {
+                        settingsNavigationRow(icon: "figure.run", titleKey: "settings_workout_section")
+                    }
+                    .listRowBackground(AppColors.cardBackground)
+                }
+
+                // Display Settings Section
+                Section {
+                    themePicker
+                        .listRowBackground(AppColors.cardBackground)
+                    weightUnitPicker
+                        .listRowBackground(AppColors.cardBackground)
+                } header: {
+                    Text("settings_display_section")
+                        .foregroundColor(AppColors.textSecondary)
+                } footer: {
+                    Text("settings_display_footer")
+                        .foregroundColor(AppColors.textMuted)
+                }
+
+            // App Info Section
+            Section {
+                HStack {
+                    Text("settings_version")
+                    Spacer()
+                    Text(appVersion)
+                        .foregroundColor(AppColors.textSecondary)
+                }
+                .listRowBackground(AppColors.cardBackground)
+            } header: {
+                Text("settings_app_info")
+                    .foregroundColor(AppColors.textSecondary)
+            }
+
+            appInfoLinksSection
+
+            // Data Management Section
+            dataManagementSection
+        }
+            .listStyle(.insetGrouped)
+            .foregroundColor(AppColors.textPrimary)
+            .scrollContentBackground(.hidden)
+            .background(AppColors.background)
+            .navigationTitle("settings_title")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                loadProfile()
+                Task {
+                    await storeKitManager.loadProducts()
+                }
+            }
+            .alert(L10n.tr("settings_delete_all_confirm_title"), isPresented: $showingDeleteConfirmation) {
+                Button(L10n.tr("common_cancel"), role: .cancel) {}
+                Button(L10n.tr("common_delete"), role: .destructive) {
+                    deleteAllData()
+                }
+            } message: {
+                Text("settings_delete_all_confirm_message")
+            }
+            .alert(restoreResultMessage, isPresented: $showingRestoreResult) {
+                Button(L10n.tr("common_ok"), role: .cancel) {}
+            }
+        }
+    }
+
+    // MARK: - Category Views
+
+    private func settingsNavigationRow(icon: String, titleKey: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(AppColors.accentBlue)
+            Text(L10n.tr(titleKey))
+                .foregroundColor(AppColors.textPrimary)
+        }
+    }
+
+    private func detailList<Content: View>(
+        titleKey: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         List {
-            // Premium Section
-            premiumSection
+            content()
+        }
+        .listStyle(.insetGrouped)
+        .foregroundColor(AppColors.textPrimary)
+        .scrollContentBackground(.hidden)
+        .background(AppColors.background)
+        .navigationTitle(L10n.tr(titleKey))
+        .navigationBarTitleDisplayMode(.inline)
+    }
 
-            // Notification Section
-            notificationSection
-
-            // Workout Settings Section
+    private var workoutSettingsDetailView: some View {
+        detailList(titleKey: "settings_workout_section") {
             Section {
                 dayTransitionPicker
                     .listRowBackground(AppColors.cardBackground)
@@ -77,21 +174,6 @@ struct SettingsView: View {
                     .foregroundColor(AppColors.textMuted)
             }
 
-            // Display Settings Section
-            Section {
-                themePicker
-                    .listRowBackground(AppColors.cardBackground)
-                weightUnitPicker
-                    .listRowBackground(AppColors.cardBackground)
-            } header: {
-                Text("settings_display_section")
-                    .foregroundColor(AppColors.textSecondary)
-            } footer: {
-                Text("settings_display_footer")
-                    .foregroundColor(AppColors.textMuted)
-            }
-
-            // Plan Update Settings Section
             Section {
                 planUpdateConfirmationToggle
                     .listRowBackground(AppColors.cardBackground)
@@ -107,7 +189,6 @@ struct SettingsView: View {
                     .foregroundColor(AppColors.textMuted)
             }
 
-            // Rest Timer Settings Section
             Section {
                 defaultRestTimePicker
                     .listRowBackground(AppColors.cardBackground)
@@ -125,49 +206,6 @@ struct SettingsView: View {
                 Text("settings_rest_timer_footer")
                     .foregroundColor(AppColors.textMuted)
             }
-
-            // App Info Section
-            Section {
-                HStack {
-                    Text("settings_version")
-                    Spacer()
-                    Text(appVersion)
-                        .foregroundColor(AppColors.textSecondary)
-                }
-                .listRowBackground(AppColors.cardBackground)
-            } header: {
-                Text("settings_app_info")
-                    .foregroundColor(AppColors.textSecondary)
-            }
-
-            // Other Section (Terms, Privacy, Feedback)
-            otherSection
-
-            // Data Management Section
-            dataManagementSection
-        }
-        .listStyle(.insetGrouped)
-        .foregroundColor(AppColors.textPrimary)
-        .scrollContentBackground(.hidden)
-        .background(AppColors.background)
-        .navigationTitle("settings_title")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            loadProfile()
-            Task {
-                await storeKitManager.loadProducts()
-            }
-        }
-        .alert(L10n.tr("settings_delete_all_confirm_title"), isPresented: $showingDeleteConfirmation) {
-            Button(L10n.tr("common_cancel"), role: .cancel) {}
-            Button(L10n.tr("common_delete"), role: .destructive) {
-                deleteAllData()
-            }
-        } message: {
-            Text("settings_delete_all_confirm_message")
-        }
-        .alert(restoreResultMessage, isPresented: $showingRestoreResult) {
-            Button(L10n.tr("common_ok"), role: .cancel) {}
         }
     }
 
@@ -287,15 +325,12 @@ struct SettingsView: View {
         } header: {
             Text("settings_notification_section")
                 .foregroundColor(AppColors.textSecondary)
-        } footer: {
-            Text("settings_notification_footer")
-                .foregroundColor(AppColors.textMuted)
         }
     }
 
-    // MARK: - Other Section
+    // MARK: - App Info Links
 
-    private var otherSection: some View {
+    private var appInfoLinksSection: some View {
         Section {
             // Terms of Service
             Link(destination: termsOfServiceURL) {
@@ -341,7 +376,8 @@ struct SettingsView: View {
                 }
             }
             .listRowBackground(AppColors.cardBackground)
-        } header: {
+        }
+        header: {
             Text("settings_other_section")
                 .foregroundColor(AppColors.textSecondary)
         }

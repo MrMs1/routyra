@@ -8,6 +8,7 @@
 
 import SwiftUI
 import UIKit
+import os
 
 // MARK: - Theme Change Notification
 
@@ -49,6 +50,10 @@ final class ThemeManager {
 
     private init() {
         self.currentTheme = ThemeType.dark.theme
+        // Ensure the App Group always has a value, even before the user opens Settings
+        // or before any profile sync runs. This prevents Watch from falling back to
+        // DarkWatchTheme due to a missing "selectedTheme" key.
+        saveThemeToAppGroup()
     }
 
     // MARK: - Theme Switching
@@ -75,6 +80,10 @@ final class ThemeManager {
     private func saveThemeToAppGroup() {
         guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
         defaults.set(currentThemeType.rawValue, forKey: themeKey)
+        #if DEBUG
+        let logger = Logger(subsystem: "com.mrms.routyra", category: "Theme")
+        logger.debug("Saved theme to AppGroup: key='\(self.themeKey, privacy: .public)' value='\(self.currentThemeType.rawValue, privacy: .public)'")
+        #endif
     }
 
     // MARK: - Global Appearance

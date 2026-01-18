@@ -313,12 +313,12 @@ struct LimeTheme: ColorTheme {
     let background = Color(hex: "131313")
     /// Dark surface for cards
     let cardBackground = Color(hex: "1D1D1D")
-    /// Completed cards blend into background
-    let cardBackgroundCompleted = Color(hex: "131313")
+    /// Completed cards should feel "muted" but still distinct from background
+    let cardBackgroundCompleted = Color(hex: "171717")
     /// Elevated card surface
     let groupedCardBackground = Color(hex: "1D1D1D")
-    /// Completed grouped card
-    let groupedCardBackgroundCompleted = Color(hex: "131313")
+    /// Completed grouped card should also remain visible against background
+    let groupedCardBackgroundCompleted = Color(hex: "171717")
 
     // MARK: - Accent Colors
     /// Spotify-style lime accent
@@ -331,8 +331,8 @@ struct LimeTheme: ColorTheme {
     // MARK: - Calendar Colors
     /// Lime for Saturday
     let weekendSaturday = Color(hex: "00CF60")
-    /// Neutral gray for Sunday
-    let weekendSunday = Color(hex: "AAAAAA")
+    /// Red for Sunday
+    let weekendSunday = Color(hex: "FF453A")
 
     // MARK: - Text Colors
     /// Primary text is pure white
@@ -344,9 +344,9 @@ struct LimeTheme: ColorTheme {
 
     // MARK: - UI Elements
     /// Subtle divider
-    let divider = Color(hex: "1D1D1D")
+    let divider = Color(hex: "2A2A2A")
     /// Empty dot matches surface
-    let dotEmpty = Color(hex: "1D1D1D")
+    let dotEmpty = Color(hex: "3A3A3A")
     /// Filled dot uses lime
     let dotFilled = Color(hex: "00CF60")
 }

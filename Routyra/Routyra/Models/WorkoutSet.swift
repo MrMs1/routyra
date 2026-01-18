@@ -45,6 +45,10 @@ final class WorkoutSet {
     /// Whether this set has been completed/logged.
     var isCompleted: Bool
 
+    /// Timestamp of last completion state change.
+    /// Used for sync conflict resolution between iPhone and Watch.
+    var completedAt: Date?
+
     /// Soft-delete flag for undo safety.
     /// When true, the set is hidden from UI but can be restored.
     /// Named isSoftDeleted to avoid collision with SwiftData's internal isDeleted property.
@@ -171,18 +175,21 @@ final class WorkoutSet {
     /// Marks the set as completed.
     func complete() {
         self.isCompleted = true
+        self.completedAt = Date()
         touch()
     }
 
     /// Marks the set as not completed.
     func uncomplete() {
         self.isCompleted = false
+        self.completedAt = Date()
         touch()
     }
 
     /// Toggles the completion state.
     func toggleCompletion() {
         self.isCompleted.toggle()
+        self.completedAt = Date()
         touch()
     }
 

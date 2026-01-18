@@ -446,6 +446,7 @@ struct PlannedSetDisplayRow: View {
     let plannedSet: PlannedSet
     let setIndex: Int
     let weightUnit: WeightUnit
+    var showsRestTime: Bool = true
 
     private var isBodyweight: Bool {
         plannedSet.metricType == .bodyweightReps
@@ -542,7 +543,7 @@ struct PlannedSetDisplayRow: View {
             Spacer(minLength: 0)
 
             // Right: Rest time (if set)
-            if let restTime = formattedRestTime {
+            if showsRestTime, let restTime = formattedRestTime {
                 HStack(spacing: 2) {
                     Image(systemName: "timer")
                         .font(.caption2)

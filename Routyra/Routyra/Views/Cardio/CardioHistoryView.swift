@@ -27,7 +27,6 @@ struct CardioHistoryView: View {
 
     // MARK: - State
 
-    @State private var showingAddSheet = false
     @State private var isSyncing = false
     @State private var syncResult: SyncResult?
     @State private var showingAuthAlert = false
@@ -57,9 +56,6 @@ struct CardioHistoryView: View {
         }
         .background(AppColors.background)
         .navigationTitle(navigationTitle)
-        .sheet(isPresented: $showingAddSheet) {
-            CardioWorkoutEditorView(profile: profile)
-        }
         .alert(L10n.tr("cardio_sync_complete"), isPresented: .constant(syncResult != nil)) {
             Button(L10n.tr("ok")) {
                 syncResult = nil
@@ -101,13 +97,6 @@ struct CardioHistoryView: View {
                     Label(L10n.tr("cardio_sync_health"), systemImage: "heart.fill")
                 }
                 .buttonStyle(.bordered)
-
-                Button {
-                    showingAddSheet = true
-                } label: {
-                    Label(L10n.tr("cardio_add_manual"), systemImage: "plus")
-                }
-                .buttonStyle(.borderedProminent)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -445,6 +434,7 @@ struct CardioWorkoutRowView: View {
         case .elliptical: return "figure.elliptical"
         case .rowing: return "figure.rower"
         case .stairClimbing, .stairs: return "figure.stairs"
+        case .stepTraining: return "figure.stairs"
         case .highIntensityIntervalTraining: return "figure.highintensity.intervaltraining"
         case .yoga: return "figure.yoga"
         case .pilates: return "figure.pilates"

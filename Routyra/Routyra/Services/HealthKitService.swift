@@ -342,6 +342,7 @@ extension HKWorkoutActivityType {
         case .rowing: return L10n.tr("activity_rowing")
         case .stairClimbing: return L10n.tr("activity_stair_climbing")
         case .stairs: return L10n.tr("activity_stairs")
+        case .stepTraining: return L10n.tr("activity_step_training")
         case .highIntensityIntervalTraining: return L10n.tr("activity_hiit")
         case .mixedCardio: return L10n.tr("activity_mixed_cardio")
         case .jumpRope: return L10n.tr("activity_jump_rope")

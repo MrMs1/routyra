@@ -53,6 +53,7 @@ struct PlanDayEditorView: View {
     @State private var showEditDaySheet: Bool = false
     @State private var showExercisePickerSheet: Bool = false
     @State private var showGroupCreationSheet: Bool = false
+    @State private var showGroupGuide: Bool = false
     @State private var editingExercise: PlanExercise? = nil
 
     // Workout sync confirmation
@@ -92,7 +93,11 @@ struct PlanDayEditorView: View {
         List {
             // Exercises section
             Section {
-                if exercises.isEmpty {
+                if day.isRestDay {
+                    restDayStateView
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                } else if exercises.isEmpty {
                     emptyStateView
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
@@ -110,7 +115,7 @@ struct PlanDayEditorView: View {
                 }
 
                 // Action buttons (hidden during reorder mode)
-                if !isReordering {
+                if !day.isRestDay && !isReordering {
                     VStack(spacing: 8) {
                         // Add exercise button
                         Button {
@@ -122,15 +127,14 @@ struct PlanDayEditorView: View {
 
                         // Create group button
                         if canCreateGroup {
-                            Button {
-                                showGroupCreationSheet = true
-                            } label: {
-                                ActionCardButton(
-                                    title: L10n.tr("create_group"),
-                                    icon: "rectangle.stack"
-                                )
-                            }
-                            .buttonStyle(.plain)
+                            GroupCreationActionCardView(
+                                onCreate: {
+                                    showGroupCreationSheet = true
+                                },
+                                onShowGuide: {
+                                    showGroupGuide = true
+                                }
+                            )
                         }
                     }
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -177,6 +181,13 @@ struct PlanDayEditorView: View {
             }
         }
         .toolbar(.hidden, for: .tabBar)
+        .overlay {
+            if showGroupGuide {
+                GroupGuideOverlayView(isPresented: $showGroupGuide)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: showGroupGuide)
         .sheet(isPresented: $showEditDaySheet) {
             EditDaySheetView(
                 dayIndex: day.dayIndex,
@@ -214,6 +225,7 @@ struct PlanDayEditorView: View {
                 planExercise: planExercise,
                 exercisesMap: exercisesMap,
                 bodyPartsMap: bodyPartsMap,
+                candidateMode: .dayEditor,
                 onSave: {
                     syncExercises()
                     syncExerciseToLinkedWorkout(planExercise)
@@ -389,6 +401,25 @@ struct PlanDayEditorView: View {
         .padding(.vertical, 32)
     }
 
+    private var restDayStateView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "bed.double")
+                .font(.system(size: 40))
+                .foregroundColor(AppColors.textMuted)
+
+            Text(L10n.tr("rest_day"))
+                .font(.headline)
+                .foregroundColor(AppColors.textSecondary)
+
+            Text(L10n.tr("rest_day_description"))
+                .font(.caption)
+                .foregroundColor(AppColors.textMuted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+    }
+
     // MARK: - Actions
 
     private func toggleExerciseExpansion(_ id: UUID) {
@@ -479,9 +510,11 @@ struct PlanDayEditorView: View {
         // Check if today's workout is linked to this plan day
         guard let profile = profile else { return }
 
-        if let workoutDay = WorkoutService.getTodayWorkoutLinkedToPlanDay(
+        let workoutDate = DateUtilities.todayWorkoutDate(transitionHour: profile.dayTransitionHour)
+        if let workoutDay = WorkoutService.getWorkoutLinkedToPlanDay(
             profileId: profile.id,
             planDayId: day.id,
+            workoutDate: workoutDate,
             modelContext: modelContext
         ) {
             pendingExerciseData = (exerciseId: exerciseId, sets: sets)
@@ -592,9 +625,11 @@ struct PlanDayEditorView: View {
 
     private func linkedWorkoutDayForSync() -> WorkoutDay? {
         guard let profile = profile else { return nil }
-        return WorkoutService.getTodayWorkoutLinkedToPlanDay(
+        let workoutDate = DateUtilities.todayWorkoutDate(transitionHour: profile.dayTransitionHour)
+        return WorkoutService.getWorkoutLinkedToPlanDay(
             profileId: profile.id,
             planDayId: day.id,
+            workoutDate: workoutDate,
             modelContext: modelContext
         )
     }
@@ -834,201 +869,6 @@ struct PlanDayEditorView: View {
     }
 }
 
-// MARK: - Plan Exercise Set Editor Sheet
-
-/// Sheet for editing sets of an existing exercise
-private struct PlanExerciseSetEditorSheet: View {
-    let planExercise: PlanExercise
-    let exercisesMap: [UUID: Exercise]
-    let bodyPartsMap: [UUID: BodyPart]
-    let onSave: () -> Void
-
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
-    @State private var profile: LocalProfile?
-
-    private var exercise: Exercise? {
-        exercisesMap[planExercise.exerciseId]
-    }
-
-    private var bodyPart: BodyPart? {
-        guard let bodyPartId = exercise?.bodyPartId else { return nil }
-        return bodyPartsMap[bodyPartId]
-    }
-
-    private var existingSets: [SetInputData] {
-        planExercise.sortedPlannedSets.map { plannedSet in
-            SetInputData(
-                metricType: plannedSet.metricType,
-                weight: plannedSet.targetWeight,
-                reps: plannedSet.targetReps,
-                durationSeconds: plannedSet.targetDurationSeconds,
-                distanceMeters: plannedSet.targetDistanceMeters
-            )
-        }
-    }
-
-    var body: some View {
-        NavigationStack {
-            if let exercise = exercise {
-                SetEditorView(
-                    exercise: exercise,
-                    bodyPart: bodyPart,
-                    metricType: planExercise.metricType,
-                    existingSets: existingSets.isEmpty
-                        ? [SetInputData(metricType: planExercise.metricType, weight: 60, reps: 10)]
-                        : existingSets,
-                    config: .planEdit,
-                    candidateCollection: buildCandidateCollection(),
-                    onConfirm: { newSets in
-                        updateSets(newSets)
-                        onSave()
-                        dismiss()
-                    }
-                )
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("cancel") {
-                            dismiss()
-                        }
-                    }
-                }
-            } else {
-                Text("exercise_not_found")
-                    .foregroundColor(AppColors.textMuted)
-            }
-        }
-        .onAppear {
-            if profile == nil {
-                profile = ProfileService.getOrCreateProfile(modelContext: modelContext)
-            }
-        }
-    }
-
-    private func buildCandidateCollection() -> CopyCandidateCollection {
-        let exerciseId = planExercise.exerciseId
-        guard let currentDay = planExercise.planDay,
-              let currentPlan = currentDay.plan else {
-            return .empty
-        }
-
-        var planCandidates: [PlanCopyCandidate] = []
-        var workoutCandidates: [WorkoutCopyCandidate] = []
-
-        // Priority order:
-        // 1. Same Day's matching exercises (highest priority)
-        // 2. Same Plan's other Days
-        // 3. Other Plans
-
-        // 1. Same Day candidates (excluding current exercise)
-        let sameDayExercises = currentDay.sortedExercises
-            .filter { $0.exerciseId == exerciseId && $0.id != planExercise.id }
-        for planEx in sameDayExercises {
-            let sets = planEx.sortedPlannedSets.map {
-                CopyableSetData(weight: $0.targetWeight ?? 60.0, reps: $0.targetReps ?? 10, restTimeSeconds: $0.restTimeSeconds)
-            }
-            if !sets.isEmpty {
-                planCandidates.append(PlanCopyCandidate(
-                    planId: currentPlan.id,
-                    planName: currentPlan.name,
-                    dayId: currentDay.id,
-                    dayName: currentDay.fullTitle,
-                    sets: sets,
-                    updatedAt: currentPlan.updatedAt,
-                    isCurrentPlan: true
-                ))
-            }
-        }
-
-        // 2. Same Plan's other Days
-        for day in currentPlan.sortedDays where day.id != currentDay.id {
-            let matchingExercises = day.sortedExercises.filter { $0.exerciseId == exerciseId }
-            for planEx in matchingExercises {
-                let sets = planEx.sortedPlannedSets.map {
-                    CopyableSetData(weight: $0.targetWeight ?? 60.0, reps: $0.targetReps ?? 10, restTimeSeconds: $0.restTimeSeconds)
-                }
-                if !sets.isEmpty {
-                    planCandidates.append(PlanCopyCandidate(
-                        planId: currentPlan.id,
-                        planName: currentPlan.name,
-                        dayId: day.id,
-                        dayName: day.fullTitle,
-                        sets: sets,
-                        updatedAt: currentPlan.updatedAt,
-                        isCurrentPlan: true
-                    ))
-                }
-            }
-        }
-
-        // 3. Other Plans (sorted by updatedAt desc)
-        let descriptor = FetchDescriptor<WorkoutPlan>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
-        if let allPlans = try? modelContext.fetch(descriptor) {
-            for plan in allPlans where plan.id != currentPlan.id {
-                for day in plan.sortedDays {
-                    let matchingExercises = day.sortedExercises.filter { $0.exerciseId == exerciseId }
-                    for planEx in matchingExercises {
-                        let sets = planEx.sortedPlannedSets.map {
-                            CopyableSetData(weight: $0.targetWeight ?? 60.0, reps: $0.targetReps ?? 10, restTimeSeconds: $0.restTimeSeconds)
-                        }
-                        if !sets.isEmpty {
-                            planCandidates.append(PlanCopyCandidate(
-                                planId: plan.id,
-                                planName: plan.name,
-                                dayId: day.id,
-                                dayName: day.fullTitle,
-                                sets: sets,
-                                updatedAt: plan.updatedAt,
-                                isCurrentPlan: false
-                            ))
-                        }
-                    }
-                }
-            }
-        }
-
-        // Array is already in priority order, limit to 20 candidates
-        planCandidates = Array(planCandidates.prefix(20))
-
-        // 3. Collect workout history candidates
-        if let profile = profile {
-            workoutCandidates = WorkoutService.getWorkoutHistorySets(
-                profileId: profile.id,
-                exerciseId: exerciseId,
-                limit: 20,
-                modelContext: modelContext
-            )
-        }
-
-        return CopyCandidateCollection(
-            planCandidates: planCandidates,
-            workoutCandidates: workoutCandidates
-        )
-    }
-
-    private func updateSets(_ newSets: [SetInputData]) {
-        // Remove existing sets
-        let existingSets = planExercise.sortedPlannedSets
-        for set in existingSets {
-            planExercise.removePlannedSet(set)
-        }
-
-        // Add new sets with all metric type fields including rest time
-        for setData in newSets {
-            planExercise.createPlannedSet(
-                metricType: setData.metricType,
-                weight: setData.weight,
-                reps: setData.reps,
-                durationSeconds: setData.durationSeconds,
-                distanceMeters: setData.distanceMeters,
-                restTimeSeconds: setData.restTimeSeconds
-            )
-        }
-
-        planExercise.plannedSetCount = newSets.count
-    }
-}
-
 // MARK: - Exercise Add Flow View
 
 /// Sheet-based flow for adding exercises: Picker → Set Editor → Confirm
@@ -1202,6 +1042,147 @@ private struct ExerciseAddFlowView: View {
             planCandidates: planCandidates,
             workoutCandidates: workoutCandidates
         )
+    }
+}
+
+// MARK: - Group Creation Helpers
+
+private struct GroupCreationActionCardView: View {
+    let onCreate: () -> Void
+    let onShowGuide: () -> Void
+
+    private let cardCornerRadius: CGFloat = 12
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(AppColors.accentBlue.opacity(0.15))
+                    .frame(width: 36, height: 36)
+
+                Image(systemName: "rectangle.stack")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(AppColors.accentBlue)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(L10n.tr("create_group"))
+                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                        .foregroundColor(AppColors.accentBlue)
+
+                    Button {
+                        onShowGuide()
+                    } label: {
+                        Text("?")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(AppColors.accentBlue)
+                            .frame(width: 20, height: 20)
+                            .background(
+                                Capsule()
+                                    .fill(AppColors.accentBlue.opacity(0.15))
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(AppColors.accentBlue.opacity(0.3), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.tr("group_guide_help"))
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(AppColors.accentBlue.opacity(0.6))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: cardCornerRadius)
+                .fill(AppColors.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: cardCornerRadius)
+                        .stroke(AppColors.accentBlue.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onCreate()
+        }
+    }
+}
+
+private struct GroupGuideOverlayView: View {
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button {
+                        closeGuide()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(AppColors.textSecondary)
+                            .frame(width: 32, height: 32)
+                            .background(AppColors.cardBackground)
+                            .clipShape(Circle())
+                    }
+                }
+                .padding(.bottom, 8)
+
+                VStack(spacing: 12) {
+                    Text(L10n.tr("group_guide_title"))
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(AppColors.textPrimary)
+                        .multilineTextAlignment(.center)
+
+                    Text(L10n.tr("group_guide_body"))
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.vertical, 8)
+
+                Button {
+                    closeGuide()
+                } label: {
+                    Text(L10n.tr("plan_guide_close"))
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(AppColors.accentBlue)
+                        .cornerRadius(10)
+                }
+                .padding(.top, 16)
+            }
+            .padding(20)
+            .contentShape(Rectangle())
+            .background(AppColors.cardBackground)
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(AppColors.textMuted.opacity(0.3), lineWidth: 1)
+            )
+            .frame(maxWidth: min(360, UIScreen.main.bounds.width * 0.9))
+        }
+    }
+
+    private func closeGuide() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            isPresented = false
+        }
     }
 }
 

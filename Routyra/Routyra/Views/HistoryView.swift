@@ -2071,6 +2071,7 @@ private struct CardioActivitySummary: Identifiable {
         case .elliptical: return "figure.elliptical"
         case .rowing: return "figure.rower"
         case .stairClimbing, .stairs: return "figure.stairs"
+        case .stepTraining: return "figure.stairs"
         case .highIntensityIntervalTraining: return "figure.highintensity.intervaltraining"
         case .yoga: return "figure.yoga"
         case .pilates: return "figure.pilates"

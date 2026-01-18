@@ -27,6 +27,7 @@
 "execution_mode_single_hint" = "Train with one plan";
 "execution_mode_cycle_hint" = "Rotate multiple plans";
 "active_cycle" = "Active Cycle";
+"select_cycle_header" = "Select Cycle";
 "no_active_cycle" = "No active cycle";
 "no_plans_in_cycle" = "No plans in cycle";
 "edit_cycles" = "Edit Cycles";
@@ -64,6 +65,9 @@
 "duplicate" = "Duplicate";
 "reorder" = "Reorder";
 "add_day" = "Add Day";
+"add_rest_day" = "Add Rest Day";
+"rest_day" = "Rest Day";
+"rest_day_description" = "Today is a rest day. Focus on recovery and get ready for the next session.";
 "new_day" = "New Day";
 "day_name" = "Day Name";
 "enter_day_name" = "Enter a day name";
@@ -134,7 +138,7 @@
 
 // MARK: - Settings
 "settings_title" = "Settings";
-"settings_workout_section" = "Workout";
+"settings_workout_section" = "Workout Settings";
 "settings_workout_footer" = "Launching the app after the set time shows the next day's workout.";
 "settings_app_info" = "App Info";
 "settings_version" = "Version";
@@ -168,7 +172,10 @@
 "workout_set_deleted" = "Set deleted: %@ kg × %d";
 "workout_delete_entry_title" = "Delete Exercise";
 "workout_delete_entry_message" = "Delete \"%@\" from this workout?";
+"workout_delete_group_title" = "Delete Group";
+"workout_delete_group_message" = "Delete this group and its exercises?";
 "workout_update_set" = "Update Set";
+"workout_apply_set" = "Apply to set";
 "workout_invalid_input" = "Please enter weight and reps";
 "workout_plan_updated" = "Plan updated";
 "plan_update_title" = "Update Plan?";
@@ -198,6 +205,8 @@
 "empty_state_copy_title" = "Copy previous workout";
 "empty_state_copy_subtitle" = "Start today with the same exercises as last time";
 "empty_state_copy_button" = "Copy and Start";
+"workout_copy_confirm_message" = "Copy the workout for %@?";
+"workout_copy_confirm_note_healthkit" = "※Cardio workouts synced from HealthKit will not be copied.";
 
 // MARK: - Ads
 "ad_sponsored" = "Sponsored";
@@ -406,6 +415,11 @@
 "plan_start_day_label" = "Start Day";
 "plan_start_day_picker_title" = "Select Start Day";
 "plan_start_warning_replace_today" = "Today's workout will be replaced with this plan.";
+"plan_start_mode_label" = "Start";
+"plan_start_timing_today" = "Today";
+"plan_start_timing_scheduled" = "Date";
+"plan_start_confirm" = "Start with these settings";
+"plan_start_day_help" = "Choose which plan day the selected date should start from.";
 
 // MARK: - Cycle Start Picker
 "cycle_start_title" = "When to start?";
@@ -424,10 +438,8 @@
 // MARK: - Plan Guide
 "plan_guide_step1_title" = "When a plan is set";
 "plan_guide_step1_body" = "Today's menu appears automatically—no need to choose exercises each time.";
-"plan_guide_step2_title" = "A plan has multiple days";
-"plan_guide_step2_body" = "It contains Day 1 / Day 2 / Day 3";
-"plan_guide_step3_title" = "Each day has exercises";
-"plan_guide_step3_body" = "You can add multiple exercises to each day";
+"plan_guide_step2_title" = "Plan the exercises for each day";
+"plan_guide_step2_body" = "Register the exercises you'll do on each day in advance.";
 "plan_guide_step4_title" = "Two ways to use it";
 "plan_guide_single" = "Single plan: use one plan";
 "plan_guide_cycle" = "Cycle: rotate through multiple plans";
@@ -441,6 +453,9 @@
 "plan_guide_exercise_incline_press" = "Incline Press";
 "plan_guide_exercise_bench" = "Bench";
 "plan_guide_exercise_squat" = "Squat";
+"group_guide_title" = "What groups are for";
+"group_guide_body" = "Use groups for supersets, compound sets, or any sequence of multiple exercises with a single rest.";
+"group_guide_help" = "Group creation help";
 
 // MARK: - Spotlight
 "spotlight_create_plan_hint" = "Create a plan here";
@@ -459,6 +474,7 @@
 // MARK: - Rest Timer
 "rest_timer_complete_title" = "Rest Complete";
 "rest_timer_complete_body" = "Time to start your next set!";
+"rest_timer_next_prefix" = "Next:";
 "rest_timer_start" = "Start Rest";
 "rest_timer_running" = "Running...";
 "rest_timer_add_30s" = "+30s";
@@ -494,9 +510,13 @@
 "sets_unit" = "sets";
 "group_round_rest" = "Rest between rounds";
 "select_exercises_to_group" = "Select exercises to group";
+"group_selection_order_hint" = "Grouped in the order you select.";
 "set_count_mismatch_title" = "Set Count Mismatch";
 "use_maximum" = "Use Maximum (%d)";
 "use_minimum" = "Use Minimum (%d)";
+"use_maximum_title" = "Use Maximum";
+"use_minimum_title" = "Use Minimum";
+"align_to_sets" = "Align to %d sets";
 "specify_manually" = "Specify Manually";
 "group_requires_two" = "Groups require at least 2 exercises";
 "round_label" = "Round %d/%d";
@@ -522,7 +542,6 @@
 
 // MARK: - Notification Settings
 "settings_notification_section" = "Notifications";
-"settings_notification_footer" = "Enable notifications to receive workout reminders.";
 "settings_open_system_notifications" = "Open System Settings";
 "settings_enable_notifications" = "Enable Notifications";
 
@@ -604,6 +623,7 @@
 "activity_rowing" = "Rowing";
 "activity_stair_climbing" = "Stair Climbing";
 "activity_stairs" = "Stairs";
+"activity_step_training" = "Stepper";
 "activity_hiit" = "HIIT";
 "activity_mixed_cardio" = "Mixed Cardio";
 "activity_jump_rope" = "Jump Rope";
@@ -648,3 +668,14 @@
 "activity_other" = "Other";
 "ok" = "OK";
 "save" = "Save";
+
+// MARK: - Share (Workout)
+"share" = "Share";
+"workout_share_title" = "Workout Summary";
+"workout_share_total_sets" = "Sets";
+"workout_share_total_volume" = "Volume";
+"workout_share_strength_section" = "Exercises";
+"workout_share_cardio_section" = "Cardio";
+"workout_share_sets_format" = "%d sets";
+"workout_share_powered_by_format" = "Powered by %@";
+"workout_share_estimated_1rm_format" = "1RM %@";

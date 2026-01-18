@@ -15,7 +15,7 @@ struct BottomStatusBarView: View {
     private var unitColor: Color { AppColors.textSecondary }
 
     private var formattedVolume: String {
-        Formatters.decimal0.string(from: NSNumber(value: volume)) ?? "0"
+        Formatters.formatVolumeNumber(volume)
     }
 
     var body: some View {

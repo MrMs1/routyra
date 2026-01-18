@@ -80,7 +80,7 @@ struct ActiveCyclePickerSheet: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(AppColors.background)
-            .navigationTitle(L10n.tr("active_cycle"))
+            .navigationTitle(L10n.tr("select_cycle_header"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

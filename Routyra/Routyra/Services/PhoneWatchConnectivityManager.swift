@@ -18,20 +18,31 @@ enum PhoneWatchMessageKey: Sendable {
     nonisolated(unsafe) static let setCompletion = "setCompletion"
     nonisolated(unsafe) static let setUncomplete = "setUncomplete"
     nonisolated(unsafe) static let requestSync = "requestSync"
+    nonisolated(unsafe) static let selectedTheme = "selectedTheme"
 }
 
 // MARK: - Watch Data Models (shared with Watch app)
 
 struct PhoneWatchWorkoutData: Sendable {
     let isRoutineMode: Bool
+    /// Ungrouped exercises (orderIndex is used for ordering).
     let exercises: [PhoneWatchExerciseData]
+    /// Grouped exercises (supersets/giant sets).
+    let exerciseGroups: [PhoneWatchExerciseGroupData]
     let defaultRestTimeSeconds: Int
     /// Whether to automatically start rest timer after recording (combination mode).
     let combineRecordAndTimerStart: Bool
 
-    nonisolated init(isRoutineMode: Bool, exercises: [PhoneWatchExerciseData], defaultRestTimeSeconds: Int, combineRecordAndTimerStart: Bool) {
+    nonisolated init(
+        isRoutineMode: Bool,
+        exercises: [PhoneWatchExerciseData],
+        exerciseGroups: [PhoneWatchExerciseGroupData] = [],
+        defaultRestTimeSeconds: Int,
+        combineRecordAndTimerStart: Bool
+    ) {
         self.isRoutineMode = isRoutineMode
         self.exercises = exercises
+        self.exerciseGroups = exerciseGroups
         self.defaultRestTimeSeconds = defaultRestTimeSeconds
         self.combineRecordAndTimerStart = combineRecordAndTimerStart
     }
@@ -39,13 +50,14 @@ struct PhoneWatchWorkoutData: Sendable {
 
 extension PhoneWatchWorkoutData: Codable {
     enum CodingKeys: String, CodingKey {
-        case isRoutineMode, exercises, defaultRestTimeSeconds, combineRecordAndTimerStart
+        case isRoutineMode, exercises, exerciseGroups, defaultRestTimeSeconds, combineRecordAndTimerStart
     }
 
     nonisolated init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         isRoutineMode = try container.decode(Bool.self, forKey: .isRoutineMode)
         exercises = try container.decode([PhoneWatchExerciseData].self, forKey: .exercises)
+        exerciseGroups = try container.decodeIfPresent([PhoneWatchExerciseGroupData].self, forKey: .exerciseGroups) ?? []
         defaultRestTimeSeconds = try container.decode(Int.self, forKey: .defaultRestTimeSeconds)
         combineRecordAndTimerStart = try container.decodeIfPresent(Bool.self, forKey: .combineRecordAndTimerStart) ?? false
     }
@@ -54,8 +66,55 @@ extension PhoneWatchWorkoutData: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(isRoutineMode, forKey: .isRoutineMode)
         try container.encode(exercises, forKey: .exercises)
+        try container.encode(exerciseGroups, forKey: .exerciseGroups)
         try container.encode(defaultRestTimeSeconds, forKey: .defaultRestTimeSeconds)
         try container.encode(combineRecordAndTimerStart, forKey: .combineRecordAndTimerStart)
+    }
+}
+
+struct PhoneWatchExerciseGroupData: Identifiable, Sendable {
+    let id: UUID
+    let orderIndex: Int
+    let setCount: Int
+    let roundRestSeconds: Int?
+    let exercises: [PhoneWatchExerciseData]
+
+    nonisolated init(
+        id: UUID,
+        orderIndex: Int,
+        setCount: Int,
+        roundRestSeconds: Int?,
+        exercises: [PhoneWatchExerciseData]
+    ) {
+        self.id = id
+        self.orderIndex = orderIndex
+        self.setCount = setCount
+        self.roundRestSeconds = roundRestSeconds
+        self.exercises = exercises
+    }
+}
+
+extension PhoneWatchExerciseGroupData: Codable {
+    enum CodingKeys: String, CodingKey {
+        case id, orderIndex, setCount, roundRestSeconds, exercises
+    }
+
+    nonisolated init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        orderIndex = try container.decode(Int.self, forKey: .orderIndex)
+        setCount = try container.decode(Int.self, forKey: .setCount)
+        roundRestSeconds = try container.decodeIfPresent(Int.self, forKey: .roundRestSeconds)
+        exercises = try container.decode([PhoneWatchExerciseData].self, forKey: .exercises)
+    }
+
+    nonisolated func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(orderIndex, forKey: .orderIndex)
+        try container.encode(setCount, forKey: .setCount)
+        try container.encodeIfPresent(roundRestSeconds, forKey: .roundRestSeconds)
+        try container.encode(exercises, forKey: .exercises)
     }
 }
 
@@ -64,15 +123,27 @@ struct PhoneWatchExerciseData: Identifiable, Sendable {
     let exerciseId: UUID
     let name: String
     let orderIndex: Int
+    /// Display order within a group (0-indexed). nil means ungrouped.
+    let groupOrderIndex: Int?
     let metricType: String
     let bodyPartCode: String?
     let sets: [PhoneWatchSetData]
 
-    nonisolated init(id: UUID, exerciseId: UUID, name: String, orderIndex: Int, metricType: String, bodyPartCode: String?, sets: [PhoneWatchSetData]) {
+    nonisolated init(
+        id: UUID,
+        exerciseId: UUID,
+        name: String,
+        orderIndex: Int,
+        groupOrderIndex: Int? = nil,
+        metricType: String,
+        bodyPartCode: String?,
+        sets: [PhoneWatchSetData]
+    ) {
         self.id = id
         self.exerciseId = exerciseId
         self.name = name
         self.orderIndex = orderIndex
+        self.groupOrderIndex = groupOrderIndex
         self.metricType = metricType
         self.bodyPartCode = bodyPartCode
         self.sets = sets
@@ -81,7 +152,7 @@ struct PhoneWatchExerciseData: Identifiable, Sendable {
 
 extension PhoneWatchExerciseData: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, exerciseId, name, orderIndex, metricType, bodyPartCode, sets
+        case id, exerciseId, name, orderIndex, groupOrderIndex, metricType, bodyPartCode, sets
     }
 
     nonisolated init(from decoder: Decoder) throws {
@@ -90,6 +161,7 @@ extension PhoneWatchExerciseData: Codable {
         exerciseId = try container.decode(UUID.self, forKey: .exerciseId)
         name = try container.decode(String.self, forKey: .name)
         orderIndex = try container.decode(Int.self, forKey: .orderIndex)
+        groupOrderIndex = try container.decodeIfPresent(Int.self, forKey: .groupOrderIndex)
         metricType = try container.decode(String.self, forKey: .metricType)
         bodyPartCode = try container.decodeIfPresent(String.self, forKey: .bodyPartCode)
         sets = try container.decode([PhoneWatchSetData].self, forKey: .sets)
@@ -101,6 +173,7 @@ extension PhoneWatchExerciseData: Codable {
         try container.encode(exerciseId, forKey: .exerciseId)
         try container.encode(name, forKey: .name)
         try container.encode(orderIndex, forKey: .orderIndex)
+        try container.encodeIfPresent(groupOrderIndex, forKey: .groupOrderIndex)
         try container.encode(metricType, forKey: .metricType)
         try container.encodeIfPresent(bodyPartCode, forKey: .bodyPartCode)
         try container.encode(sets, forKey: .sets)
@@ -116,6 +189,7 @@ struct PhoneWatchSetData: Identifiable, Sendable {
     let distanceMeters: Double?
     let restTimeSeconds: Int?
     var isCompleted: Bool
+    var completedAt: Date?
 
     nonisolated init(
         id: UUID,
@@ -125,7 +199,8 @@ struct PhoneWatchSetData: Identifiable, Sendable {
         durationSeconds: Int?,
         distanceMeters: Double?,
         restTimeSeconds: Int?,
-        isCompleted: Bool
+        isCompleted: Bool,
+        completedAt: Date? = nil
     ) {
         self.id = id
         self.setIndex = setIndex
@@ -135,12 +210,13 @@ struct PhoneWatchSetData: Identifiable, Sendable {
         self.distanceMeters = distanceMeters
         self.restTimeSeconds = restTimeSeconds
         self.isCompleted = isCompleted
+        self.completedAt = completedAt
     }
 }
 
 extension PhoneWatchSetData: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, setIndex, weight, reps, durationSeconds, distanceMeters, restTimeSeconds, isCompleted
+        case id, setIndex, weight, reps, durationSeconds, distanceMeters, restTimeSeconds, isCompleted, completedAt
     }
 
     nonisolated init(from decoder: Decoder) throws {
@@ -153,6 +229,7 @@ extension PhoneWatchSetData: Codable {
         distanceMeters = try container.decodeIfPresent(Double.self, forKey: .distanceMeters)
         restTimeSeconds = try container.decodeIfPresent(Int.self, forKey: .restTimeSeconds)
         isCompleted = try container.decode(Bool.self, forKey: .isCompleted)
+        completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
     }
 
     nonisolated func encode(to encoder: Encoder) throws {
@@ -165,6 +242,7 @@ extension PhoneWatchSetData: Codable {
         try container.encodeIfPresent(distanceMeters, forKey: .distanceMeters)
         try container.encodeIfPresent(restTimeSeconds, forKey: .restTimeSeconds)
         try container.encode(isCompleted, forKey: .isCompleted)
+        try container.encodeIfPresent(completedAt, forKey: .completedAt)
     }
 }
 
@@ -258,7 +336,12 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
 
         do {
             let data = try JSONEncoder().encode(watchData)
-            let message: [String: Any] = [PhoneWatchMessageKey.workoutData: data]
+            // Include selected theme so Watch can persist it locally.
+            let themeRaw = ThemeManager.shared.currentThemeType.rawValue
+            let message: [String: Any] = [
+                PhoneWatchMessageKey.workoutData: data,
+                PhoneWatchMessageKey.selectedTheme: themeRaw,
+            ]
 
             if session.isReachable {
                 session.sendMessage(message, replyHandler: nil) { @Sendable error in
@@ -299,19 +382,24 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
         defaultRestTimeSeconds: Int,
         combineRecordAndTimerStart: Bool
     ) -> PhoneWatchWorkoutData {
-        guard let workoutDay = workoutDay, workoutDay.mode == .routine else {
+        // Send workout content to Watch for both routine and non-routine days.
+        // The Watch UI will decide how to present it (e.g., show "no workout" only when empty).
+        guard let workoutDay = workoutDay else {
             return PhoneWatchWorkoutData(
                 isRoutineMode: false,
                 exercises: [],
+                exerciseGroups: [],
                 defaultRestTimeSeconds: defaultRestTimeSeconds,
                 combineRecordAndTimerStart: combineRecordAndTimerStart
             )
         }
 
+        let isRoutineMode = workoutDay.mode == .routine
+
         // Create a dictionary for quick body part lookup
         let bodyPartDict = Dictionary(uniqueKeysWithValues: bodyParts.map { ($0.id, $0) })
 
-        let watchExercises = workoutDay.sortedEntries.map { entry -> PhoneWatchExerciseData in
+        func makeExerciseData(entry: WorkoutExerciseEntry, groupOrderIndex: Int? = nil) -> PhoneWatchExerciseData {
             let exercise = exercises.first { $0.id == entry.exerciseId }
             let exerciseName = exercise?.localizedName ?? "Unknown"
 
@@ -330,7 +418,8 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
                     durationSeconds: set.durationSeconds,
                     distanceMeters: set.distanceMeters,
                     restTimeSeconds: set.restTimeSeconds,
-                    isCompleted: set.isCompleted
+                    isCompleted: set.isCompleted,
+                    completedAt: set.completedAt
                 )
             }
 
@@ -339,15 +428,39 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
                 exerciseId: entry.exerciseId,
                 name: exerciseName,
                 orderIndex: entry.orderIndex,
+                groupOrderIndex: groupOrderIndex,
                 metricType: entry.metricType.rawValue,
                 bodyPartCode: bodyPartCode,
                 sets: watchSets
             )
         }
 
+        // Ungrouped entries only (avoid duplicates with exerciseGroups)
+        let watchExercises = workoutDay.sortedEntries
+            .filter { $0.group == nil }
+            .map { entry in
+                makeExerciseData(entry: entry)
+            }
+
+        let watchGroups = workoutDay.exerciseGroups
+            .sorted { $0.orderIndex < $1.orderIndex }
+            .map { group -> PhoneWatchExerciseGroupData in
+                let groupExercises = group.sortedEntries.map { entry in
+                    makeExerciseData(entry: entry, groupOrderIndex: entry.groupOrderIndex)
+                }
+                return PhoneWatchExerciseGroupData(
+                    id: group.id,
+                    orderIndex: group.orderIndex,
+                    setCount: group.setCount,
+                    roundRestSeconds: group.roundRestSeconds,
+                    exercises: groupExercises
+                )
+            }
+
         return PhoneWatchWorkoutData(
-            isRoutineMode: true,
+            isRoutineMode: isRoutineMode,
             exercises: watchExercises,
+            exerciseGroups: watchGroups,
             defaultRestTimeSeconds: defaultRestTimeSeconds,
             combineRecordAndTimerStart: combineRecordAndTimerStart
         )
@@ -450,6 +563,11 @@ extension PhoneWatchConnectivityManager: WCSessionDelegate {
         if let data = userInfo[PhoneWatchMessageKey.setCompletion] as? Data {
             Task { @MainActor in
                 self.handleSetCompletion(data)
+            }
+        }
+        if userInfo[PhoneWatchMessageKey.requestSync] != nil {
+            Task { @MainActor in
+                self.handleSyncRequest()
             }
         }
     }

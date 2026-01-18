@@ -237,6 +237,8 @@ struct SetEditorView: View {
     let candidateCollection: CopyCandidateCollection
     let onConfirm: ([SetInputData]) -> Void
     var weightUnit: WeightUnit = .kg
+    let isSetCountEditingEnabled: Bool
+    let isRestTimeEditingEnabled: Bool
 
     @Environment(\.dismiss) private var dismiss
 
@@ -350,6 +352,8 @@ struct SetEditorView: View {
         initialWeight: Double,
         initialReps: Int,
         initialRestTimeSeconds: Int? = nil,
+        isSetCountEditingEnabled: Bool = true,
+        isRestTimeEditingEnabled: Bool = true,
         candidateCollection: CopyCandidateCollection = .empty,
         onConfirm: @escaping ([(weight: Double, reps: Int)]) -> Void
     ) {
@@ -360,6 +364,8 @@ struct SetEditorView: View {
         self.initialMetricType = .weightReps
         self.initialRestTimeSeconds = initialRestTimeSeconds
         self.config = .workout
+        self.isSetCountEditingEnabled = isSetCountEditingEnabled
+        self.isRestTimeEditingEnabled = isRestTimeEditingEnabled
         self.candidateCollection = candidateCollection
         self.onConfirm = { sets in
             onConfirm(sets.map { (weight: $0.weight ?? 0, reps: $0.reps ?? 0) })
@@ -377,6 +383,8 @@ struct SetEditorView: View {
         initialDistanceMeters: Double? = nil,
         initialRestTimeSeconds: Int? = nil,
         config: SetEditorConfig,
+        isSetCountEditingEnabled: Bool = true,
+        isRestTimeEditingEnabled: Bool = true,
         candidateCollection: CopyCandidateCollection = .empty,
         onConfirm: @escaping ([SetInputData]) -> Void,
         weightUnit: WeightUnit = .kg
@@ -388,6 +396,8 @@ struct SetEditorView: View {
         self.initialMetricType = metricType
         self.initialRestTimeSeconds = initialRestTimeSeconds
         self.config = config
+        self.isSetCountEditingEnabled = isSetCountEditingEnabled
+        self.isRestTimeEditingEnabled = isRestTimeEditingEnabled
         self.candidateCollection = candidateCollection
         self.onConfirm = onConfirm
         self.weightUnit = weightUnit
@@ -399,6 +409,8 @@ struct SetEditorView: View {
         bodyPart: BodyPart?,
         existingSets: [(weight: Double, reps: Int)],
         config: SetEditorConfig,
+        isSetCountEditingEnabled: Bool = true,
+        isRestTimeEditingEnabled: Bool = true,
         candidateCollection: CopyCandidateCollection = .empty,
         onConfirm: @escaping ([(weight: Double, reps: Int)]) -> Void
     ) {
@@ -409,6 +421,8 @@ struct SetEditorView: View {
         self.initialMetricType = .weightReps
         self.initialRestTimeSeconds = nil
         self.config = config
+        self.isSetCountEditingEnabled = isSetCountEditingEnabled
+        self.isRestTimeEditingEnabled = isRestTimeEditingEnabled
         self.candidateCollection = candidateCollection
         self.onConfirm = { sets in
             onConfirm(sets.map { (weight: $0.weight ?? 0, reps: $0.reps ?? 0) })
@@ -424,6 +438,8 @@ struct SetEditorView: View {
         metricType: SetMetricType,
         existingSets: [SetInputData],
         config: SetEditorConfig,
+        isSetCountEditingEnabled: Bool = true,
+        isRestTimeEditingEnabled: Bool = true,
         candidateCollection: CopyCandidateCollection = .empty,
         onConfirm: @escaping ([SetInputData]) -> Void
     ) {
@@ -434,6 +450,8 @@ struct SetEditorView: View {
         self.initialMetricType = metricType
         self.initialRestTimeSeconds = existingSets.first?.restTimeSeconds
         self.config = config
+        self.isSetCountEditingEnabled = isSetCountEditingEnabled
+        self.isRestTimeEditingEnabled = isRestTimeEditingEnabled
         self.candidateCollection = candidateCollection
         self.onConfirm = onConfirm
         // Initialize sets state with existing data
@@ -479,25 +497,27 @@ struct SetEditorView: View {
                             }
 
                             // Add set button
-                            Button {
-                                addSet()
-                                // Scroll to bottom after adding
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    withAnimation(.easeOut(duration: 0.2)) {
-                                        proxy.scrollTo("confirmButton", anchor: .bottom)
+                            if isSetCountEditingEnabled {
+                                Button {
+                                    addSet()
+                                    // Scroll to bottom after adding
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        withAnimation(.easeOut(duration: 0.2)) {
+                                            proxy.scrollTo("confirmButton", anchor: .bottom)
+                                        }
                                     }
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "plus")
+                                        Text("workout_add_another_set")
+                                    }
+                                    .font(.subheadline)
+                                    .foregroundColor(AppColors.textSecondary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(AppColors.cardBackground)
+                                    .cornerRadius(10)
                                 }
-                            } label: {
-                                HStack {
-                                    Image(systemName: "plus")
-                                    Text("workout_add_another_set")
-                                }
-                                .font(.subheadline)
-                                .foregroundColor(AppColors.textSecondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(AppColors.cardBackground)
-                                .cornerRadius(10)
                             }
 
                             // Confirm button
@@ -805,8 +825,9 @@ struct SetEditorView: View {
                     set: { sets[index].restTimeSeconds = $0 }
                 ),
                 initialWeight: initialWeight,
+                isRestTimeEditingEnabled: isRestTimeEditingEnabled,
                 onDelete: { deleteSet(at: index) },
-                canDelete: sets.count > 1,
+                canDelete: isSetCountEditingEnabled && sets.count > 1,
                 weightUnit: weightUnit
             )
         case .timeDistance:
@@ -821,18 +842,19 @@ struct SetEditorView: View {
                     set: { sets[index].distanceMeters = $0 }
                 ),
                 onDelete: { deleteSet(at: index) },
-                canDelete: sets.count > 1
+                canDelete: isSetCountEditingEnabled && sets.count > 1
             )
         case .completion:
             CompletionEditorRow(
                 index: index + 1,
                 onDelete: { deleteSet(at: index) },
-                canDelete: sets.count > 1
+                canDelete: isSetCountEditingEnabled && sets.count > 1
             )
         }
     }
 
     private func deleteSet(at index: Int) {
+        guard isSetCountEditingEnabled else { return }
         if sets.count > 1 {
             sets.remove(at: index)
         }
@@ -1021,6 +1043,7 @@ private struct WeightBodyweightEditorRow: View {
     @Binding var reps: Int
     @Binding var restTimeSeconds: Int?
     let initialWeight: Double
+    let isRestTimeEditingEnabled: Bool
     let onDelete: () -> Void
     let canDelete: Bool
     var weightUnit: WeightUnit = .kg
@@ -1048,11 +1071,13 @@ private struct WeightBodyweightEditorRow: View {
                     .fontWeight(.medium)
                     .foregroundColor(AppColors.textSecondary)
 
-                RestTimePickerCompact(restTimeSeconds: Binding(
-                    get: { restTimeSeconds ?? 0 },
-                    set: { restTimeSeconds = $0 > 0 ? $0 : nil }
-                ))
-                .frame(width: 60, alignment: .leading)
+                if isRestTimeEditingEnabled {
+                    RestTimePickerCompact(restTimeSeconds: Binding(
+                        get: { restTimeSeconds ?? 0 },
+                        set: { restTimeSeconds = $0 > 0 ? $0 : nil }
+                    ))
+                    .frame(width: 60, alignment: .leading)
+                }
             }
             .frame(width: 64, alignment: .leading)
 

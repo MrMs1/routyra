@@ -8,6 +8,7 @@
 
 import Combine
 import SwiftUI
+import os
 
 // MARK: - Watch Theme Manager
 
@@ -21,6 +22,11 @@ final class WatchThemeManager: ObservableObject {
 
     private let appGroupID = "group.com.mrms.routyra"
     private let themeKey = "selectedTheme"
+    private let localThemeKey = "lastSelectedTheme"
+
+    #if DEBUG
+    private let logger = Logger(subsystem: "com.mrms.routyra", category: "WatchTheme")
+    #endif
 
     // MARK: - Published Colors
 
@@ -32,6 +38,10 @@ final class WatchThemeManager: ObservableObject {
     @Published private(set) var successGreen: Color = Color(hex: "30D158")
     @Published private(set) var alertRed: Color = Color(hex: "FF453A")
 
+    // MARK: - State
+
+    private var currentThemeRaw: String?
+
     // MARK: - Initialization
 
     private init() {
@@ -42,7 +52,75 @@ final class WatchThemeManager: ObservableObject {
 
     /// Refreshes colors from App Groups UserDefaults.
     func refreshTheme() {
-        let theme = loadCurrentTheme()
+        #if DEBUG
+        logger.debug("refreshTheme() called")
+        #endif
+        guard let themeRaw = resolveThemeRaw() else {
+            // If we already applied a theme, keep it when App Group is not ready.
+            if currentThemeRaw != nil {
+                return
+            }
+            applyTheme(DarkWatchTheme())
+            currentThemeRaw = nil
+            return
+        }
+
+        if themeRaw == currentThemeRaw {
+            return
+        }
+
+        if let themeType = ThemeType(rawValue: themeRaw) {
+            applyTheme(themeType.watchTheme)
+            currentThemeRaw = themeRaw
+        } else {
+            #if DEBUG
+            logger.warning("Unknown themeRaw='\(themeRaw, privacy: .public)' -> keeping current theme")
+            #endif
+        }
+    }
+
+    // MARK: - Private Methods
+
+    private func resolveThemeRaw() -> String? {
+        if let defaults = UserDefaults(suiteName: appGroupID) {
+            if let themeRaw = defaults.string(forKey: themeKey) {
+                if ThemeType(rawValue: themeRaw) != nil {
+                    persistLocalThemeRaw(themeRaw)
+                    #if DEBUG
+                    logger.debug("Loaded app group themeRaw='\(themeRaw, privacy: .public)'")
+                    #endif
+                    return themeRaw
+                }
+                #if DEBUG
+                logger.warning("Unknown app group themeRaw='\(themeRaw, privacy: .public)'")
+                #endif
+            } else {
+                #if DEBUG
+                logger.warning("AppGroup theme missing key '\(self.themeKey, privacy: .public)'")
+                #endif
+            }
+        } else {
+            #if DEBUG
+            logger.error("UserDefaults(suiteName: \(self.appGroupID, privacy: .public)) is nil")
+            #endif
+        }
+
+        if let themeRaw = UserDefaults.standard.string(forKey: localThemeKey),
+           ThemeType(rawValue: themeRaw) != nil {
+            #if DEBUG
+            logger.debug("Loaded local themeRaw='\(themeRaw, privacy: .public)'")
+            #endif
+            return themeRaw
+        }
+
+        return nil
+    }
+
+    private func persistLocalThemeRaw(_ themeRaw: String) {
+        UserDefaults.standard.set(themeRaw, forKey: localThemeKey)
+    }
+
+    private func applyTheme(_ theme: WatchColorTheme) {
         background = theme.background
         cardBackground = theme.cardBackground
         accentBlue = theme.accentBlue
@@ -50,18 +128,6 @@ final class WatchThemeManager: ObservableObject {
         textSecondary = theme.textSecondary
         successGreen = theme.successGreen
         alertRed = theme.alertRed
-    }
-
-    // MARK: - Private Methods
-
-    private func loadCurrentTheme() -> WatchColorTheme {
-        guard let defaults = UserDefaults(suiteName: appGroupID),
-              let themeRaw = defaults.string(forKey: themeKey),
-              let themeType = ThemeType(rawValue: themeRaw)
-        else {
-            return DarkWatchTheme()
-        }
-        return themeType.watchTheme
     }
 
     // MARK: - Body Part Color

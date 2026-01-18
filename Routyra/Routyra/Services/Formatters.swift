@@ -117,8 +117,12 @@ enum Formatters {
     /// - value >= 10: 1 decimal
     /// - value < 10: 2 decimals
     nonisolated static func formatVolumeNumber(_ value: Double) -> String {
+        // Preserve fractional part when present (e.g., 187.5 should not become 188).
+        // Use 0 decimals only for whole numbers; otherwise show 1-2 decimals depending on magnitude.
+        let isWholeNumber = value.truncatingRemainder(dividingBy: 1) == 0
+
         let formatter: NumberFormatter
-        if value >= 100 {
+        if isWholeNumber {
             formatter = decimal0
         } else if value >= 10 {
             formatter = decimal1

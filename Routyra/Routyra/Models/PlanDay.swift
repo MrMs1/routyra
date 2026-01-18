@@ -23,6 +23,9 @@ final class PlanDay {
     /// Optional display name (e.g., "Push", "Pull", "Legs", or "胸・肩").
     var name: String?
 
+    /// Whether this day is a rest day (no exercises).
+    var isRestDay: Bool = false
+
     /// Optional note for this day.
     var note: String?
 
@@ -41,10 +44,12 @@ final class PlanDay {
     ///   - dayIndex: Day number (1-indexed).
     ///   - name: Optional display name.
     ///   - note: Optional note.
-    init(dayIndex: Int, name: String? = nil, note: String? = nil) {
+    ///   - isRestDay: Whether this day is a rest day (defaults to false).
+    init(dayIndex: Int, name: String? = nil, note: String? = nil, isRestDay: Bool = false) {
         self.id = UUID()
         self.dayIndex = dayIndex
         self.name = name
+        self.isRestDay = isRestDay
         self.note = note
         self.exercises = []
         self.exerciseGroups = []
@@ -57,6 +62,9 @@ final class PlanDay {
         if let name = name, !name.isEmpty {
             return name
         }
+        if isRestDay {
+            return L10n.tr("rest_day")
+        }
         return L10n.tr("day_label", dayIndex)
     }
 
@@ -64,6 +72,9 @@ final class PlanDay {
     var fullTitle: String {
         if let name = name, !name.isEmpty {
             return L10n.tr("day_label_with_name", dayIndex, name)
+        }
+        if isRestDay {
+            return L10n.tr("day_label_with_name", dayIndex, L10n.tr("rest_day"))
         }
         return L10n.tr("day_label", dayIndex)
     }
@@ -85,7 +96,10 @@ final class PlanDay {
 
     /// Summary string for collapsed view (e.g., "3種目 / 9セット").
     var summary: String {
-        L10n.tr("plan_day_summary", exerciseCount, totalPlannedSets)
+        if isRestDay {
+            return L10n.tr("rest_day")
+        }
+        return L10n.tr("plan_day_summary", exerciseCount, totalPlannedSets)
     }
 
     // MARK: - Methods
@@ -128,8 +142,14 @@ final class PlanDay {
         let copy = PlanDay(
             dayIndex: newDayIndex,
             name: name,
-            note: note
+            note: note,
+            isRestDay: isRestDay
         )
+
+        // Rest days don't copy exercises/sets.
+        if isRestDay {
+            return copy
+        }
 
         for exercise in sortedExercises {
             let exerciseCopy = PlanExercise(

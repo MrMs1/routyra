@@ -26,6 +26,7 @@ struct PlanStartPickerSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    @State private var selectedTiming: PlanStartTiming = .today
     @State private var selectedDayIndex: Int = 1
     @State private var showDayPicker: Bool = false
     @State private var scheduledStartDate: Date = DateUtilities.today
@@ -44,7 +45,7 @@ struct PlanStartPickerSheet: View {
                         .fontWeight(.bold)
                         .foregroundColor(AppColors.textPrimary)
 
-                    Text(L10n.tr("plan_start_subtitle", dayDisplayText))
+                    Text(L10n.tr("plan_start_subtitle", startSummaryText))
                         .font(.subheadline)
                         .foregroundColor(AppColors.textMuted)
                 }
@@ -52,33 +53,27 @@ struct PlanStartPickerSheet: View {
 
                 Spacer()
 
-                // Main content: Buttons + Day selector
+                // Main content: Timing + Details + Confirm
                 VStack(spacing: 16) {
-                    // Start timing buttons
-                    VStack(spacing: 12) {
-                        primaryButton(timing: .today, title: L10n.tr("plan_start_today"))
-                        if todayHasWorkoutData {
-                            Text(L10n.tr("plan_start_warning_replace_today"))
-                                .font(.caption)
-                                .foregroundColor(AppColors.textMuted)
-                                .multilineTextAlignment(.center)
-                        }
-
-                        VStack(spacing: 10) {
-                            DatePicker(
-                                L10n.tr("plan_start_date_label"),
-                                selection: $scheduledStartDate,
-                                in: DateUtilities.today...,
-                                displayedComponents: .date
-                            )
-                            .datePickerStyle(.compact)
-
-                            secondaryButton(title: L10n.tr("plan_start_scheduled"))
-                        }
-                    }
+                    StartTimingSection(
+                        selectedTiming: $selectedTiming,
+                        scheduledStartDate: $scheduledStartDate,
+                        todayHasWorkoutData: todayHasWorkoutData
+                    )
 
                     // Start Day selector (directly below buttons)
                     startDaySelector
+
+                    Text(L10n.tr("plan_start_day_help"))
+                        .font(.caption)
+                        .foregroundColor(AppColors.textMuted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    KeyValueSummaryCard(rows: [
+                        .init(label: L10n.tr("plan_start_mode_label"), value: startModeValueText),
+                        .init(label: L10n.tr("plan_start_day_label"), value: dayDisplayText),
+                    ])
+                    confirmButton
                 }
                 .padding(.horizontal)
 
@@ -100,40 +95,6 @@ struct PlanStartPickerSheet: View {
                     selectedDayIndex: $selectedDayIndex
                 )
             }
-        }
-    }
-
-    // MARK: - Primary Button
-
-    private func primaryButton(timing: PlanStartTiming, title: String) -> some View {
-        Button {
-            onConfirm(timing, selectedDayIndex, nil)
-            dismiss()
-        } label: {
-            Text(title)
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(AppColors.accentBlue)
-                .foregroundColor(.white)
-                .cornerRadius(12)
-        }
-    }
-
-    // MARK: - Secondary Button
-
-    private func secondaryButton(title: String) -> some View {
-        Button {
-            onConfirm(.scheduled, selectedDayIndex, scheduledStartDate)
-            dismiss()
-        } label: {
-            Text(title)
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(AppColors.cardBackground)
-                .foregroundColor(AppColors.textPrimary)
-                .cornerRadius(12)
         }
     }
 
@@ -170,15 +131,52 @@ struct PlanStartPickerSheet: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Summary + Confirm
+
+    private var confirmButton: some View {
+        Button {
+            let startDate = selectedTiming == .scheduled ? scheduledStartDate : nil
+            onConfirm(selectedTiming, selectedDayIndex, startDate)
+            dismiss()
+        } label: {
+            Text(L10n.tr("plan_start_confirm"))
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(AppColors.accentBlue)
+                .foregroundColor(.white)
+                .cornerRadius(12)
+        }
+    }
+
+    private var startSummaryText: String {
+        "\(startModeValueText) (\(dayDisplayText))"
+    }
+
+    private var startModeValueText: String {
+        switch selectedTiming {
+        case .today:
+            return L10n.tr("today")
+        case .nextWorkout:
+            return L10n.tr("plan_start_next_workout")
+        case .scheduled:
+            return DateFormatter.localizedString(from: scheduledStartDate, dateStyle: .short, timeStyle: .none)
+        }
+    }
+
     private var dayDisplayText: String {
         guard selectedDayIndex >= 1 && selectedDayIndex <= sortedDays.count else {
             return L10n.tr("day_label", 1)
         }
         let day = sortedDays[selectedDayIndex - 1]
-        if let name = day.name, !name.isEmpty {
-            return "\(L10n.tr("day_label", selectedDayIndex)) (\(name))"
+        let base = L10n.tr("day_label", selectedDayIndex)
+        if let name = day.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !name.isEmpty,
+           name != base,
+           name != "Day \(selectedDayIndex)" {
+            return "\(base) (\(name))"
         }
-        return L10n.tr("day_label", selectedDayIndex)
+        return base
     }
 }
 

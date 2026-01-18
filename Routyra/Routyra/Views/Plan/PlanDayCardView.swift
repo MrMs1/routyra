@@ -87,11 +87,18 @@ struct PlanDayCardView<Destination: Hashable>: View {
                 onToggleExpand()
             } label: {
                 HStack(spacing: 12) {
-                    // Chevron
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(AppColors.textMuted)
-                        .frame(width: 16)
+                    if day.isRestDay {
+                        Image(systemName: "bed.double")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppColors.textMuted)
+                            .frame(width: 16)
+                    } else {
+                        // Chevron
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(AppColors.textMuted)
+                            .frame(width: 16)
+                    }
 
                     // Day info
                     VStack(alignment: .leading, spacing: 2) {
@@ -101,7 +108,7 @@ struct PlanDayCardView<Destination: Hashable>: View {
 
                         HStack(spacing: 4) {
                             // Body part color dots (collapsed state)
-                            if !isExpanded {
+                            if !day.isRestDay && !isExpanded {
                                 let uniqueBodyParts = getUniqueBodyParts()
                                 if !uniqueBodyParts.isEmpty {
                                     HStack(spacing: 4) {
@@ -127,15 +134,17 @@ struct PlanDayCardView<Destination: Hashable>: View {
             .buttonStyle(.plain)
 
             // Edit button (NavigationLink hidden to prevent disclosure indicator)
-            Image(systemName: "pencil.circle.fill")
-                .font(.system(size: 24))
-                .foregroundColor(AppColors.accentBlue)
-                .background(
-                    NavigationLink(value: editDestination) {
-                        EmptyView()
-                    }
-                    .opacity(0)
-                )
+            if !day.isRestDay {
+                Image(systemName: "pencil.circle.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(AppColors.accentBlue)
+                    .background(
+                        NavigationLink(value: editDestination) {
+                            EmptyView()
+                        }
+                        .opacity(0)
+                    )
+            }
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 12)
@@ -145,7 +154,23 @@ struct PlanDayCardView<Destination: Hashable>: View {
 
     private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if displayItems.isEmpty {
+            if day.isRestDay {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 6) {
+                        Text(L10n.tr("rest_day"))
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.textSecondary)
+                        Text(L10n.tr("rest_day_description"))
+                            .font(.caption)
+                            .foregroundColor(AppColors.textMuted)
+                            .multilineTextAlignment(.center)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, 16)
+                .padding(.horizontal, 12)
+            } else if displayItems.isEmpty {
                 // Empty state
                 HStack {
                     Spacer()

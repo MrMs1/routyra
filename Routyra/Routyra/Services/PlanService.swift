@@ -197,11 +197,21 @@ enum PlanService {
         // First time using this plan
         guard let lastOpenedDate = progress.lastOpenedDate else {
             progress.lastOpenedDate = todayWorkout
+            try? modelContext.save()
             return progress.currentDayIndex
         }
 
         // Same workout day - no advancement needed
         if DateUtilities.isSameDay(lastOpenedDate, todayWorkout) {
+            return progress.currentDayIndex
+        }
+
+        // If the previous plan day was a rest day, auto-advance regardless of workout data.
+        if let previousPlanDay = plan.day(at: progress.currentDayIndex),
+           previousPlanDay.isRestDay {
+            progress.advanceToNextDay(totalDays: totalDays)
+            progress.lastOpenedDate = todayWorkout
+            try? modelContext.save()
             return progress.currentDayIndex
         }
 
@@ -222,6 +232,7 @@ enum PlanService {
         }
 
         progress.lastOpenedDate = todayWorkout
+        try? modelContext.save()
         return progress.currentDayIndex
     }
 
@@ -347,6 +358,11 @@ enum PlanService {
         workoutDay: WorkoutDay,
         modelContext: ModelContext
     ) {
+        // Rest day: no exercises to expand.
+        if planDay.isRestDay {
+            return
+        }
+
         // Build a unified list of items to expand (groups + ungrouped exercises)
         // sorted by orderIndex
         var items: [(orderIndex: Int, isGroup: Bool, group: PlanExerciseGroup?, exercise: PlanExercise?)] = []
@@ -627,11 +643,13 @@ enum PlanService {
     ///
     /// - Parameters:
     ///   - profile: The local profile.
+    ///   - workoutDate: The workout date (must be calculated with transitionHour consideration).
     ///   - modelContext: The SwiftData model context.
     /// - Returns: Today's workout day (created or existing), or nil if no active plan.
     @MainActor
     static func setupTodayWorkout(
         profile: LocalProfile,
+        workoutDate: Date,
         modelContext: ModelContext
     ) -> WorkoutDay? {
         // Check if profile has active plan
@@ -642,8 +660,9 @@ enum PlanService {
 
         // OPTIMIZATION: Early return if workout is already set up for current plan
         // This avoids expensive handleAppOpen() and reindexDays() calls on subsequent opens
-        if let existingWorkout = WorkoutService.getTodayWorkout(
+        if let existingWorkout = WorkoutService.getWorkoutDay(
             profileId: profile.id,
+            date: workoutDate,
             modelContext: modelContext
         ) {
             // If already linked to a plan day from this plan, return immediately
@@ -687,6 +706,7 @@ enum PlanService {
             planDay = sameDayAfterReindex
             if progress.currentDayIndex != sameDayAfterReindex.dayIndex {
                 progress.currentDayIndex = sameDayAfterReindex.dayIndex
+                try? modelContext.save()
             }
         } else {
             // Day was deleted or not found, clamp to valid range
@@ -694,6 +714,7 @@ enum PlanService {
             planDay = plan.day(at: clampedIndex)
             if progress.currentDayIndex != clampedIndex && plan.dayCount > 0 {
                 progress.currentDayIndex = clampedIndex
+                try? modelContext.save()
             }
         }
 
@@ -702,8 +723,9 @@ enum PlanService {
         }
 
         // Check if workout already exists for today (re-check after handleAppOpen)
-        if let existingWorkout = WorkoutService.getTodayWorkout(
+        if let existingWorkout = WorkoutService.getWorkoutDay(
             profileId: profile.id,
+            date: workoutDate,
             modelContext: modelContext
         ) {
             // If the workout is already set up for this plan day, return as is
@@ -727,7 +749,7 @@ enum PlanService {
         // Create new workout day in plan mode
         let workoutDay = WorkoutService.getOrCreateWorkoutDay(
             profileId: profile.id,
-            date: Date(),
+            date: workoutDate,
             mode: .routine,
             routinePresetId: planId,
             routineDayId: planDay.id,

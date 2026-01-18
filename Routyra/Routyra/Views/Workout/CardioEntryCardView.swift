@@ -48,6 +48,7 @@ struct CardioEntryCardView: View {
         case .elliptical: return "figure.elliptical"
         case .rowing: return "figure.rowing"
         case .stairClimbing, .stairs: return "figure.stairs"
+        case .stepTraining: return "figure.stairs"
         case .highIntensityIntervalTraining: return "figure.highintensity.intervaltraining"
         case .yoga: return "figure.yoga"
         case .pilates: return "figure.pilates"
@@ -289,6 +290,7 @@ struct CardioEntryCardView: View {
                     CardioTimeDistanceInputView(
                         durationSeconds: $durationSeconds,
                         distanceMeters: $distanceMeters,
+                        allowsEditing: isManualEntry,
                         onDurationChange: { newSeconds in
                             let newDuration = Double(newSeconds)
                             if newDuration != cardio.duration {
@@ -301,9 +303,8 @@ struct CardioEntryCardView: View {
                     )
 
                     // Action buttons
-                    if cardio.isCompleted {
-                        // Completed state - show uncomplete button (manual only)
-                        if isManualEntry {
+                    if isManualEntry {
+                        if cardio.isCompleted {
                             Button(action: onUncomplete) {
                                 HStack(spacing: 6) {
                                     Image(systemName: "arrow.uturn.backward")
@@ -316,22 +317,21 @@ struct CardioEntryCardView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
                             }
-                        }
-                    } else {
-                        // Not completed - show complete button
-                        Button(action: onComplete) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "checkmark")
-                                    .font(.subheadline.weight(.semibold))
-                                Text(L10n.tr("cardio_mark_complete"))
+                        } else {
+                            Button(action: onComplete) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "checkmark")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(L10n.tr("cardio_mark_complete"))
+                                }
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(AppColors.accentBlue)
+                                .cornerRadius(10)
                             }
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppColors.textPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(AppColors.accentBlue)
-                            .cornerRadius(10)
                         }
                     }
                 }
@@ -376,6 +376,7 @@ struct CardioEntryCardView: View {
 private struct CardioTimeDistanceInputView: View {
     @Binding var durationSeconds: Int
     @Binding var distanceMeters: Double?
+    let allowsEditing: Bool
     var onDurationChange: (Int) -> Void
     var onDistanceChange: (Double?) -> Void
 
@@ -477,6 +478,16 @@ private struct CardioTimeDistanceInputView: View {
                 .foregroundColor(AppColors.accentBlue)
             }
         }
+        .onChange(of: allowsEditing) { _, newValue in
+            if !newValue {
+                minutesFieldFocused = false
+                secondsFieldFocused = false
+                distanceFieldFocused = false
+                isEditingMinutes = false
+                isEditingSeconds = false
+                isEditingDistance = false
+            }
+        }
     }
 
     @ViewBuilder
@@ -487,7 +498,7 @@ private struct CardioTimeDistanceInputView: View {
         focused: FocusState<Bool>.Binding,
         onUpdate: @escaping (Int) -> Void
     ) -> some View {
-        if isEditing.wrappedValue {
+        if isEditing.wrappedValue && allowsEditing {
             TextField("", text: text)
                 .keyboardType(.numberPad)
                 .font(.system(size: valueFontSize, weight: .semibold, design: .rounded))
@@ -518,14 +529,16 @@ private struct CardioTimeDistanceInputView: View {
                 .foregroundColor(AppColors.textPrimary)
                 .frame(minWidth: 50)
                 .onTapGesture {
-                    isEditing.wrappedValue = true
+                    if allowsEditing {
+                        isEditing.wrappedValue = true
+                    }
                 }
         }
     }
 
     @ViewBuilder
     private var distanceValueView: some View {
-        if isEditingDistance {
+        if isEditingDistance && allowsEditing {
             TextField("", text: $distanceText)
                 .keyboardType(.decimalPad)
                 .font(.system(size: valueFontSize, weight: .semibold, design: .rounded))
@@ -570,7 +583,9 @@ private struct CardioTimeDistanceInputView: View {
                 .foregroundColor(distanceKm != nil ? AppColors.textPrimary : AppColors.textMuted)
                 .frame(minWidth: 55)
                 .onTapGesture {
-                    isEditingDistance = true
+                    if allowsEditing {
+                        isEditingDistance = true
+                    }
                 }
         }
     }

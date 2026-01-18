@@ -790,6 +790,26 @@ struct PlanProgressTests {
         #expect(progress.currentDayIndex == 2)
     }
 
+    @Test("既存の空WorkoutDayがある場合はsetupTodayWorkoutでプランを展開する")
+    @MainActor
+    func testSetupTodayWorkoutExpandsExistingEmptyWorkoutDay() throws {
+        let container = try createTestContainer()
+        let context = container.mainContext
+
+        let (profile, plan) = createProfileAndPlan(dayCount: 1, modelContext: context)
+
+        let today = DateUtilities.startOfDay(Date())
+        let workoutDay = WorkoutDay(profileId: profile.id, date: today)
+        context.insert(workoutDay)
+
+        _ = PlanService.setupTodayWorkout(profile: profile, modelContext: context)
+
+        #expect(workoutDay.mode == .routine)
+        #expect(workoutDay.routinePresetId == plan.id)
+        #expect(workoutDay.routineDayId != nil)
+        #expect(!workoutDay.entries.isEmpty)
+    }
+
     // MARK: - Transition Hour Bug Prevention Tests
 
     @Test("transitionHour考慮で深夜は前日として扱われる")

@@ -82,6 +82,7 @@ struct WorkoutView: View {
     @State private var currentDistance: Double? = nil
     @State private var profile: LocalProfile?
     @State private var navigationPath = NavigationPath()
+    @State private var shouldReturnToPickerAfterCardio = false
     @State private var hasInitialized: Bool = false
     @State private var pendingCardioExercise: Exercise?
 
@@ -104,6 +105,11 @@ struct WorkoutView: View {
     @State private var draggedItemId: String?
     @State private var showPlanReorderDialog = false
     @State private var pendingPlanReorder: PlanReorderMap?
+    @State private var pendingGroupDelete: WorkoutExerciseGroup?
+    @State private var showGroupDeleteDialog = false
+    @State private var groupSwipeOffsets: [UUID: CGFloat] = [:]
+    @State private var groupSwipeStartOffsets: [UUID: CGFloat] = [:]
+    @State private var openGroupSwipeId: UUID?
 
     // Past day rescue support
     @State private var showPastDayRescuePicker = false
@@ -120,6 +126,10 @@ struct WorkoutView: View {
     @State private var showCombinationAnnouncement = false
     @State private var combinationDontShowAgain = false
     @State private var selectedGroupRoundIndex: [UUID: Int] = [:]
+    @State private var showCopyPreviousConfirm = false
+
+    // Share support
+    @State private var shareImagePayload: ShareImagePayload?
 
     // Ad support
     @StateObject private var adManager = NativeAdManager()
@@ -138,6 +148,11 @@ struct WorkoutView: View {
 
     private var selectedWorkoutDate: Date {
         DateUtilities.startOfDay(selectedDate)
+    }
+
+    private var copySourceWorkoutDateLabel: String {
+        let sourceDate = lastWorkoutDay?.date ?? selectedWorkoutDate
+        return Formatters.monthDay.string(from: DateUtilities.startOfDay(sourceDate))
     }
 
     private var isViewingToday: Bool {
@@ -275,11 +290,58 @@ struct WorkoutView: View {
         return plan.day(at: dayInfo.dayIndex)
     }
 
-    /// Most recent workout day with entries (excluding today), used for "copy previous" feature
+    /// Gets the PlanDay for the selected date (today/future preview or linked WorkoutDay).
+    private var selectedPlanDay: PlanDay? {
+        // 1) If a WorkoutDay exists, resolve via routinePresetId + routineDayId
+        if let workoutDay = selectedWorkoutDay,
+           let planId = workoutDay.routinePresetId,
+           let planDayId = workoutDay.routineDayId,
+           let plan = PlanService.getPlan(id: planId, modelContext: modelContext) {
+            return plan.days.first { $0.id == planDayId }
+        }
+
+        // 2) If no WorkoutDay exists, resolve from day context + active plan
+        if let dayInfo = currentDayContextInfo,
+           let plan = activePlan {
+            return plan.day(at: dayInfo.dayIndex)
+        }
+
+        return nil
+    }
+
+    private var shouldShowRestDayView: Bool {
+        guard shouldShowEmptyState else { return false }
+        return selectedPlanDay?.isRestDay ?? false
+    }
+
+    private var isRestDay: Bool {
+        selectedPlanDay?.isRestDay ?? false
+    }
+
+    private var shouldShowShareCard: Bool {
+        // Never show on rest day
+        guard !isRestDay else { return false }
+
+        // Must have at least 1 strength entry (cardio-only days should not show)
+        let strengthEntries = sortedEntries
+        guard !strengthEntries.isEmpty else { return false }
+
+        // All strength entries must be "completed sets only"
+        guard strengthEntries.allSatisfy({ $0.isPlannedSetsCompleted }) else { return false }
+
+        // If there are cardio workouts for the day, all must be completed
+        if !selectedDateCardioWorkouts.isEmpty {
+            guard selectedDateCardioWorkouts.allSatisfy({ $0.isCompleted }) else { return false }
+        }
+
+        return true
+    }
+
+    /// Most recent workout day with entries before selected date, used for "copy previous" feature
     private var lastWorkoutDay: WorkoutDay? {
-        let today = todayWorkoutDate
+        let targetDate = selectedWorkoutDate
         return workoutDays.first { workoutDay in
-            !DateUtilities.isSameDay(workoutDay.date, today) && !workoutDay.sortedEntries.isEmpty
+            workoutDay.date < targetDate && !workoutDay.sortedEntries.isEmpty
         }
     }
 
@@ -455,7 +517,7 @@ struct WorkoutView: View {
         return workoutDay.totalCompletedSets == 0
     }
 
-    var body: some View {
+    private var navigationRoot: some View {
         NavigationStack(path: $navigationPath) {
             mainContent
                 .navigationDestination(for: WorkoutDestination.self) { destination in
@@ -472,99 +534,192 @@ struct WorkoutView: View {
                     }
                 }
         }
-        .onAppear {
-            // OPTIMIZATION: Guard all heavy operations with hasInitialized
-            // Profile caching in ProfileService makes this call cheap on subsequent visits
-            profile = ProfileService.getOrCreateProfile(modelContext: modelContext)
+    }
 
-            if !hasInitialized {
-                // Initialize only once to preserve state when switching tabs
-                // These operations are expensive and don't need to run on every tab switch
+    var body: some View {
+        bodyWithAnimation
+    }
 
-                // Only load cycle if in cycle mode
-                if profile?.executionMode == .cycle {
-                    loadActiveCycle()
+    private var bodyWithAnimation: some View {
+        bodyWithCombinationOverlay
+            .animation(.easeInOut(duration: 0.2), value: showCombinationAnnouncement)
+    }
+
+    private var bodyWithCombinationOverlay: some View {
+        bodyWithAlert
+            .overlay {
+                combinationOverlay
+            }
+    }
+
+    private var bodyWithAlert: some View {
+        bodyWithSheets
+            .alert(L10n.tr("rest_timer_conflict_title"), isPresented: $showTimerConflictAlert) {
+                Button(L10n.tr("rest_timer_conflict_continue"), role: .cancel) {
+                    // Keep current timer running
+                    pendingTimerDuration = 0
                 }
-
-                ensureTodayWorkout()
-
-                selectedDate = todayWorkoutDate
-                if let first = sortedEntries.first {
-                    expandedEntryId = first.id
-                    updateCurrentWeightReps(for: first)
+                Button(L10n.tr("rest_timer_conflict_switch")) {
+                    // Switch to new timer
+                    restTimer.forceStart(duration: pendingTimerDuration)
+                    pendingTimerDuration = 0
                 }
-
-                // Load ads if not premium
-                if !(profile?.isPremiumUser ?? false) {
-                    adManager.loadNativeAds(count: 3)
+            } message: {
+                Text(L10n.tr("rest_timer_conflict_message"))
+            }
+            .alert(L10n.tr("empty_state_copy_title"), isPresented: $showCopyPreviousConfirm) {
+                Button(L10n.tr("cancel"), role: .cancel) {}
+                Button(L10n.tr("empty_state_copy_button")) {
+                    copyPreviousWorkout()
                 }
+            } message: {
+                Text(L10n.tr("workout_copy_confirm_message", copySourceWorkoutDateLabel))
+                    + Text("\n")
+                    + Text(L10n.tr("workout_copy_confirm_note_healthkit"))
+                        .font(.footnote)
+            }
+            .confirmationDialog(
+                L10n.tr("workout_delete_group_title"),
+                isPresented: $showGroupDeleteDialog,
+                titleVisibility: .visible
+            ) {
+                Button(L10n.tr("delete"), role: .destructive) {
+                    if let group = pendingGroupDelete {
+                        deleteGroup(group)
+                    }
+                    pendingGroupDelete = nil
+                }
+                Button(L10n.tr("cancel"), role: .cancel) {
+                    pendingGroupDelete = nil
+                }
+            } message: {
+                Text(L10n.tr("workout_delete_group_message"))
+            }
+    }
 
-                // Setup Watch Connectivity
-                setupWatchConnectivity()
+    private var bodyWithSheets: some View {
+        bodyWithDayOverlay
+            .sheet(isPresented: $showPastDayRescuePicker) {
+                pastDayRescueSheet
+            }
+            .sheet(
+                item: $pendingCardioExercise,
+                onDismiss: {
+                    shouldReturnToPickerAfterCardio = false
+                },
+                content: { exercise in
+                    cardioEntrySheet(for: exercise)
+                }
+            )
+            .sheet(item: $shareImagePayload) { payload in
+                ShareSheet(items: [payload.image])
+            }
+    }
 
-                hasInitialized = true
+    private var bodyWithDayOverlay: some View {
+        bodyWithLifecycle
+            .overlay {
+                dayOverlay
+            }
+    }
+
+    private var bodyWithLifecycle: some View {
+        navigationRoot
+            .onAppear(perform: handleOnAppear)
+            .onChange(of: selectedDate) { _, _ in
+                handleSelectedDateChange()
+            }
+    }
+
+    private func handleOnAppear() {
+        // OPTIMIZATION: Guard all heavy operations with hasInitialized
+        // Profile caching in ProfileService makes this call cheap on subsequent visits
+        profile = ProfileService.getOrCreateProfile(modelContext: modelContext)
+
+        if !hasInitialized {
+            // Initialize only once to preserve state when switching tabs
+            // These operations are expensive and don't need to run on every tab switch
+
+            // Only load cycle if in cycle mode
+            if profile?.executionMode == .cycle {
+                loadActiveCycle()
             }
 
-            // Send workout data to Watch on appear
-            sendWorkoutDataToWatch()
-        }
-        .onChange(of: selectedDate) { _, _ in
-            if isReordering {
-                stopReorderMode()
-            }
+            ensureTodayWorkout()
+
+            selectedDate = todayWorkoutDate
             if let first = sortedEntries.first {
                 expandedEntryId = first.id
                 updateCurrentWeightReps(for: first)
-            } else {
-                expandedEntryId = nil
             }
+
+            // Load ads if not premium
+            if !(profile?.isPremiumUser ?? false) {
+                adManager.loadNativeAds(count: 3)
+            }
+
+            // Setup Watch Connectivity
+            setupWatchConnectivity()
+
+            hasInitialized = true
         }
-        .overlay {
-            dayOverlay
+
+        // Send workout data to Watch on appear
+        sendWorkoutDataToWatch()
+    }
+
+    private func handleSelectedDateChange() {
+        if isReordering {
+            stopReorderMode()
         }
-        .sheet(isPresented: $showPastDayRescuePicker) {
-            if let plan = activePlan {
-                PlanStartDayPickerSheet(
-                    days: plan.sortedDays,
-                    selectedDayIndex: $rescueDayIndex
+        if let first = sortedEntries.first {
+            expandedEntryId = first.id
+            updateCurrentWeightReps(for: first)
+        } else {
+            expandedEntryId = nil
+        }
+    }
+
+    private func shiftSelectedDate(by days: Int) {
+        guard let newDate = Calendar.current.date(byAdding: .day, value: days, to: selectedWorkoutDate) else {
+            return
+        }
+        selectedDate = DateUtilities.startOfDay(newDate)
+    }
+
+    @ViewBuilder
+    private var pastDayRescueSheet: some View {
+        if let plan = activePlan {
+            PlanStartDayPickerSheet(
+                days: plan.sortedDays,
+                selectedDayIndex: $rescueDayIndex
+            )
+            .onDisappear {
+                // After sheet is dismissed, execute rescue if a day was selected
+                if rescueDayIndex > 0 {
+                    rescuePastDay(planId: plan.id, dayIndex: rescueDayIndex)
+                    rescueDayIndex = 0 // Reset for next time
+                }
+            }
+        } else {
+            EmptyView()
+        }
+    }
+
+    private func cardioEntrySheet(for exercise: Exercise) -> some View {
+        NavigationStack {
+            CardioTimeDistanceEntryView { durationSeconds, distanceMeters in
+                addCardioWorkout(
+                    exercise,
+                    durationSeconds: durationSeconds,
+                    distanceMeters: distanceMeters
                 )
-                .onDisappear {
-                    // After sheet is dismissed, execute rescue if a day was selected
-                    if rescueDayIndex > 0 {
-                        rescuePastDay(planId: plan.id, dayIndex: rescueDayIndex)
-                        rescueDayIndex = 0 // Reset for next time
-                    }
+                if shouldReturnToPickerAfterCardio {
+                    navigationPath.removeLast()
                 }
+                shouldReturnToPickerAfterCardio = false
             }
         }
-        .sheet(item: $pendingCardioExercise) { exercise in
-            NavigationStack {
-                CardioTimeDistanceEntryView { durationSeconds, distanceMeters in
-                    addCardioWorkout(
-                        exercise,
-                        durationSeconds: durationSeconds,
-                        distanceMeters: distanceMeters
-                    )
-                }
-            }
-        }
-        .alert(L10n.tr("rest_timer_conflict_title"), isPresented: $showTimerConflictAlert) {
-            Button(L10n.tr("rest_timer_conflict_continue"), role: .cancel) {
-                // Keep current timer running
-                pendingTimerDuration = 0
-            }
-            Button(L10n.tr("rest_timer_conflict_switch")) {
-                // Switch to new timer
-                restTimer.forceStart(duration: pendingTimerDuration)
-                pendingTimerDuration = 0
-            }
-        } message: {
-            Text(L10n.tr("rest_timer_conflict_message"))
-        }
-        .overlay {
-            combinationOverlay
-        }
-        .animation(.easeInOut(duration: 0.2), value: showCombinationAnnouncement)
     }
 
     private var mainContent: some View {
@@ -680,11 +835,10 @@ struct WorkoutView: View {
 
         return ScrollView {
             LazyVStack(spacing: 8) {
-                ForEach(cachedDisplayItems.indices, id: \.self) { index in
-                    let item = cachedDisplayItems[index]
+                ForEach(Array(cachedDisplayItems.enumerated()), id: \.element.id) { index, item in
                     displayItemView(item, scrollProxy: scrollProxy)
 
-                    // Show ad after every 3 exercises (only if more than 3 exercises)
+                    // Show ad after the 3rd exercise only when there are 5+ exercises
                     if let adIndex = shouldShowAd(afterIndex: index, displayItemsCount: cachedDisplayItems.count),
                        adIndex < adManager.nativeAds.count,
                        !(profile?.isPremiumUser ?? false) {
@@ -693,36 +847,48 @@ struct WorkoutView: View {
                 }
 
                 if cachedDisplayItems.isEmpty {
-                    // Future date without workout: show plan preview
-                    if isFutureWithoutWorkout, let planDay = previewPlanDay, let dayInfo = currentDayContextInfo {
-                        PlanDayPreviewView(
-                            planDay: planDay,
-                            dayIndex: dayInfo.dayIndex,
-                            totalDays: dayInfo.totalDays,
-                            exercises: exercisesDict,
-                            bodyParts: bodyPartsDict,
-                            weightUnit: profile?.effectiveWeightUnit ?? .kg
-                        )
-                    } else {
-                        // Regular empty state (today or past)
-                        EmptyStateView(
-                            isToday: isViewingToday,
-                            showCopyOption: canCopyPreviousWorkout,
-                            showRescueOption: canRescueFromPlan,
-                            onCreatePlan: {
-                                navigateToRoutines = true
-                            },
-                            onCopyPrevious: {
-                                copyPreviousWorkout()
-                            },
-                            onAddExercise: {
-                                navigationPath.append(WorkoutDestination.exercisePicker)
-                            },
-                            onRescueFromPlan: {
-                                showPastDayRescuePicker = true
-                            }
-                        )
+                    VStack(spacing: 0) {
+                        if shouldShowRestDayView {
+                            RestDayEmptyView()
+                        // Future date without workout: show plan preview
+                        } else if isFutureWithoutWorkout, let planDay = previewPlanDay, let dayInfo = currentDayContextInfo {
+                            PlanDayPreviewView(
+                                planDay: planDay,
+                                dayIndex: dayInfo.dayIndex,
+                                totalDays: dayInfo.totalDays,
+                                exercises: exercisesDict,
+                                bodyParts: bodyPartsDict,
+                                weightUnit: profile?.effectiveWeightUnit ?? .kg
+                            )
+                        } else {
+                            // Regular empty state (today or past)
+                            EmptyStateView(
+                                isToday: isViewingToday,
+                                showCopyOption: canCopyPreviousWorkout,
+                                showRescueOption: canRescueFromPlan,
+                                showRecordFromPlanPrimary: activePlan != nil,
+                                showDescription: activePlan == nil,
+                                onCreatePlan: {
+                                    navigateToRoutines = true
+                                },
+                                onRecordFromPlan: {
+                                    recordFromPlan()
+                                },
+                                onCopyPrevious: {
+                                    showCopyPreviousConfirm = true
+                                },
+                                onAddExercise: {
+                                    navigationPath.append(WorkoutDestination.exercisePicker)
+                                },
+                                onRescueFromPlan: {
+                                    showPastDayRescuePicker = true
+                                }
+                            )
+                        }
                     }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(emptyStateDaySwipeGesture)
 
                     // Show ad at bottom of empty state
                     if shouldShowEmptyStateAd {
@@ -732,6 +898,12 @@ struct WorkoutView: View {
                     // Add exercise card at bottom of list (only when entries exist)
                     AddExerciseCard {
                         navigationPath.append(WorkoutDestination.exercisePicker)
+                    }
+
+                    if shouldShowShareCard {
+                        ShareWorkoutCard {
+                            startWorkoutShare()
+                        }
                     }
 
                     // Always show ad below add exercise button
@@ -778,25 +950,45 @@ struct WorkoutView: View {
         }
     }
 
+    private var emptyStateDaySwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 30, coordinateSpace: .local)
+            .onEnded { value in
+                guard shouldShowEmptyState else { return }
+
+                let horizontalTranslation = value.translation.width
+                let verticalTranslation = value.translation.height
+                guard abs(horizontalTranslation) > abs(verticalTranslation) else { return }
+
+                let swipeThreshold: CGFloat = 80
+                if horizontalTranslation > swipeThreshold {
+                    shiftSelectedDate(by: -1)
+                } else if horizontalTranslation < -swipeThreshold {
+                    shiftSelectedDate(by: 1)
+                }
+            }
+    }
+
     @ViewBuilder
     private func destinationView(for destination: WorkoutDestination) -> some View {
         switch destination {
         case .exercisePicker:
             if let profile = profile {
-                WorkoutExercisePickerView(
-                    profile: profile,
-                    exercises: exercisesDict,
-                    bodyParts: bodyPartsDict,
-                    onSelect: { exercise in
-                        // Navigate to set editor instead of directly adding
-                        navigationPath.removeLast()
-                        if isCardioExercise(exercise) {
-                            pendingCardioExercise = exercise
-                        } else {
-                            navigationPath.append(WorkoutDestination.setEditor(exercise: exercise))
+                    WorkoutExercisePickerView(
+                        profile: profile,
+                        exercises: exercisesDict,
+                        bodyParts: bodyPartsDict,
+                        onSelect: { exercise in
+                            // Navigate to set editor instead of directly adding
+                            if isCardioExercise(exercise) {
+                                shouldReturnToPickerAfterCardio = true
+                                pendingCardioExercise = exercise
+                            } else {
+                                shouldReturnToPickerAfterCardio = false
+                                navigationPath.removeLast()
+                                navigationPath.append(WorkoutDestination.setEditor(exercise: exercise))
+                            }
                         }
-                    }
-                )
+                    )
             }
 
         case .setEditor(let exercise):
@@ -804,6 +996,7 @@ struct WorkoutView: View {
                 Color.clear
                     .onAppear {
                         if pendingCardioExercise == nil {
+                            shouldReturnToPickerAfterCardio = false
                             pendingCardioExercise = exercise
                         }
                         navigationPath.removeLast()
@@ -1070,6 +1263,11 @@ struct WorkoutView: View {
         let selectedRound = selectedGroupRoundIndex[group.id] ?? defaultRoundIndex
         let isCombinationMode = profile?.combineRecordAndTimerStart ?? false
         let restSeconds = group.roundRestSeconds ?? profile?.defaultRestTimeSeconds ?? 0
+        let lastCompletedRoundIndex = group.roundsCompleted - 1
+        let isViewingCompletedRound = !group.isAllRoundsComplete && selectedRound < defaultRoundIndex
+        let canUncompleteSelectedRound = selectedRound == lastCompletedRoundIndex &&
+            lastCompletedRoundIndex >= 0 &&
+            canUncompleteGroupRound(group, roundIndex: selectedRound)
 
         VStack(alignment: .leading, spacing: 10) {
             WorkoutExerciseGroupCardView(
@@ -1087,6 +1285,7 @@ struct WorkoutView: View {
                     totalRounds: group.setCount,
                     activeRound: group.activeRound,
                     isAllRoundsComplete: group.isAllRoundsComplete,
+                    isViewingCompletedRound: isViewingCompletedRound,
                     selectedRoundIndex: selectedRound,
                     onSelectRound: { index in
                         selectedGroupRoundIndex[group.id] = index
@@ -1112,27 +1311,81 @@ struct WorkoutView: View {
                     }
 
                     if !group.isAllRoundsComplete {
-                        RestTimerActionDockView(
-                            isCombinationMode: isCombinationMode,
-                            restTimeSeconds: restSeconds,
-                            onLog: {
+                        if isViewingCompletedRound {
+                            // Match single-exercise behavior:
+                            // When viewing a completed round, show "Go to latest set"
+                            // instead of logging the next (active) round.
+                            Button(action: {
+                                selectedGroupRoundIndex[group.id] = defaultRoundIndex
+                            }) {
+                                HStack(spacing: 6) {
+                                    Text("workout_go_to_current_set")
+                                    Image(systemName: "arrow.right")
+                                        .font(.subheadline.weight(.semibold))
+                                }
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(AppColors.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(AppColors.accentBlue.opacity(0.18))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(AppColors.accentBlue.opacity(0.45), lineWidth: 1)
+                                )
+                                .cornerRadius(12)
+                            }
+                        } else {
+                            // Group spec: log round (single action). No REST timer UI for groups.
+                            Button(action: {
                                 let success = logGroupRound(for: group)
-                                if success {
+                                guard success else { return }
+
+                                // Do NOT start rest timer when the final round was just completed.
+                                guard !group.isAllRoundsComplete else { return }
+
+                                // Start rest timer only for non-final rounds (combination mode).
+                                if isCombinationMode, restSeconds > 0 {
                                     handleCombinationModeTimer(restTimeSeconds: group.roundRestSeconds)
                                 }
-                                return success
-                            },
-                            onTimerStart: {
-                                handleManualTimerStart(duration: restSeconds)
-                            },
-                            onTimerCancel: {
-                                restTimer.cancel()
-                            },
-                            onRestTimeChange: { newTime in
-                                group.roundRestSeconds = newTime > 0 ? newTime : nil
-                            },
-                            timerManager: restTimer
-                        )
+                            }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "checkmark")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(L10n.tr(isCombinationMode ? "rest_timer_log_and_start" : "rest_timer_log_set"))
+                                        .font(.headline)
+                                        .fontWeight(.semibold)
+                                }
+                                .foregroundColor(AppColors.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(AppColors.accentBlue)
+                                .cornerRadius(12)
+                            }
+                        }
+                    }
+
+                    // Uncomplete (undo) button for group rounds:
+                    // Only the last completed round can be reverted (same rule as single-set undo).
+                    if canUncompleteSelectedRound {
+                        Button(action: {
+                            _ = uncompleteGroupRound(for: group, roundIndex: selectedRound)
+                            // Match single-exercise behavior: return to latest after undo when viewing past rounds.
+                            if isViewingCompletedRound {
+                                selectedGroupRoundIndex[group.id] = max(0, group.activeRound - 1)
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.uturn.backward")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("workout_uncomplete_set")
+                            }
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(AppColors.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                        }
                     }
                 }
             }
@@ -1140,7 +1393,9 @@ struct WorkoutView: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppColors.cardBackground)
+                // Match single exercise card behavior:
+                // when the group is fully completed, use the "completed" background variant.
+                .fill(group.isAllRoundsComplete ? AppColors.groupedCardBackgroundCompleted : AppColors.groupedCardBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(AppColors.divider.opacity(0.6), lineWidth: 0.5)
@@ -1202,6 +1457,9 @@ struct WorkoutView: View {
             onUpdateSet: { set in
                 updateCompletedSet(set)
             },
+            onApplySet: { set in
+                applyPendingSetValues(set)
+            },
             onUncompleteSet: { set in
                 uncompleteSet(set)
             },
@@ -1213,6 +1471,8 @@ struct WorkoutView: View {
             },
             onUpdateRestTime: { set, newRestTime in
                 set.restTimeSeconds = newRestTime
+                // Sync rest time change to Watch.
+                sendWorkoutDataToWatch()
             },
             defaultRestTimeSeconds: profile?.defaultRestTimeSeconds ?? 90,
             isCombinationModeEnabled: profile?.combineRecordAndTimerStart ?? false,
@@ -1281,7 +1541,16 @@ struct WorkoutView: View {
         Group {
             switch item {
             case .group(let group):
+                // Use system swipe actions to avoid vertical scroll conflicts.
                 groupView(for: group, scrollProxy: scrollProxy)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            pendingGroupDelete = group
+                            showGroupDeleteDialog = true
+                        } label: {
+                            Label(L10n.tr("delete"), systemImage: "trash")
+                        }
+                    }
             case .entry(let entry):
                 entryCardView(for: entry, scrollProxy: scrollProxy, isGrouped: false)
             case .cardio(let cardio):
@@ -1297,6 +1566,105 @@ struct WorkoutView: View {
                     Label(L10n.tr("reorder"), systemImage: "arrow.up.arrow.down")
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func groupSwipeCardView(
+        for group: WorkoutExerciseGroup,
+        scrollProxy: ScrollViewProxy
+    ) -> some View {
+        let deleteButtonWidth: CGFloat = 80
+        let deleteButtonHeight: CGFloat = 56
+        let offset = groupSwipeOffsets[group.id] ?? 0
+
+        ZStack(alignment: .trailing) {
+            Button(role: .destructive) {
+                pendingGroupDelete = group
+                showGroupDeleteDialog = true
+            } label: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.red)
+
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                .frame(width: deleteButtonWidth, height: deleteButtonHeight)
+            }
+            .buttonStyle(.plain)
+
+            groupView(for: group, scrollProxy: scrollProxy)
+                .offset(x: offset)
+                // Allow vertical scrolling on the card, while still supporting horizontal swipe-to-delete.
+                .simultaneousGesture(groupSwipeGesture(for: group, deleteWidth: deleteButtonWidth))
+                .onTapGesture {
+                    if openGroupSwipeId == group.id {
+                        closeGroupSwipe(group.id)
+                    }
+                }
+        }
+    }
+
+    private func groupSwipeGesture(
+        for group: WorkoutExerciseGroup,
+        deleteWidth: CGFloat
+    ) -> some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .local)
+            .onChanged { value in
+                // Only treat as a swipe when horizontal intent is clear.
+                // This prevents the swipe gesture from stealing vertical ScrollView scrolling.
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                if openGroupSwipeId != nil && openGroupSwipeId != group.id {
+                    closeAllGroupSwipes(except: group.id)
+                }
+
+                let startOffset = groupSwipeStartOffsets[group.id] ?? (groupSwipeOffsets[group.id] ?? 0)
+                groupSwipeStartOffsets[group.id] = startOffset
+
+                let newOffset = startOffset + value.translation.width
+                groupSwipeOffsets[group.id] = min(0, max(-deleteWidth, newOffset))
+            }
+            .onEnded { value in
+                groupSwipeStartOffsets[group.id] = nil
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+
+                let offset = groupSwipeOffsets[group.id] ?? 0
+                let shouldOpen = offset <= -deleteWidth / 2 || value.predictedEndTranslation.width <= -deleteWidth
+                if shouldOpen {
+                    openGroupSwipe(group.id, width: deleteWidth)
+                } else {
+                    closeGroupSwipe(group.id)
+                }
+            }
+    }
+
+    private func openGroupSwipe(_ id: UUID, width: CGFloat) {
+        withAnimation(.easeOut(duration: 0.2)) {
+            groupSwipeOffsets[id] = -width
+            openGroupSwipeId = id
+        }
+        closeAllGroupSwipes(except: id)
+    }
+
+    private func closeGroupSwipe(_ id: UUID) {
+        withAnimation(.easeOut(duration: 0.2)) {
+            groupSwipeOffsets[id] = 0
+            if openGroupSwipeId == id {
+                openGroupSwipeId = nil
+            }
+        }
+    }
+
+    private func closeAllGroupSwipes(except id: UUID?) {
+        for (groupId, _) in groupSwipeOffsets where groupId != id {
+            groupSwipeOffsets[groupId] = 0
+        }
+        if let id, openGroupSwipeId != id {
+            openGroupSwipeId = nil
+        } else if id == nil {
+            openGroupSwipeId = nil
         }
     }
 
@@ -1433,15 +1801,27 @@ struct WorkoutView: View {
     }
 
     private func cardioState(for date: Date) -> WorkoutDayState {
+        let profileId = profile?.id
+        // Get the WorkoutDay for this date
+        let normalizedDate = DateUtilities.startOfDay(date)
+        let linkedWorkoutDayId = workoutDays.first(where: { $0.date == normalizedDate })?.id
+
         let workouts = allCardioWorkouts.filter { workout in
-            if let profile = profile, workout.profile?.id != profile.id {
+            // Profile filter
+            if let profileId = profileId, workout.profile?.id != profileId {
                 return false
             }
-            return DateUtilities.isSameDay(workout.startDate, date)
+            // If linked to a WorkoutDay, use that
+            if let linkedId = linkedWorkoutDayId, workout.workoutDayId == linkedId {
+                return true
+            }
+            // If not linked, use date comparison
+            return workout.workoutDayId == nil &&
+                DateUtilities.isSameDay(workout.startDate, date)
         }
 
         guard !workouts.isEmpty else { return .none }
-        return workouts.contains { $0.isCompleted } ? .complete : .incomplete
+        return workouts.allSatisfy { $0.isCompleted } ? .complete : .incomplete
     }
 
     /// Computes workout state for each day of the current week
@@ -1458,8 +1838,7 @@ struct WorkoutView: View {
 
             let strengthState: WorkoutDayState
             if let workoutDay = workoutDays.first(where: { $0.date == normalizedDate }) {
-                if workoutDay.entries.isEmpty || workoutDay.totalCompletedSets == 0 {
-                    // No entries or no completed sets = not started
+                if workoutDay.entries.isEmpty {
                     strengthState = .none
                 } else if workoutDay.entries.allSatisfy({ $0.isPlannedSetsCompleted }) {
                     strengthState = .complete
@@ -1471,7 +1850,21 @@ struct WorkoutView: View {
             }
 
             let cardioState = cardioState(for: normalizedDate)
-            states[dayIndex] = strengthState == .none ? cardioState : strengthState
+
+            // Combined state logic
+            let finalState: WorkoutDayState
+            switch (strengthState, cardioState) {
+            case (.incomplete, _), (_, .incomplete):
+                // If either is incomplete, the day is incomplete
+                finalState = .incomplete
+            case (.complete, .complete), (.complete, .none), (.none, .complete):
+                // If all existing workouts are complete, the day is complete
+                finalState = .complete
+            case (.none, .none):
+                // No workouts for this day
+                finalState = .none
+            }
+            states[dayIndex] = finalState
         }
         return states
     }
@@ -1491,18 +1884,17 @@ struct WorkoutView: View {
     }
 
     /// Returns the ad index to show after the given item index, or nil if no ad should be shown.
-    /// Ads are shown after every 3 exercises (indices 2, 5, 8...), but only when there are more than 3 exercises.
-    /// For 3 or fewer exercises, ads are shown at the bottom instead.
+    /// Ads are shown after every 3 exercises (indices 2, 5, 8...), but only when there are 5+ exercises.
     private func shouldShowAd(afterIndex index: Int, displayItemsCount: Int) -> Int? {
-        // Don't show inline ads if 3 or fewer exercises (will show at bottom instead)
-        guard displayItemsCount > 3 else { return nil }
+        // Don't show inline ads unless there are 5+ exercises (will show at bottom instead)
+        guard displayItemsCount >= 5 else { return nil }
 
         // Show ad after index 2, 5, 8... (every 3rd item, 0-indexed)
         // This means after item at positions 3, 6, 9... in 1-indexed terms
         guard (index + 1) % 3 == 0 else { return nil }
 
-        // Don't show ad after the last item (will use bottom ad instead)
-        guard index < displayItemsCount - 1 else { return nil }
+        // Don't show ad too close to the end (keep at least 2 items after the ad)
+        guard index <= displayItemsCount - 3 else { return nil }
 
         // Don't show ad adjacent to expanded card
         if let expandedIndex = expandedEntryIndex {
@@ -1792,6 +2184,20 @@ struct WorkoutView: View {
         }
     }
 
+    private func recordFromPlan() {
+        if activePlan != nil, shouldShowEmptyState {
+            rescueDayIndex = 0
+            showPastDayRescuePicker = true
+            return
+        }
+
+        if isViewingToday {
+            ensureTodayWorkout()
+            let currentDate = selectedDate
+            selectedDate = currentDate
+        }
+    }
+
     private func completeAndAdvanceCycle() {
         guard let cycle = activeCycle else { return }
 
@@ -1843,13 +2249,19 @@ struct WorkoutView: View {
         case .single:
             // Setup from active plan in single mode
             if let activePlanId = profile.activePlanId {
+                let didCarryOver = moveIncompleteRoutineWorkoutToToday(
+                    planId: activePlanId,
+                    workoutDate: workoutDate
+                )
+                if didCarryOver {
+                    return
+                }
                 if applyScheduledPlanIfNeeded(profile: profile, planId: activePlanId, workoutDate: workoutDate) {
                     return
                 }
                 if isScheduledPlanPending {
                     break
                 }
-                _ = moveIncompleteRoutineWorkoutToToday(planId: activePlanId, workoutDate: workoutDate)
                 setupWorkoutFromSinglePlan(planId: activePlanId, workoutDate: workoutDate)
                 return
             }
@@ -1864,23 +2276,60 @@ struct WorkoutView: View {
     }
 
     private func moveIncompleteRoutineWorkoutToToday(planId: UUID, workoutDate: Date) -> Bool {
-        guard workoutDays.first(where: { DateUtilities.isSameDay($0.date, workoutDate) }) == nil else {
-            return false
-        }
+        let todayWorkout = workoutDays.first(where: { DateUtilities.isSameDay($0.date, workoutDate) })
 
         guard let candidate = workoutDays.first(where: { workoutDay in
             workoutDay.date < workoutDate
                 && workoutDay.mode == .routine
                 && workoutDay.routinePresetId == planId
                 && workoutDay.routineDayId != nil
-                && workoutDay.totalCompletedSets == 0
+                && !hasAnyCompletedActivity(for: workoutDay)
         }) else {
             return false
+        }
+
+        if let todayWorkout {
+            guard todayWorkout.mode == .routine,
+                  todayWorkout.routinePresetId == planId,
+                  !hasAnyCompletedActivity(for: todayWorkout) else {
+                return false
+            }
+            deleteCardioWorkouts(for: todayWorkout)
+            modelContext.delete(todayWorkout)
         }
 
         candidate.date = workoutDate
         candidate.touch()
         return true
+    }
+
+    private func hasAnyCompletedActivity(for workoutDay: WorkoutDay) -> Bool {
+        if workoutDay.totalCompletedSets > 0 {
+            return true
+        }
+
+        let workoutDayId = workoutDay.id
+        let descriptor = FetchDescriptor<CardioWorkout>(
+            predicate: #Predicate<CardioWorkout> { workout in
+                workout.workoutDayId == workoutDayId && workout.isCompleted == true
+            }
+        )
+        let completedCardio = (try? modelContext.fetch(descriptor)) ?? []
+        return !completedCardio.isEmpty
+    }
+
+    private func deleteCardioWorkouts(for workoutDay: WorkoutDay) {
+        let workoutDayId = workoutDay.id
+        let descriptor = FetchDescriptor<CardioWorkout>(
+            predicate: #Predicate<CardioWorkout> { workout in
+                workout.workoutDayId == workoutDayId
+            }
+        )
+        if let workouts = try? modelContext.fetch(descriptor) {
+            for workout in workouts {
+                modelContext.delete(workout)
+            }
+        }
     }
 
     private func applyScheduledPlanIfNeeded(
@@ -2013,6 +2462,7 @@ struct WorkoutView: View {
         // Use PlanService to setup today's workout (it handles plan lookup internally)
         _ = PlanService.setupTodayWorkout(
             profile: profile,
+            workoutDate: workoutDate,
             modelContext: modelContext
         )
     }
@@ -2029,9 +2479,43 @@ struct WorkoutView: View {
 
             // If different workout day and already completed
             if !DateUtilities.isSameDay(lastWorkoutDate, workoutDate) {
+                // Prevent double-advancement within the same workout day.
+                if let lastAdvancedAt = progress.lastAdvancedAt {
+                    let lastAdvancedWorkoutDate = DateUtilities.workoutDate(for: lastAdvancedAt, transitionHour: transitionHour)
+                    if DateUtilities.isSameDay(lastAdvancedWorkoutDate, workoutDate) {
+                        return
+                    }
+                }
                 // Auto-advance to next day
                 CycleService.advance(cycle: cycle, modelContext: modelContext)
                 cycleStateInfo = CycleService.getCurrentStateInfo(for: cycle, modelContext: modelContext)
+            }
+        }
+
+        // If the current cycle day is a rest day, auto-advance once per workout day.
+        if let (_, planDay) = CycleService.getCurrentPlanDay(for: cycle, modelContext: modelContext),
+           planDay.isRestDay {
+            if let lastAdvancedAt = progress.lastAdvancedAt {
+                let lastAdvancedWorkoutDate = DateUtilities.workoutDate(for: lastAdvancedAt, transitionHour: transitionHour)
+                if !DateUtilities.isSameDay(lastAdvancedWorkoutDate, workoutDate) {
+                    CycleService.advance(cycle: cycle, modelContext: modelContext)
+                    cycleStateInfo = CycleService.getCurrentStateInfo(for: cycle, modelContext: modelContext)
+                }
+            } else if let lastCompletedAt = progress.lastCompletedAt {
+                let lastCompletedWorkoutDate = DateUtilities.workoutDate(for: lastCompletedAt, transitionHour: transitionHour)
+                if let daysDiff = DateUtilities.daysBetween(lastCompletedWorkoutDate, and: workoutDate), daysDiff >= 2 {
+                    // Rest day was skipped; advance once.
+                    CycleService.advance(cycle: cycle, modelContext: modelContext)
+                    cycleStateInfo = CycleService.getCurrentStateInfo(for: cycle, modelContext: modelContext)
+                } else {
+                    // First rest day open after completion; record to avoid same-day auto-advance.
+                    progress.lastAdvancedAt = workoutDate
+                    try? modelContext.save()
+                }
+            } else {
+                // No completion yet; record to avoid same-day auto-advance.
+                progress.lastAdvancedAt = workoutDate
+                try? modelContext.save()
             }
         }
     }
@@ -2079,6 +2563,8 @@ struct WorkoutView: View {
     private func changeExercise(entryId: UUID, to exercise: Exercise) {
         guard let entry = sortedEntries.first(where: { $0.id == entryId }) else { return }
         entry.exerciseId = exercise.id
+        // Sync changes to Watch (today only; guarded inside sendWorkoutDataToWatch()).
+        sendWorkoutDataToWatch()
     }
 
     /// Adds a selected exercise to the current workout with specified sets
@@ -2157,6 +2643,9 @@ struct WorkoutView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             expandedEntryId = entry.id
         }
+
+        // Sync new exercise to Watch immediately.
+        sendWorkoutDataToWatch()
     }
 
     private func addCardioWorkout(
@@ -2199,6 +2688,10 @@ struct WorkoutView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             expandedEntryId = cardioWorkout.id
         }
+
+        // If Watch is showing today's workout, keep it in sync.
+        // (Cardio itself isn't currently part of the Watch payload, but this keeps the sync behavior consistent.)
+        sendWorkoutDataToWatch()
     }
 
     private func nextCardioOrderIndex(for workoutDayId: UUID) -> Int {
@@ -2212,6 +2705,8 @@ struct WorkoutView: View {
 
     private func addSet(to entry: WorkoutExerciseEntry) {
         _ = entry.createSet(weight: Decimal(currentWeight), reps: currentReps, isCompleted: false)
+        // Sync set count/values to Watch.
+        sendWorkoutDataToWatch()
     }
 
     /// Copies exercises from the most recent workout to today
@@ -2231,12 +2726,26 @@ struct WorkoutView: View {
 
         guard let workoutDay = workoutDay else { return }
 
+        // Copy groups first to preserve grouping structure
+        let previousGroups = previousDay.exerciseGroups.sorted { $0.orderIndex < $1.orderIndex }
+        var groupMap: [UUID: WorkoutExerciseGroup] = [:]
+        for previousGroup in previousGroups {
+            let newGroup = WorkoutExerciseGroup(
+                orderIndex: previousGroup.orderIndex,
+                setCount: previousGroup.setCount,
+                roundRestSeconds: previousGroup.roundRestSeconds
+            )
+            workoutDay.exerciseGroups.append(newGroup)
+            modelContext.insert(newGroup)
+            groupMap[previousGroup.id] = newGroup
+        }
+
         // Copy each entry from previous workout
         let previousEntries = previousDay.sortedEntries
-        for (index, previousEntry) in previousEntries.enumerated() {
+        for previousEntry in previousEntries {
             let newEntry = WorkoutExerciseEntry(
                 exerciseId: previousEntry.exerciseId,
-                orderIndex: index,
+                orderIndex: previousEntry.orderIndex,
                 source: .free,
                 plannedSetCount: previousEntry.activeSets.count
             )
@@ -2253,6 +2762,41 @@ struct WorkoutView: View {
             }
 
             workoutDay.addEntry(newEntry)
+
+            if let previousGroup = previousEntry.group,
+               let newGroup = groupMap[previousGroup.id] {
+                GroupService.addEntryToGroup(
+                    newEntry,
+                    group: newGroup,
+                    groupOrderIndex: previousEntry.groupOrderIndex ?? 0
+                )
+            }
+        }
+
+        // Copy cardio workouts (exclude HealthKit imports)
+        let previousCardioWorkouts = allCardioWorkouts
+            .filter { $0.workoutDayId == previousDay.id && $0.source != .healthKit }
+            .sorted { $0.orderIndex < $1.orderIndex }
+        if !previousCardioWorkouts.isEmpty {
+            var nextOrderIndex = nextCardioOrderIndex(for: workoutDay.id)
+            for previousCardio in previousCardioWorkouts {
+                let cardioWorkout = CardioWorkout(
+                    activityType: previousCardio.activityType,
+                    startDate: workoutDay.date,
+                    duration: previousCardio.duration,
+                    totalDistance: previousCardio.totalDistance,
+                    totalEnergyBurned: previousCardio.totalEnergyBurned,
+                    averageHeartRate: previousCardio.averageHeartRate,
+                    maxHeartRate: previousCardio.maxHeartRate,
+                    isCompleted: false,
+                    workoutDayId: workoutDay.id,
+                    orderIndex: nextOrderIndex,
+                    source: previousCardio.source,
+                    profile: profile
+                )
+                nextOrderIndex += 1
+                modelContext.insert(cardioWorkout)
+            }
         }
 
         // Expand the first entry
@@ -2313,7 +2857,8 @@ struct WorkoutView: View {
             if group.roundsCompleted > previousGroupRoundsCompleted,
                let restSeconds = group.roundRestSeconds,
                restSeconds > 0 {
-                handleManualTimerStart(duration: restSeconds)
+                let detail = nextGroupRoundNotificationDetail(group: group)
+                handleManualTimerStart(duration: restSeconds, notificationDetail: detail)
             }
 
             if let nextEntry = GroupService.getNextEntryInGroup(after: entry, in: group) {
@@ -2362,7 +2907,8 @@ struct WorkoutView: View {
 
         // Combination mode: auto-start timer after logging set (ungrouped only)
         if group == nil {
-            handleCombinationModeTimer(restTimeSeconds: nextSet.restTimeSeconds)
+            let detail = nextSetNotificationDetail(afterLoggingEntry: entry, allSetsCompleted: allSetsCompleted)
+            handleCombinationModeTimer(restTimeSeconds: nextSet.restTimeSeconds, notificationDetail: detail)
         }
 
         // Send updated data to Watch
@@ -2426,6 +2972,40 @@ struct WorkoutView: View {
         return true
     }
 
+    private func canUncompleteGroupRound(_ group: WorkoutExerciseGroup, roundIndex: Int) -> Bool {
+        guard roundIndex >= 0 else { return false }
+        guard group.roundsCompleted - 1 == roundIndex else { return false }
+
+        // Only allow if the selected round is the last completed for every entry.
+        // (Mirrors "only last completed set can be uncompleted" rule.)
+        for entry in group.sortedEntries {
+            let sets = entry.sortedSets
+            guard roundIndex < sets.count else { return false }
+            guard sets[roundIndex].isCompleted else { return false }
+            guard entry.completedSetsCount == roundIndex + 1 else { return false }
+        }
+        return true
+    }
+
+    @discardableResult
+    private func uncompleteGroupRound(for group: WorkoutExerciseGroup, roundIndex: Int) -> Bool {
+        guard canUncompleteGroupRound(group, roundIndex: roundIndex) else { return false }
+
+        // Uncomplete the round across all entries.
+        for entry in group.sortedEntries {
+            let set = entry.sortedSets[roundIndex]
+            uncompleteSet(set)
+        }
+
+        // Keep the selection on the now-active round.
+        selectedGroupRoundIndex[group.id] = max(0, min(roundIndex, max(group.setCount - 1, 0)))
+
+        // Send updated data to Watch (in addition to per-set uncomplete messages).
+        sendWorkoutDataToWatch()
+
+        return true
+    }
+
     /// Updates a completed set with new values.
     /// - Parameter set: The completed set to update.
     /// - Returns: true if update succeeded, false if validation failed.
@@ -2461,6 +3041,47 @@ struct WorkoutView: View {
         try? modelContext.save()
 
         // Send updated data to Watch
+        sendWorkoutDataToWatch()
+
+        return true
+    }
+
+    /// Applies current input values to an incomplete set without completing it.
+    /// - Parameter set: The active (incomplete) set to update.
+    /// - Returns: true if update succeeded, false if validation failed.
+    @discardableResult
+    private func applyPendingSetValues(_ set: WorkoutSet) -> Bool {
+        guard !set.isCompleted else { return false }
+
+        guard WorkoutService.validateSetInput(
+            metricType: set.metricType,
+            weight: currentWeight,
+            reps: currentReps,
+            durationSeconds: currentDuration,
+            distanceMeters: currentDistance
+        ) else {
+            showSnackBar(
+                message: L10n.tr("workout_invalid_input"),
+                undoAction: {}
+            )
+            return false
+        }
+
+        switch set.metricType {
+        case .weightReps:
+            set.update(weightDouble: currentWeight, reps: currentReps)
+        case .bodyweightReps:
+            set.update(reps: currentReps)
+        case .timeDistance:
+            set.durationSeconds = currentDuration
+            set.distanceMeters = currentDistance
+        case .completion:
+            break
+        }
+
+        try? modelContext.save()
+
+        // Sync updated set values to Watch.
         sendWorkoutDataToWatch()
 
         return true
@@ -2503,7 +3124,7 @@ struct WorkoutView: View {
     // MARK: - Rest Timer Handling
 
     /// Handles manual timer start from exercise card button
-    private func handleManualTimerStart(duration: Int) {
+    private func handleManualTimerStart(duration: Int, notificationDetail: String? = nil) {
         guard duration > 0 else { return }
 
         // Check if should show combination announcement (first manual timer start)
@@ -2520,12 +3141,15 @@ struct WorkoutView: View {
             pendingTimerDuration = duration
             showTimerConflictAlert = true
         } else {
-            _ = restTimer.start(duration: duration)
+            _ = restTimer.start(
+                duration: duration,
+                notificationDetail: notificationDetail ?? currentNextSetNotificationDetail()
+            )
         }
     }
 
     /// Handles combination mode timer start after logging a set
-    private func handleCombinationModeTimer(restTimeSeconds: Int?) {
+    private func handleCombinationModeTimer(restTimeSeconds: Int?, notificationDetail: String? = nil) {
         guard let profile = profile,
               profile.combineRecordAndTimerStart else {
             return
@@ -2542,16 +3166,86 @@ struct WorkoutView: View {
             pendingTimerDuration = restTime
             showTimerConflictAlert = true
         } else {
-            _ = restTimer.start(duration: restTime)
+            _ = restTimer.start(duration: restTime, notificationDetail: notificationDetail ?? currentNextSetNotificationDetail())
         }
     }
 
     /// Starts the timer after user enables combination mode from announcement
     private func startTimerAfterEnablingCombination() {
         if pendingTimerDuration > 0 {
-            _ = restTimer.start(duration: pendingTimerDuration)
+            _ = restTimer.start(duration: pendingTimerDuration, notificationDetail: currentNextSetNotificationDetail())
             pendingTimerDuration = 0
         }
+    }
+
+    private func currentNextSetNotificationDetail() -> String? {
+        let weightUnit = profile?.effectiveWeightUnit ?? .kg
+
+        if let expandedId = expandedEntryId,
+           let entry = sortedEntries.first(where: { $0.id == expandedId }),
+           let set = entry.sortedSets.first(where: { !$0.isCompleted }) {
+            return formatNextSetNotificationDetail(entry: entry, set: set, weightUnit: weightUnit)
+        }
+
+        if let entry = sortedEntries.first(where: { !$0.isPlannedSetsCompleted }),
+           let set = entry.sortedSets.first(where: { !$0.isCompleted }) {
+            return formatNextSetNotificationDetail(entry: entry, set: set, weightUnit: weightUnit)
+        }
+
+        return nil
+    }
+
+    private func nextSetNotificationDetail(afterLoggingEntry entry: WorkoutExerciseEntry, allSetsCompleted: Bool) -> String? {
+        let weightUnit = profile?.effectiveWeightUnit ?? .kg
+
+        if allSetsCompleted {
+            guard let nextEntry = sortedEntries.first(where: { !$0.isPlannedSetsCompleted && $0.id != entry.id }),
+                  let nextSet = nextEntry.sortedSets.first(where: { !$0.isCompleted }) else {
+                return nil
+            }
+            return formatNextSetNotificationDetail(entry: nextEntry, set: nextSet, weightUnit: weightUnit)
+        } else {
+            guard let nextSet = entry.sortedSets.first(where: { !$0.isCompleted }) else { return nil }
+            return formatNextSetNotificationDetail(entry: entry, set: nextSet, weightUnit: weightUnit)
+        }
+    }
+
+    private func nextGroupRoundNotificationDetail(group: WorkoutExerciseGroup) -> String? {
+        let weightUnit = profile?.effectiveWeightUnit ?? .kg
+        guard let nextEntry = group.nextEntryToFocus else { return nil }
+
+        // After a round completes, activeRound points to the next round (1-indexed).
+        let roundIndex = max(0, group.activeRound - 1)
+        guard roundIndex < nextEntry.sortedSets.count else { return nil }
+
+        let nextSet = nextEntry.sortedSets[roundIndex]
+        guard !nextSet.isCompleted else { return nil }
+
+        return formatNextSetNotificationDetail(entry: nextEntry, set: nextSet, weightUnit: weightUnit)
+    }
+
+    private func formatNextSetNotificationDetail(entry: WorkoutExerciseEntry, set: WorkoutSet, weightUnit: WeightUnit) -> String {
+        let prefix = L10n.tr("rest_timer_next_prefix")
+        let exerciseName = getExerciseName(for: entry.exerciseId)
+        let setLabel = L10n.tr("set_label", set.setIndex)
+
+        let metricText: String
+        switch set.metricType {
+        case .weightReps:
+            metricText = "\(Formatters.formatWeight(set.weightDouble))\(weightUnit.symbol) × \(set.reps ?? 0)"
+        case .bodyweightReps:
+            metricText = "\(L10n.tr("bodyweight_label")) × \(set.reps ?? 0)"
+        case .timeDistance:
+            if let distance = set.distanceMeters, distance > 0 {
+                metricText = "\(set.durationFormatted) / \(set.distanceFormatted)"
+            } else {
+                metricText = set.durationFormatted
+            }
+        case .completion:
+            metricText = L10n.tr("history_completed")
+        }
+
+        return "\(prefix) \(exerciseName) \(setLabel)  \(metricText)"
     }
 
     // MARK: - Plan Update Handling
@@ -2936,11 +3630,15 @@ struct WorkoutView: View {
     private func removePlannedSet(_ set: WorkoutSet, from entry: WorkoutExerciseEntry) {
         guard entry.sortedSets.count > 1 else { return }
         set.softDelete()
+        // Sync set removal to Watch.
+        sendWorkoutDataToWatch()
     }
 
     private func deleteCompletedSet(_ set: WorkoutSet, from entry: WorkoutExerciseEntry) {
         guard entry.sortedSets.count > 1 else { return }
         set.softDelete()
+        // Sync set removal to Watch.
+        sendWorkoutDataToWatch()
     }
 
     /// Marks a completed set as not completed
@@ -2949,6 +3647,7 @@ struct WorkoutView: View {
 
         // Send update to Watch
         PhoneWatchConnectivityManager.shared.sendSetUncomplete(setId: set.id)
+        sendWorkoutDataToWatch()
     }
 
     /// Deletes an entire exercise entry from the workout
@@ -2960,13 +3659,31 @@ struct WorkoutView: View {
 
         // Delete the entry
         modelContext.delete(entry)
+        // Sync entry deletion to Watch.
+        sendWorkoutDataToWatch()
+    }
 
-        // Expand the next available entry
-        if let nextEntry = sortedEntries.first(where: { $0.id != entry.id }) {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                expandedEntryId = nextEntry.id
-            }
+    /// Deletes a group and releases its entries back to ungrouped state
+    private func deleteGroup(_ group: WorkoutExerciseGroup) {
+        closeGroupSwipe(group.id)
+        groupSwipeStartOffsets[group.id] = nil
+
+        let entryIds = Set(group.entries.map { $0.id })
+        if let expandedEntryId, entryIds.contains(expandedEntryId) {
+            self.expandedEntryId = nil
         }
+        if let workoutDay = selectedWorkoutDay {
+            workoutDay.entries.removeAll { entryIds.contains($0.id) }
+        }
+        for entry in group.entries {
+            modelContext.delete(entry)
+        }
+        group.entries.removeAll()
+        selectedWorkoutDay?.exerciseGroups.removeAll { $0.id == group.id }
+        selectedGroupRoundIndex[group.id] = nil
+        modelContext.delete(group)
+        // Sync group deletion to Watch.
+        sendWorkoutDataToWatch()
     }
 
     private func showSnackBar(message: String, undoAction: @escaping () -> Void) {
@@ -3046,12 +3763,50 @@ struct WorkoutView: View {
                 hasher.combine(entry.id)
                 hasher.combine(entry.exerciseId)
                 hasher.combine(entry.orderIndex)
+                hasher.combine(entry.metricType)
+                hasher.combine(entry.group?.id)
+                hasher.combine(entry.groupOrderIndex)
                 for set in entry.sortedSets {
                     hasher.combine(set.id)
+                    hasher.combine(set.setIndex)
+                    hasher.combine(set.metricType)
                     hasher.combine(set.isCompleted)
                     hasher.combine(set.weight)
                     hasher.combine(set.reps)
+                    hasher.combine(set.durationSeconds)
+                    hasher.combine(set.distanceMeters)
                     hasher.combine(set.restTimeSeconds)
+                }
+            }
+        }
+
+        if let groups = selectedWorkoutDay?.exerciseGroups {
+            let sortedGroups = groups.sorted { $0.orderIndex < $1.orderIndex }
+            hasher.combine(sortedGroups.count)
+            for group in sortedGroups {
+                hasher.combine(group.id)
+                hasher.combine(group.orderIndex)
+                hasher.combine(group.setCount)
+                hasher.combine(group.roundRestSeconds)
+                let groupEntries = group.sortedEntries
+                hasher.combine(groupEntries.count)
+                for entry in groupEntries {
+                    hasher.combine(entry.id)
+                    hasher.combine(entry.exerciseId)
+                    hasher.combine(entry.orderIndex)
+                    hasher.combine(entry.groupOrderIndex)
+                    hasher.combine(entry.metricType)
+                    for set in entry.sortedSets {
+                        hasher.combine(set.id)
+                        hasher.combine(set.setIndex)
+                        hasher.combine(set.metricType)
+                        hasher.combine(set.isCompleted)
+                        hasher.combine(set.weight)
+                        hasher.combine(set.reps)
+                        hasher.combine(set.durationSeconds)
+                        hasher.combine(set.distanceMeters)
+                        hasher.combine(set.restTimeSeconds)
+                    }
                 }
             }
         }
@@ -3084,6 +3839,155 @@ struct WorkoutView: View {
             }
         }
     }
+
+    private func startWorkoutShare() {
+        Task { @MainActor in
+            guard let image = renderWorkoutShareImage() else { return }
+            shareImagePayload = ShareImagePayload(image: image)
+        }
+    }
+
+    @MainActor
+    private func renderWorkoutShareImage() -> UIImage? {
+        guard shouldShowShareCard else { return nil }
+
+        let weightUnit = profile?.effectiveWeightUnit ?? .kg
+
+        let totalSets = sortedEntries.reduce(0) { $0 + $1.activeSets.count }
+        let totalVolume = sortedEntries.reduce(Decimal.zero) { $0 + $1.totalVolume }
+
+        let shareView = WorkoutShareCardView(
+            date: selectedWorkoutDate,
+            exercises: buildShareExerciseSummaries(weightUnit: weightUnit),
+            cardio: buildShareCardioSummaries(),
+            totalSetsText: "\(totalSets)",
+            totalVolumeText: Formatters.formatVolumeNumber(Double(truncating: totalVolume as NSNumber))
+        )
+        .frame(width: 360)
+        .preferredColorScheme(ThemeManager.shared.currentThemeType.colorScheme)
+
+        let renderer = ImageRenderer(content: shareView)
+        renderer.scale = UIScreen.main.scale
+        renderer.isOpaque = true
+        return renderer.uiImage
+    }
+
+    private func buildShareExerciseSummaries(weightUnit: WeightUnit) -> [WorkoutShareExerciseSummary] {
+        sortedEntries.map { entry in
+            let exercise = exercisesDict[entry.exerciseId]
+            let name = exercise?.localizedName ?? getExerciseName(for: entry.exerciseId)
+            let dotColor = exercise
+                .flatMap { $0.bodyPartId }
+                .flatMap { bodyPartsDict[$0] }
+                .map(\.color)
+
+            let setsCount = entry.activeSets.count
+            let setsText = L10n.tr("workout_share_sets_format", setsCount)
+
+            let detailText: String?
+            switch entry.metricType {
+            case .weightReps:
+                let completed = entry.activeSets
+                    .filter { $0.isCompleted && $0.metricType == .weightReps }
+
+                let best = completed
+                    .filter { $0.isCompleted && $0.metricType == .weightReps }
+                    .max(by: { $0.weightDouble < $1.weightDouble })
+
+                let best1RM: Double? = completed
+                    .compactMap { set in
+                        guard let reps = set.reps, reps > 0, set.weightDouble > 0 else { return nil }
+                        // Epley: 1RM = w * (1 + reps/30)
+                        return set.weightDouble * (1.0 + (Double(reps) / 30.0))
+                    }
+                    .max()
+
+                if let best, let reps = best.reps, best.weightDouble > 0 {
+                    let bestText = "\(Formatters.formatWeight(best.weightDouble))\(weightUnit.symbol) × \(reps)"
+                    if let best1RM, best1RM > 0 {
+                        let oneRMText = L10n.tr(
+                            "workout_share_estimated_1rm_format",
+                            "\(Formatters.formatWeight(best1RM))\(weightUnit.symbol)"
+                        )
+                        detailText = "\(bestText)\n\(oneRMText)"
+                    } else {
+                        detailText = bestText
+                    }
+                } else {
+                    detailText = nil
+                }
+            case .bodyweightReps:
+                let bestReps = entry.activeSets
+                    .filter { $0.isCompleted && $0.metricType == .bodyweightReps }
+                    .compactMap(\.reps)
+                    .max()
+                if let bestReps {
+                    detailText = "\(L10n.tr("bodyweight_label")) × \(bestReps)"
+                } else {
+                    detailText = nil
+                }
+            case .timeDistance:
+                let totalSeconds = entry.activeSets
+                    .filter { $0.isCompleted && $0.metricType == .timeDistance }
+                    .reduce(0) { $0 + ($1.durationSeconds ?? 0) }
+                let totalDistance = entry.activeSets
+                    .filter { $0.isCompleted && $0.metricType == .timeDistance }
+                    .reduce(0.0) { $0 + ($1.distanceMeters ?? 0) }
+
+                let durationText = formatDuration(seconds: totalSeconds)
+                if totalDistance > 0 {
+                    detailText = "\(durationText) / \(formatDistance(meters: totalDistance))"
+                } else {
+                    detailText = durationText
+                }
+            case .completion:
+                detailText = L10n.tr("history_completed")
+            }
+
+            return WorkoutShareExerciseSummary(
+                name: name,
+                dotColor: dotColor,
+                setsText: setsText,
+                detailText: detailText
+            )
+        }
+    }
+
+    private func buildShareCardioSummaries() -> [WorkoutShareCardioSummary] {
+        selectedDateCardioWorkouts.map { workout in
+            let type = HKWorkoutActivityType(rawValue: UInt(workout.activityType))
+            let name = type?.displayName ?? L10n.tr("unknown")
+            let duration = workout.formattedDuration
+            if let distance = workout.formattedDistance {
+                return WorkoutShareCardioSummary(name: name, detailText: "\(duration) / \(distance)")
+            }
+            return WorkoutShareCardioSummary(name: name, detailText: duration)
+        }
+    }
+
+    private func formatDuration(seconds: Int) -> String {
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        let secs = seconds % 60
+
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        }
+        return String(format: "%d:%02d", minutes, secs)
+    }
+
+    private func formatDistance(meters: Double) -> String {
+        let km = meters / 1000.0
+        if km >= 1.0 {
+            return String(format: "%.1f km", km)
+        }
+        return String(format: "%.0f m", meters)
+    }
+}
+
+private struct ShareImagePayload: Identifiable {
+    let id = UUID()
+    let image: UIImage
 }
 
 // MARK: - Empty State View
@@ -3094,7 +3998,10 @@ struct EmptyStateView: View {
     let isToday: Bool
     let showCopyOption: Bool
     var showRescueOption: Bool = false
+    var showRecordFromPlanPrimary: Bool = false
+    var showDescription: Bool = true
     let onCreatePlan: () -> Void
+    var onRecordFromPlan: (() -> Void)? = nil
     let onCopyPrevious: () -> Void
     let onAddExercise: () -> Void
     var onRescueFromPlan: (() -> Void)? = nil
@@ -3117,24 +4024,37 @@ struct EmptyStateView: View {
                     .foregroundColor(AppColors.textPrimary)
                     .multilineTextAlignment(.center)
 
-                Text(L10n.tr(descriptionKey))
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.textSecondary)
-                    .multilineTextAlignment(.center)
+                if showDescription {
+                    Text(L10n.tr(descriptionKey))
+                        .font(.subheadline)
+                        .foregroundColor(AppColors.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
             }
             .padding(.horizontal, 8)
 
             // Action cards
             VStack(spacing: 12) {
-                // Card A: Create Plan (Primary) - Always shown
-                PlanActionCard(
-                    badgeText: L10n.tr("empty_state_recommended"),
-                    title: L10n.tr("empty_state_create_plan_title"),
-                    subtitle: L10n.tr("empty_state_create_plan_subtitle"),
-                    buttonText: L10n.tr("empty_state_create_plan_button"),
-                    isPrimary: true,
-                    action: onCreatePlan
-                )
+                // Card A: Create Plan or Record from Plan (Primary)
+                if showRecordFromPlanPrimary, let recordAction = onRecordFromPlan {
+                    PlanActionCard(
+                        badgeText: nil,
+                        title: L10n.tr("workout_rescue_from_plan"),
+                        subtitle: L10n.tr("workout_rescue_from_plan_subtitle"),
+                        buttonText: L10n.tr("workout_rescue_from_plan_button"),
+                        isPrimary: true,
+                        action: recordAction
+                    )
+                } else {
+                    PlanActionCard(
+                        badgeText: L10n.tr("empty_state_recommended"),
+                        title: L10n.tr("empty_state_create_plan_title"),
+                        subtitle: L10n.tr("empty_state_create_plan_subtitle"),
+                        buttonText: L10n.tr("empty_state_create_plan_button"),
+                        isPrimary: true,
+                        action: onCreatePlan
+                    )
+                }
 
                 // Card C: Copy Previous (Conditional) - Between A and B
                 if showCopyOption {
@@ -3149,7 +4069,7 @@ struct EmptyStateView: View {
                 }
 
                 // Card D: Rescue from Plan (Conditional - past date with active plan)
-                if showRescueOption, let rescueAction = onRescueFromPlan {
+                if showRescueOption, !showRecordFromPlanPrimary, let rescueAction = onRescueFromPlan {
                     PlanActionCard(
                         badgeText: nil,
                         title: L10n.tr("workout_rescue_from_plan"),
@@ -3177,6 +4097,29 @@ struct EmptyStateView: View {
     }
 }
 
+/// Rest day view shown when selected date is a routine rest day.
+private struct RestDayEmptyView: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "bed.double")
+                .font(.system(size: 44))
+                .foregroundColor(AppColors.textMuted)
+
+            Text(L10n.tr("rest_day"))
+                .font(.headline)
+                .foregroundColor(AppColors.textSecondary)
+
+            Text(L10n.tr("rest_day_description"))
+                .font(.caption)
+                .foregroundColor(AppColors.textMuted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 16)
+        .padding(.bottom, 24)
+    }
+}
+
 // MARK: - Plan Action Card
 
 /// Tappable card with title, subtitle, and button for empty state actions.
@@ -3189,34 +4132,34 @@ struct PlanActionCard: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 12) {
-                // Badge (optional)
-                if let badge = badgeText {
-                    Text(badge)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(AppColors.accentBlue)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(AppColors.accentBlue.opacity(0.15))
-                        .cornerRadius(4)
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            // Badge (optional)
+            if let badge = badgeText {
+                Text(badge)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.accentBlue)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(AppColors.accentBlue.opacity(0.15))
+                    .cornerRadius(4)
+            }
 
-                // Title and subtitle
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundColor(AppColors.textPrimary)
+            // Title and subtitle
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundColor(AppColors.textPrimary)
 
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundColor(AppColors.textSecondary)
-                }
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.textSecondary)
+            }
 
-                // Button
-                HStack {
-                    Spacer()
+            // Button
+            HStack {
+                Spacer()
+                Button(action: action) {
                     Text(buttonText)
                         .font(.subheadline)
                         .fontWeight(.semibold)
@@ -3234,13 +4177,13 @@ struct PlanActionCard: View {
                         )
                         .cornerRadius(8)
                 }
+                .buttonStyle(.plain)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppColors.cardBackground)
-            .cornerRadius(12)
         }
-        .buttonStyle(.plain)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppColors.cardBackground)
+        .cornerRadius(12)
     }
 }
 
@@ -3316,6 +4259,31 @@ struct AddExerciseCard: View {
                 Image(systemName: "plus")
                     .font(.system(size: 14, weight: .medium))
                 Text("add_exercise")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
+            .foregroundColor(AppColors.textSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(AppColors.cardBackground)
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Share Workout Card
+
+/// Card-style button for sharing the day's workout summary as an image.
+struct ShareWorkoutCard: View {
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 8) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 14, weight: .medium))
+                Text("share")
                     .font(.subheadline)
                     .fontWeight(.medium)
             }

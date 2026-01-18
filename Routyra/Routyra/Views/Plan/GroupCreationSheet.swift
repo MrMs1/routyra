@@ -18,7 +18,8 @@ struct GroupCreationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    @State private var selectedExerciseIds: Set<UUID> = []
+    // Keep selection order so group order can follow it.
+    @State private var selectedExerciseIds: [UUID] = []
     @State private var showSetCountResolver = false
     @State private var resolvedSetCount: Int = 3
     @State private var restSeconds: Int? = 90
@@ -27,8 +28,13 @@ struct GroupCreationSheet: View {
         planDay.sortedExercises.filter { !$0.isGrouped }
     }
 
+    private var ungroupedExerciseMap: [UUID: PlanExercise] {
+        Dictionary(uniqueKeysWithValues: ungroupedExercises.map { ($0.id, $0) })
+    }
+
     private var selectedExercises: [PlanExercise] {
-        ungroupedExercises.filter { selectedExerciseIds.contains($0.id) }
+        // Preserve selection order
+        selectedExerciseIds.compactMap { ungroupedExerciseMap[$0] }
     }
 
     private var canCreateGroup: Bool {
@@ -37,45 +43,69 @@ struct GroupCreationSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Selection instructions
-                if ungroupedExercises.count < 2 {
-                    ContentUnavailableView {
-                        Label(L10n.tr("group_requires_two"), systemImage: "rectangle.stack")
-                    } description: {
-                        Text(L10n.tr("add_exercise"))
-                    }
-                } else {
-                    List {
-                        Section {
-                            ForEach(ungroupedExercises, id: \.id) { planExercise in
-                                let exercise = exercisesMap[planExercise.exerciseId]
-                                let bodyPartId = exercise?.bodyPartId
-                                let bodyPart = bodyPartId.flatMap { bodyPartsMap[$0] }
-
-                                ExerciseSelectionRow(
-                                    planExercise: planExercise,
-                                    exercise: exercise,
-                                    bodyPart: bodyPart,
-                                    isSelected: selectedExerciseIds.contains(planExercise.id),
-                                    onToggle: {
-                                        if selectedExerciseIds.contains(planExercise.id) {
-                                            selectedExerciseIds.remove(planExercise.id)
-                                        } else {
-                                            selectedExerciseIds.insert(planExercise.id)
-                                        }
-                                    }
-                                )
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                            }
-                        } header: {
-                            Text(L10n.tr("select_exercises_to_group"))
-                                .textCase(nil)
+            ZStack {
+                VStack(spacing: 0) {
+                    // Selection instructions
+                    if ungroupedExercises.count < 2 {
+                        ContentUnavailableView {
+                            Label(L10n.tr("group_requires_two"), systemImage: "rectangle.stack")
+                        } description: {
+                            Text(L10n.tr("add_exercise"))
                         }
+                    } else {
+                        List {
+                            Section {
+                                ForEach(ungroupedExercises, id: \.id) { planExercise in
+                                    let exercise = exercisesMap[planExercise.exerciseId]
+                                    let bodyPartId = exercise?.bodyPartId
+                                    let bodyPart = bodyPartId.flatMap { bodyPartsMap[$0] }
+                                    let selectionNumber = selectedExerciseIds.firstIndex(of: planExercise.id).map { $0 + 1 }
+
+                                    ExerciseSelectionRow(
+                                        planExercise: planExercise,
+                                        exercise: exercise,
+                                        bodyPart: bodyPart,
+                                        selectionNumber: selectionNumber,
+                                        onToggle: {
+                                            if let idx = selectedExerciseIds.firstIndex(of: planExercise.id) {
+                                                selectedExerciseIds.remove(at: idx)
+                                            } else {
+                                                selectedExerciseIds.append(planExercise.id)
+                                            }
+                                        }
+                                    )
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
+                                }
+                            } header: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(L10n.tr("select_exercises_to_group"))
+                                        .textCase(nil)
+
+                                    Text(L10n.tr("group_selection_order_hint"))
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.textSecondary)
+                                        .textCase(nil)
+                                }
+                            }
+                        }
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
+                }
+                .allowsHitTesting(!showSetCountResolver)
+
+                if showSetCountResolver {
+                    GroupSetCountResolverSheet(
+                        isPresented: $showSetCountResolver,
+                        exercises: selectedExercises,
+                        exercisesMap: exercisesMap,
+                        onResolve: { setCount in
+                            resolvedSetCount = setCount
+                            createGroup()
+                        }
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
             }
             .background(AppColors.background)
@@ -94,17 +124,7 @@ struct GroupCreationSheet: View {
                     .disabled(!canCreateGroup)
                 }
             }
-            .sheet(isPresented: $showSetCountResolver) {
-                GroupSetCountResolverSheet(
-                    exercises: selectedExercises,
-                    exercisesMap: exercisesMap,
-                    onResolve: { setCount in
-                        resolvedSetCount = setCount
-                        createGroup()
-                    }
-                )
-                .presentationDetents([.medium])
-            }
+            .animation(.easeOut(duration: 0.2), value: showSetCountResolver)
         }
     }
 
@@ -129,16 +149,29 @@ private struct ExerciseSelectionRow: View {
     let planExercise: PlanExercise
     let exercise: Exercise?
     let bodyPart: BodyPart?
-    let isSelected: Bool
+    let selectionNumber: Int?
     let onToggle: () -> Void
 
     var body: some View {
+        let isSelected = selectionNumber != nil
         Button(action: onToggle) {
             HStack(spacing: 12) {
                 // Selection indicator
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundColor(isSelected ? AppColors.accentBlue : AppColors.textMuted)
+                ZStack {
+                    Circle()
+                        .stroke(isSelected ? AppColors.accentBlue : AppColors.textMuted.opacity(0.6), lineWidth: 2)
+                        .frame(width: 26, height: 26)
+
+                    if let selectionNumber = selectionNumber {
+                        Circle()
+                            .fill(AppColors.accentBlue)
+                            .frame(width: 26, height: 26)
+                        Text("\(selectionNumber)")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(.white)
+                            .monospacedDigit()
+                    }
+                }
 
                 // Exercise info
                 VStack(alignment: .leading, spacing: 2) {

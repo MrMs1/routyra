@@ -60,6 +60,13 @@ struct WorkoutExerciseGroupCardView: View {
             .background(progressColor.opacity(0.15))
             .cornerRadius(6)
 
+            // Completed checkmark (match single-exercise completion affordance)
+            if group.isAllRoundsComplete {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundColor(progressColor)
+            }
+
             Spacer()
 
             // Rest time (editable)
@@ -191,6 +198,9 @@ struct GroupRoundDotsColumnView: View {
     let totalRounds: Int
     let activeRound: Int
     let isAllRoundsComplete: Bool
+    /// True when user is viewing a completed round (i.e. selectedRoundIndex < active round).
+    /// Matches single-exercise behavior: do not emphasize the active (incomplete) round while viewing history.
+    let isViewingCompletedRound: Bool
     let selectedRoundIndex: Int
     let onSelectRound: (Int) -> Void
 
@@ -234,7 +244,9 @@ struct GroupRoundDotsColumnView: View {
                     GroupRoundDotView(
                         index: index,
                         isCompleted: index < completedCount,
-                        isActive: index == activeIndex,
+                        // Match SetDotsView: when a completed round is selected, don't visually "pull" attention
+                        // to the current active round (prevents the uncompleted round from looking odd).
+                        isActive: !isViewingCompletedRound && index == activeIndex,
                         isSelected: index == selectedRoundIndex,
                         dotSize: dotSize
                     )
@@ -268,7 +280,9 @@ private struct GroupRoundDotView: View {
 
     var body: some View {
         ZStack {
-            if isActive || isSelected {
+            // Show LARGE numbered circle ONLY for the selected round.
+            // Active round should NOT look "selected" when viewing a completed round.
+            if isSelected {
                 Circle()
                     .fill(AppColors.cardBackground)
                     .frame(width: dotSize, height: dotSize)
@@ -281,9 +295,19 @@ private struct GroupRoundDotView: View {
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(numberColor)
             } else {
-                Circle()
-                    .fill(isCompleted ? AppColors.dotFilled : AppColors.dotEmpty)
-                    .frame(width: 10, height: 10)
+                // Small dot for non-selected rounds.
+                // If this is the active round, emphasize subtly with a ring (no number).
+                ZStack {
+                    Circle()
+                        .fill(isCompleted ? AppColors.dotFilled : AppColors.dotEmpty)
+                        .frame(width: 10, height: 10)
+
+                    if isActive {
+                        Circle()
+                            .stroke(AppColors.accentBlue.opacity(0.8), lineWidth: 2)
+                            .frame(width: 16, height: 16)
+                    }
+                }
             }
         }
         .frame(width: dotSize, height: dotSize)

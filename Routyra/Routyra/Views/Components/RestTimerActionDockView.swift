@@ -19,6 +19,10 @@ struct RestTimerActionDockView: View {
 
     /// Callback when log button is tapped
     let onLog: () -> Bool
+    /// Optional override for log button title (localization key)
+    let logTitleKey: String?
+    /// Optional override for log button icon
+    let logIconName: String
 
     /// Callback when timer start is requested
     let onTimerStart: () -> Void
@@ -38,6 +42,30 @@ struct RestTimerActionDockView: View {
     @State private var editingRestTime: Int = 0
     @State private var logSuccessPulse = false
     @State private var hapticTrigger = 0
+
+    // MARK: - Init
+
+    init(
+        isCombinationMode: Bool,
+        restTimeSeconds: Int,
+        onLog: @escaping () -> Bool,
+        onTimerStart: @escaping () -> Void,
+        onTimerCancel: @escaping () -> Void,
+        onRestTimeChange: @escaping (Int) -> Void,
+        timerManager: RestTimerManager,
+        logTitleKey: String? = nil,
+        logIconName: String = "checkmark"
+    ) {
+        self.isCombinationMode = isCombinationMode
+        self.restTimeSeconds = restTimeSeconds
+        self.onLog = onLog
+        self.onTimerStart = onTimerStart
+        self.onTimerCancel = onTimerCancel
+        self.onRestTimeChange = onRestTimeChange
+        self.timerManager = timerManager
+        self.logTitleKey = logTitleKey
+        self.logIconName = logIconName
+    }
 
     // MARK: - Computed Properties
 
@@ -74,7 +102,8 @@ struct RestTimerActionDockView: View {
     // MARK: - Log Button (Row A)
 
     private var logButton: some View {
-        Button(action: {
+        let titleKey = logTitleKey ?? (isCombinationMode ? "rest_timer_log_and_start" : "rest_timer_log_set")
+        return Button(action: {
             let success = onLog()
             if success {
                 withAnimation(.easeInOut(duration: 0.15)) {
@@ -92,9 +121,9 @@ struct RestTimerActionDockView: View {
                 Spacer()
 
                 HStack(spacing: 8) {
-                    Image(systemName: "checkmark")
+                    Image(systemName: logIconName)
                         .font(.subheadline.weight(.semibold))
-                    Text(isCombinationMode ? "rest_timer_log_and_start" : "rest_timer_log_set")
+                    Text(L10n.tr(titleKey))
                         .font(.headline)
                         .fontWeight(.semibold)
                 }

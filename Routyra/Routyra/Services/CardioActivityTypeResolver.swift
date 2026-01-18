@@ -10,12 +10,20 @@ import HealthKit
 
 enum CardioActivityTypeResolver {
     private static let codeToActivityType: [String: HKWorkoutActivityType] = [
+        // Backward-compatibility:
+        // These codes may exist in older local databases, but we no longer seed them
+        // because HealthKit represents running as a single activity type.
+        "indoor_running": .running,
+        "outdoor_running": .running,
+
         "treadmill": .running,
         "cycling": .cycling,
         "rowing": .rowing,
         "elliptical": .elliptical,
         "jump_rope": .jumpRope,
-        "stair_climber": .stairClimbing
+        "stair_climber": .stairClimbing,
+        "stepper": .stepTraining,
+        "hiit": .highIntensityIntervalTraining
     ]
 
     static func isCardioExercise(_ exercise: Exercise, bodyPartsMap: [UUID: BodyPart]) -> Bool {
