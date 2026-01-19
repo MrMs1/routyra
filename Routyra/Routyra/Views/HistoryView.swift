@@ -526,7 +526,7 @@ private extension HistoryView {
         .padding(.horizontal, 10)
         .padding(.top, 10)
         .padding(.bottom, 12)
-        .background(AppColors.cardBackgroundCompleted)
+        .background(AppColors.cardBackgroundSecondary)
         .cornerRadius(10)
     }
 
@@ -571,15 +571,20 @@ private extension HistoryView {
     }
 
     var exerciseSummarySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(L10n.tr("history_exercise_summary"))
                 .font(.subheadline)
                 .foregroundColor(AppColors.textSecondary)
+                .padding(.horizontal, 4)
 
             if exerciseSummaries.isEmpty {
                 Text(L10n.tr("history_no_workouts_month"))
                     .font(.footnote)
                     .foregroundColor(AppColors.textSecondary)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppColors.cardBackground)
+                    .cornerRadius(12)
             } else {
                 VStack(spacing: 8) {
                     ForEach(exerciseSummaries) { summary in
@@ -592,13 +597,10 @@ private extension HistoryView {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(AppColors.cardBackground)
-        .cornerRadius(12)
     }
 
     var cardioSummarySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(L10n.tr("cardio_monthly_summary"))
                     .font(.subheadline)
@@ -622,11 +624,16 @@ private extension HistoryView {
                 .disabled(isCardioSyncing)
                 .accessibilityLabel(L10n.tr("cardio_sync_health"))
             }
+            .padding(.horizontal, 4)
 
             if cardioActivitySummaries.isEmpty {
                 Text(L10n.tr("cardio_no_workouts_month"))
                     .font(.footnote)
                     .foregroundColor(AppColors.textSecondary)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppColors.cardBackground)
+                    .cornerRadius(12)
             } else {
                 VStack(spacing: 8) {
                     ForEach(cardioActivitySummaries) { summary in
@@ -645,9 +652,6 @@ private extension HistoryView {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(AppColors.cardBackground)
-        .cornerRadius(12)
     }
 }
 
@@ -955,7 +959,7 @@ private extension HistoryView {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppColors.cardBackgroundCompleted)
+        .background(AppColors.cardBackground)
         .cornerRadius(12)
     }
 
@@ -1007,7 +1011,7 @@ private extension HistoryView {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppColors.cardBackgroundCompleted)
+        .background(AppColors.cardBackground)
         .cornerRadius(12)
     }
 
@@ -1026,7 +1030,7 @@ private extension HistoryView {
         .padding(.horizontal, 4)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(AppColors.cardBackground)
+                .fill(AppColors.cardBackgroundSecondary)
         )
     }
 }
@@ -1863,7 +1867,7 @@ private extension ExerciseHistoryDetailView {
         .padding(.horizontal, 4)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(AppColors.cardBackgroundCompleted)
+                .fill(AppColors.cardBackgroundSecondary)
         )
     }
 
@@ -1965,7 +1969,7 @@ private extension ExerciseHistoryDetailView {
         .padding(.horizontal, 4)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(AppColors.cardBackgroundCompleted)
+                .fill(AppColors.cardBackgroundSecondary)
         )
     }
 
@@ -2174,7 +2178,7 @@ private struct SummaryStatsGrid: View {
                 .background(
                     style == .carded
                         ? RoundedRectangle(cornerRadius: 10)
-                            .fill(AppColors.cardBackgroundCompleted)
+                            .fill(AppColors.cardBackgroundSecondary)
                         : nil
                 )
             }

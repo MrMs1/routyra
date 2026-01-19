@@ -194,6 +194,8 @@ struct SettingsView: View {
                     .listRowBackground(AppColors.cardBackground)
                 combineRecordTimerToggle
                     .listRowBackground(AppColors.cardBackground)
+                skipFinalSetTimerToggle
+                    .listRowBackground(AppColors.cardBackground)
                 if !(profile?.combineRecordAndTimerStart ?? false) &&
                    (profile?.hasShownCombinationAnnouncement ?? false) {
                     reShowAnnouncementButton
@@ -598,6 +600,24 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("settings_combine_record_timer")
                 Text("settings_combine_record_timer_hint")
+                    .font(.caption)
+                    .foregroundColor(AppColors.textSecondary)
+            }
+        }
+        .tint(AppColors.accentBlue)
+    }
+
+    private var skipFinalSetTimerToggle: some View {
+        Toggle(isOn: Binding(
+            get: { profile?.skipRestTimerOnFinalSet ?? true },
+            set: { newValue in
+                profile?.skipRestTimerOnFinalSet = newValue
+                try? modelContext.save()
+            }
+        )) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("settings_skip_timer_final_set")
+                Text("settings_skip_timer_final_set_hint")
                     .font(.caption)
                     .foregroundColor(AppColors.textSecondary)
             }

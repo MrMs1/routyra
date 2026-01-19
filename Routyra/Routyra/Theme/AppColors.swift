@@ -27,6 +27,7 @@ enum AppColors {
     static var cardBackgroundCompleted: Color { theme.cardBackgroundCompleted }
     static var groupedCardBackground: Color { theme.groupedCardBackground }
     static var groupedCardBackgroundCompleted: Color { theme.groupedCardBackgroundCompleted }
+    static var cardBackgroundSecondary: Color { theme.cardBackgroundSecondary }
 
     // MARK: - Accent Colors
 

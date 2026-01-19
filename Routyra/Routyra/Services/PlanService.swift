@@ -267,12 +267,86 @@ enum PlanService {
             return (false, nil)
         }
 
+        // Fully completed - advance
         if workoutDay.isRoutineCompleted {
             return (true, nil)
-        } else {
-            // Incomplete - return the workout so it can be deleted
+        }
+
+        // Get PlanDay info for partial completion check
+        guard let plan = getPlan(id: planId, modelContext: modelContext),
+              let planDayId = workoutDay.routineDayId,
+              let planDay = plan.sortedDays.first(where: { $0.id == planDayId }) else {
             return (false, workoutDay)
         }
+
+        // If any plan exercise has at least 1 completed set, advance (keep data)
+        if hasAnyPlanExerciseProgress(workoutDay: workoutDay, planDay: planDay) {
+            return (true, nil)  // Advance, don't delete data
+        }
+
+        // 0 sets completed - clear routine entries only and stay on same day
+        // (keeps CardioWorkouts and free entries)
+        clearRoutineEntries(workoutDay: workoutDay, modelContext: modelContext)
+        return (false, nil)  // Return nil to prevent deletion by caller
+    }
+
+    /// Checks if any plan exercise (unchanged routine source) has at least 1 completed set.
+    /// - Parameters:
+    ///   - workoutDay: The workout day to check.
+    ///   - planDay: The plan day for comparison.
+    /// - Returns: True if at least 1 planned exercise has progress.
+    @MainActor
+    private static func hasAnyPlanExerciseProgress(
+        workoutDay: WorkoutDay,
+        planDay: PlanDay
+    ) -> Bool {
+        // Only consider entries with source == .routine
+        let routineEntries = workoutDay.entries.filter { $0.source == .routine }
+
+        // Build set of exerciseIds from the plan
+        let planExerciseIds = Set(planDay.sortedExercises.map { $0.exerciseId })
+
+        for entry in routineEntries {
+            // Only count entries whose exercise is still in the plan (not swapped)
+            guard planExerciseIds.contains(entry.exerciseId) else {
+                continue // Exercise was changed/swapped - don't count
+            }
+
+            // If this entry has at least 1 completed set, return true
+            if entry.hasCompletedSets {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Clears routine entries from a workout day while preserving free entries and cardio.
+    /// - Parameters:
+    ///   - workoutDay: The workout day to clear.
+    ///   - modelContext: The SwiftData model context.
+    @MainActor
+    private static func clearRoutineEntries(workoutDay: WorkoutDay, modelContext: ModelContext) {
+        // Delete only routine source entries (keep free entries)
+        let routineEntries = workoutDay.entries.filter { $0.source == .routine }
+        for entry in routineEntries {
+            // Delete sets first
+            for workoutSet in entry.sets {
+                modelContext.delete(workoutSet)
+            }
+            modelContext.delete(entry)
+        }
+        workoutDay.entries.removeAll { $0.source == .routine }
+
+        // Clear exercise groups
+        for group in workoutDay.exerciseGroups {
+            modelContext.delete(group)
+        }
+        workoutDay.exerciseGroups.removeAll()
+
+        // Clear routine info
+        workoutDay.routineDayId = nil
+        workoutDay.routinePresetId = nil
+        workoutDay.mode = .free
     }
 
     // MARK: - Day Change (Single Plan Mode)

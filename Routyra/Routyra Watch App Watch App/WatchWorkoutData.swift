@@ -20,25 +20,29 @@ struct WatchWorkoutData: Sendable {
     let defaultRestTimeSeconds: Int
     /// Whether to automatically start rest timer after recording (combination mode).
     let combineRecordAndTimerStart: Bool
+    /// Whether to skip rest timer on the final set of each exercise.
+    let skipRestTimerOnFinalSet: Bool
 
     nonisolated init(
         isRoutineMode: Bool,
         exercises: [WatchExerciseData],
         exerciseGroups: [WatchExerciseGroupData] = [],
         defaultRestTimeSeconds: Int,
-        combineRecordAndTimerStart: Bool
+        combineRecordAndTimerStart: Bool,
+        skipRestTimerOnFinalSet: Bool = true
     ) {
         self.isRoutineMode = isRoutineMode
         self.exercises = exercises
         self.exerciseGroups = exerciseGroups
         self.defaultRestTimeSeconds = defaultRestTimeSeconds
         self.combineRecordAndTimerStart = combineRecordAndTimerStart
+        self.skipRestTimerOnFinalSet = skipRestTimerOnFinalSet
     }
 }
 
 extension WatchWorkoutData: Codable {
     enum CodingKeys: String, CodingKey {
-        case isRoutineMode, exercises, exerciseGroups, defaultRestTimeSeconds, combineRecordAndTimerStart
+        case isRoutineMode, exercises, exerciseGroups, defaultRestTimeSeconds, combineRecordAndTimerStart, skipRestTimerOnFinalSet
     }
 
     nonisolated init(from decoder: Decoder) throws {
@@ -48,6 +52,7 @@ extension WatchWorkoutData: Codable {
         exerciseGroups = try container.decodeIfPresent([WatchExerciseGroupData].self, forKey: .exerciseGroups) ?? []
         defaultRestTimeSeconds = try container.decode(Int.self, forKey: .defaultRestTimeSeconds)
         combineRecordAndTimerStart = try container.decodeIfPresent(Bool.self, forKey: .combineRecordAndTimerStart) ?? false
+        skipRestTimerOnFinalSet = try container.decodeIfPresent(Bool.self, forKey: .skipRestTimerOnFinalSet) ?? true
     }
 
     nonisolated func encode(to encoder: Encoder) throws {
@@ -57,6 +62,7 @@ extension WatchWorkoutData: Codable {
         try container.encode(exerciseGroups, forKey: .exerciseGroups)
         try container.encode(defaultRestTimeSeconds, forKey: .defaultRestTimeSeconds)
         try container.encode(combineRecordAndTimerStart, forKey: .combineRecordAndTimerStart)
+        try container.encode(skipRestTimerOnFinalSet, forKey: .skipRestTimerOnFinalSet)
     }
 }
 

@@ -103,9 +103,9 @@ struct WorkoutExerciseGroupCardView: View {
         case .notStarted:
             return AppColors.textMuted
         case .inProgress:
-            return AppColors.accentBlue
+            return AppColors.textSecondary
         case .completed:
-            return Color.green.opacity(0.7)
+            return AppColors.accentBlue
         }
     }
 

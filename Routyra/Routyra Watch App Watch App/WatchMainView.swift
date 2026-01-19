@@ -197,7 +197,12 @@ struct WatchMainView: View {
                                 themeManager: themeManager,
                                 onComplete: {
                                     recordSet(setId: set.id)
-                                    startRestTimerIfNeeded(restTimeSeconds: set.restTimeSeconds)
+                                    // Check if this was the actual last set (including any added sets)
+                                    let allSetsCompleted = exercise.sets.filter { $0.id != set.id }.allSatisfy { $0.isCompleted }
+                                    let shouldSkip = (workoutData?.skipRestTimerOnFinalSet ?? true) && allSetsCompleted
+                                    if !shouldSkip {
+                                        startRestTimerIfNeeded(restTimeSeconds: set.restTimeSeconds)
+                                    }
                                 }
                             )
                         }

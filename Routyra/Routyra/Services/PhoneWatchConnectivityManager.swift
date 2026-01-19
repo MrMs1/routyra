@@ -32,25 +32,29 @@ struct PhoneWatchWorkoutData: Sendable {
     let defaultRestTimeSeconds: Int
     /// Whether to automatically start rest timer after recording (combination mode).
     let combineRecordAndTimerStart: Bool
+    /// Whether to skip rest timer on the final set of each exercise.
+    let skipRestTimerOnFinalSet: Bool
 
     nonisolated init(
         isRoutineMode: Bool,
         exercises: [PhoneWatchExerciseData],
         exerciseGroups: [PhoneWatchExerciseGroupData] = [],
         defaultRestTimeSeconds: Int,
-        combineRecordAndTimerStart: Bool
+        combineRecordAndTimerStart: Bool,
+        skipRestTimerOnFinalSet: Bool = true
     ) {
         self.isRoutineMode = isRoutineMode
         self.exercises = exercises
         self.exerciseGroups = exerciseGroups
         self.defaultRestTimeSeconds = defaultRestTimeSeconds
         self.combineRecordAndTimerStart = combineRecordAndTimerStart
+        self.skipRestTimerOnFinalSet = skipRestTimerOnFinalSet
     }
 }
 
 extension PhoneWatchWorkoutData: Codable {
     enum CodingKeys: String, CodingKey {
-        case isRoutineMode, exercises, exerciseGroups, defaultRestTimeSeconds, combineRecordAndTimerStart
+        case isRoutineMode, exercises, exerciseGroups, defaultRestTimeSeconds, combineRecordAndTimerStart, skipRestTimerOnFinalSet
     }
 
     nonisolated init(from decoder: Decoder) throws {
@@ -60,6 +64,7 @@ extension PhoneWatchWorkoutData: Codable {
         exerciseGroups = try container.decodeIfPresent([PhoneWatchExerciseGroupData].self, forKey: .exerciseGroups) ?? []
         defaultRestTimeSeconds = try container.decode(Int.self, forKey: .defaultRestTimeSeconds)
         combineRecordAndTimerStart = try container.decodeIfPresent(Bool.self, forKey: .combineRecordAndTimerStart) ?? false
+        skipRestTimerOnFinalSet = try container.decodeIfPresent(Bool.self, forKey: .skipRestTimerOnFinalSet) ?? true
     }
 
     nonisolated func encode(to encoder: Encoder) throws {
@@ -69,6 +74,7 @@ extension PhoneWatchWorkoutData: Codable {
         try container.encode(exerciseGroups, forKey: .exerciseGroups)
         try container.encode(defaultRestTimeSeconds, forKey: .defaultRestTimeSeconds)
         try container.encode(combineRecordAndTimerStart, forKey: .combineRecordAndTimerStart)
+        try container.encode(skipRestTimerOnFinalSet, forKey: .skipRestTimerOnFinalSet)
     }
 }
 
@@ -322,7 +328,8 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
         exercises: [Exercise],
         bodyParts: [BodyPart] = [],
         defaultRestTimeSeconds: Int,
-        combineRecordAndTimerStart: Bool = false
+        combineRecordAndTimerStart: Bool = false,
+        skipRestTimerOnFinalSet: Bool = true
     ) {
         guard let session = session else { return }
 
@@ -331,7 +338,8 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
             exercises: exercises,
             bodyParts: bodyParts,
             defaultRestTimeSeconds: defaultRestTimeSeconds,
-            combineRecordAndTimerStart: combineRecordAndTimerStart
+            combineRecordAndTimerStart: combineRecordAndTimerStart,
+            skipRestTimerOnFinalSet: skipRestTimerOnFinalSet
         )
 
         do {
@@ -380,7 +388,8 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
         exercises: [Exercise],
         bodyParts: [BodyPart],
         defaultRestTimeSeconds: Int,
-        combineRecordAndTimerStart: Bool
+        combineRecordAndTimerStart: Bool,
+        skipRestTimerOnFinalSet: Bool
     ) -> PhoneWatchWorkoutData {
         // Send workout content to Watch for both routine and non-routine days.
         // The Watch UI will decide how to present it (e.g., show "no workout" only when empty).
@@ -390,7 +399,8 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
                 exercises: [],
                 exerciseGroups: [],
                 defaultRestTimeSeconds: defaultRestTimeSeconds,
-                combineRecordAndTimerStart: combineRecordAndTimerStart
+                combineRecordAndTimerStart: combineRecordAndTimerStart,
+                skipRestTimerOnFinalSet: skipRestTimerOnFinalSet
             )
         }
 
@@ -462,7 +472,8 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
             exercises: watchExercises,
             exerciseGroups: watchGroups,
             defaultRestTimeSeconds: defaultRestTimeSeconds,
-            combineRecordAndTimerStart: combineRecordAndTimerStart
+            combineRecordAndTimerStart: combineRecordAndTimerStart,
+            skipRestTimerOnFinalSet: skipRestTimerOnFinalSet
         )
     }
 

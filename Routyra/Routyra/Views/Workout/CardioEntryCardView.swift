@@ -16,6 +16,8 @@ struct CardioEntryCardView: View {
     let onComplete: () -> Void
     let onUncomplete: () -> Void
     let onDelete: () -> Void
+    let showsHealthKitLinkButton: Bool
+    let onLinkFromHealthKit: () -> Void
     var onUpdateDuration: ((Double) -> Void)?
     var onUpdateDistance: ((Double?) -> Void)?
 
@@ -304,6 +306,25 @@ struct CardioEntryCardView: View {
 
                     // Action buttons
                     if isManualEntry {
+                        if showsHealthKitLinkButton {
+                            Button(action: onLinkFromHealthKit) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "heart.fill")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundColor(.red.opacity(0.7))
+                                    Text(L10n.tr("cardio_link_healthkit_button"))
+                                }
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(AppColors.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(AppColors.divider.opacity(0.8), lineWidth: 1)
+                                )
+                            }
+                        }
                         if cardio.isCompleted {
                             Button(action: onUncomplete) {
                                 HStack(spacing: 6) {

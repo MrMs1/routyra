@@ -72,6 +72,10 @@ final class LocalProfile {
     /// Whether the combination mode announcement has been shown.
     var hasShownCombinationAnnouncement: Bool
 
+    /// Whether to skip rest timer on the final set of each exercise (default: true).
+    /// Uses property default for SwiftData migration safety.
+    var skipRestTimerOnFinalSet: Bool = true
+
     // MARK: - Display Settings
 
     /// The unit for displaying weight values (kg or lb).

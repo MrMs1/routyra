@@ -163,6 +163,8 @@
 "workout_rest_timer" = "Rest Timer";
 "workout_sets_completed" = "%d sets completed";
 "workout_sets_progress" = "%d/%d sets";
+"workout_rounds_completed" = "%d rounds completed";
+"workout_rounds_progress" = "%d/%d rounds";
 "workout_add_another_set" = "Add another set";
 "workout_add_to_workout" = "Add";
 "workout_add_sets_title" = "Add Sets";
@@ -469,6 +471,8 @@
 "settings_default_rest_time" = "Default Rest Time";
 "settings_combine_record_timer" = "Auto-start Timer on Log";
 "settings_combine_record_timer_hint" = "Timer starts automatically when you log a set";
+"settings_skip_timer_final_set" = "Skip Timer on Final Set";
+"settings_skip_timer_final_set_hint" = "Don't start rest timer after the last set of each exercise";
 "settings_reshow_announcement" = "Re-show Timer Announcement";
 
 // MARK: - Rest Timer
@@ -610,6 +614,9 @@
 "cardio_detail_energy_burned_label" = "Active Calories";
 "cardio_mark_complete" = "Mark as complete";
 "cardio_mark_incomplete" = "Mark as incomplete";
+"cardio_link_healthkit_button" = "Link HealthKit workout";
+"cardio_link_healthkit_title" = "Select HealthKit workout";
+"cardio_link_healthkit_message" = "This will replace the planned cardio with the selected HealthKit workout and lock editing.";
 "cardio_completed" = "Completed";
 "cardio_delete_message" = "Delete %@ workout?";
 

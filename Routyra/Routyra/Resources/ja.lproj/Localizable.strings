@@ -163,6 +163,8 @@
 "workout_rest_timer" = "レストタイマー";
 "workout_sets_completed" = "%dセット完了";
 "workout_sets_progress" = "%d/%dセット";
+"workout_rounds_completed" = "%dラウンド完了";
+"workout_rounds_progress" = "%d/%dラウンド";
 "workout_add_another_set" = "もう1セット";
 "workout_add_to_workout" = "追加";
 "workout_add_sets_title" = "セットを追加";
@@ -469,6 +471,8 @@
 "settings_default_rest_time" = "デフォルトのレスト時間";
 "settings_combine_record_timer" = "記録時に自動でタイマー開始";
 "settings_combine_record_timer_hint" = "セットを記録すると自動的にタイマーが開始します";
+"settings_skip_timer_final_set" = "最終セットでタイマーをスキップ";
+"settings_skip_timer_final_set_hint" = "各種目の最終セット記録時にレストタイマーを起動しません";
 "settings_reshow_announcement" = "タイマーのお知らせを再表示";
 
 // MARK: - Rest Timer
@@ -610,6 +614,9 @@
 "cardio_detail_energy_burned_label" = "アクティブキロカロリー";
 "cardio_mark_complete" = "完了にする";
 "cardio_mark_incomplete" = "未完了に戻す";
+"cardio_link_healthkit_button" = "ヘルスケアの実績と紐づける";
+"cardio_link_healthkit_title" = "ヘルスケアの有酸素を選択";
+"cardio_link_healthkit_message" = "選択した有酸素で予定を上書きし、編集不可になります。";
 "cardio_completed" = "完了";
 "cardio_delete_message" = "%@を削除しますか？";
 

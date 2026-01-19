@@ -81,7 +81,8 @@ final class WatchSyncCoordinator: ObservableObject {
                 exercises: exercises,
                 bodyParts: bodyParts,
                 defaultRestTimeSeconds: profile.defaultRestTimeSeconds,
-                combineRecordAndTimerStart: profile.combineRecordAndTimerStart
+                combineRecordAndTimerStart: profile.combineRecordAndTimerStart,
+                skipRestTimerOnFinalSet: profile.skipRestTimerOnFinalSet
             )
         } catch {
             print("WatchSyncCoordinator: Failed to fetch data: \(error)")

@@ -368,7 +368,7 @@ struct CardioWorkoutRowView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(AppColors.cardBackgroundCompleted)
+                .fill(AppColors.cardBackgroundSecondary)
         )
     }
 

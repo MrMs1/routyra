@@ -120,7 +120,7 @@ struct HistoryDayDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
-        .background(AppColors.cardBackgroundCompleted)
+        .background(AppColors.cardBackgroundSecondary)
         .cornerRadius(10)
     }
 
@@ -278,7 +278,7 @@ struct HistoryDayDetailView: View {
         .padding(.horizontal, 4)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(AppColors.cardBackgroundCompleted)
+                .fill(AppColors.cardBackgroundSecondary)
         )
     }
 

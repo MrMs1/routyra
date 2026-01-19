@@ -19,6 +19,7 @@ protocol ColorTheme {
     var cardBackgroundCompleted: Color { get }
     var groupedCardBackground: Color { get }
     var groupedCardBackgroundCompleted: Color { get }
+    var cardBackgroundSecondary: Color { get }
 
     // MARK: - Accent Colors
     var accentBlue: Color { get }
@@ -185,9 +186,10 @@ struct DarkTheme: ColorTheme {
     // MARK: - Backgrounds
     let background = Color(hex: "0F0F10")
     let cardBackground = Color(hex: "1C1C1E")
-    let cardBackgroundCompleted = Color(hex: "141416")
-    let groupedCardBackground = Color(hex: "242426")
+    let cardBackgroundCompleted = Color(hex: "1A1A1C")
+    let groupedCardBackground = Color(hex: "1C1C1E")
     let groupedCardBackgroundCompleted = Color(hex: "1A1A1C")
+    let cardBackgroundSecondary = Color(hex: "141416")
 
     // MARK: - Accent Colors
     let accentBlue = Color(hex: "0A84FF")
@@ -220,11 +222,13 @@ struct MidnightTheme: ColorTheme {
     /// Card surface
     let cardBackground = Color(hex: "2B2D31")
     /// Completed card surface
-    let cardBackgroundCompleted = Color(hex: "26282C")
+    let cardBackgroundCompleted = Color(hex: "2A2C30")
     /// Elevated card surface
-    let groupedCardBackground = Color(hex: "313338")
+    let groupedCardBackground = Color(hex: "2B2D31")
     /// Completed elevated card surface
     let groupedCardBackgroundCompleted = Color(hex: "2A2C30")
+    /// Secondary card background for nested elements
+    let cardBackgroundSecondary = Color(hex: "26282C")
 
     // MARK: - Accent Colors
     /// Discord blurple accent
@@ -267,11 +271,13 @@ struct KuromiTheme: ColorTheme {
     /// Dark purple-gray for cards
     let cardBackground = Color(hex: "201E25")
     /// Darker for completed cards
-    let cardBackgroundCompleted = Color(hex: "1C1B1F")
+    let cardBackgroundCompleted = Color(hex: "232128")
     /// Elevated card surface
-    let groupedCardBackground = Color(hex: "2A2830")
+    let groupedCardBackground = Color(hex: "201E25")
     /// Completed grouped card
     let groupedCardBackgroundCompleted = Color(hex: "232128")
+    /// Secondary card background for nested elements
+    let cardBackgroundSecondary = Color(hex: "1C1B1F")
 
     // MARK: - Accent Colors
     /// Vivid purple accent
@@ -319,6 +325,8 @@ struct LimeTheme: ColorTheme {
     let groupedCardBackground = Color(hex: "1D1D1D")
     /// Completed grouped card should also remain visible against background
     let groupedCardBackgroundCompleted = Color(hex: "171717")
+    /// Secondary card background for nested elements
+    let cardBackgroundSecondary = Color(hex: "171717")
 
     // MARK: - Accent Colors
     /// Spotify-style lime accent
@@ -362,11 +370,13 @@ struct LightTheme: ColorTheme {
     /// Pure white cards for clear contrast
     let cardBackground = Color(hex: "FFFFFF")
     /// Slightly gray for completed cards
-    let cardBackgroundCompleted = Color(hex: "F5F5F7")
+    let cardBackgroundCompleted = Color(hex: "E8E8EA")
     /// Elevated card with subtle gray
-    let groupedCardBackground = Color(hex: "F0F0F2")
+    let groupedCardBackground = Color(hex: "FFFFFF")
     /// Completed grouped card
     let groupedCardBackgroundCompleted = Color(hex: "E8E8EA")
+    /// Secondary card background for nested elements
+    let cardBackgroundSecondary = Color(hex: "F5F5F7")
 
     // MARK: - Accent Colors
     /// iOS system blue for light mode
@@ -409,11 +419,13 @@ struct GruvboxLightTheme: ColorTheme {
     /// Gruvbox light1 for cards
     let cardBackground = Color(hex: "EBDBB2")
     /// Slightly deeper light2 for completed cards
-    let cardBackgroundCompleted = Color(hex: "D5C4A1")
+    let cardBackgroundCompleted = Color(hex: "BDAE93")
     /// Light2 for grouped cards
-    let groupedCardBackground = Color(hex: "D5C4A1")
+    let groupedCardBackground = Color(hex: "EBDBB2")
     /// Light3 for completed grouped cards
     let groupedCardBackgroundCompleted = Color(hex: "BDAE93")
+    /// Secondary card background for nested elements
+    let cardBackgroundSecondary = Color(hex: "D5C4A1")
 
     // MARK: - Accent Colors
     /// Gruvbox blue
@@ -456,11 +468,13 @@ struct GruvboxDarkTheme: ColorTheme {
     /// Warmer mid charcoal for cards
     let cardBackground = Color(hex: "32302F")
     /// Slightly darker for completed cards
-    let cardBackgroundCompleted = Color(hex: "2B2826")
+    let cardBackgroundCompleted = Color(hex: "32302F")
     /// Lifted card background for grouped cards
-    let groupedCardBackground = Color(hex: "3A3633")
+    let groupedCardBackground = Color(hex: "32302F")
     /// Completed grouped cards
     let groupedCardBackgroundCompleted = Color(hex: "32302F")
+    /// Secondary card background for nested elements
+    let cardBackgroundSecondary = Color(hex: "2B2826")
 
     // MARK: - Accent Colors
     /// Gruvbox blue
@@ -504,11 +518,13 @@ struct SerenityTheme: ColorTheme {
     /// White cards for clear contrast
     let cardBackground = Color(hex: "FFFFFF")
     /// Soft aqua for completed cards
-    let cardBackgroundCompleted = Color(hex: "F0F8FA")
+    let cardBackgroundCompleted = Color(hex: "DCE9EE")
     /// Light aqua for grouped cards
-    let groupedCardBackground = Color(hex: "E8F3F7")
+    let groupedCardBackground = Color(hex: "FFFFFF")
     /// Completed grouped card
     let groupedCardBackgroundCompleted = Color(hex: "DCE9EE")
+    /// Secondary card background for nested elements
+    let cardBackgroundSecondary = Color(hex: "F0F8FA")
 
     // MARK: - Accent Colors
     /// Soft teal accent
@@ -551,11 +567,13 @@ struct BlossomTheme: ColorTheme {
     /// White cards for clear contrast
     let cardBackground = Color(hex: "FFFFFF")
     /// Soft blush for completed cards
-    let cardBackgroundCompleted = Color(hex: "F8F0F3")
+    let cardBackgroundCompleted = Color(hex: "EBDBE2")
     /// Light pink for grouped cards
-    let groupedCardBackground = Color(hex: "F5E8ED")
+    let groupedCardBackground = Color(hex: "FFFFFF")
     /// Completed grouped card
     let groupedCardBackgroundCompleted = Color(hex: "EBDBE2")
+    /// Secondary card background for nested elements
+    let cardBackgroundSecondary = Color(hex: "F8F0F3")
 
     // MARK: - Accent Colors
     /// Soft rose accent
@@ -598,11 +616,13 @@ struct LavenderDuskTheme: ColorTheme {
     /// White cards for clear contrast
     let cardBackground = Color(hex: "FFFFFF")
     /// Light lavender for completed cards
-    let cardBackgroundCompleted = Color(hex: "F5F2F9")
+    let cardBackgroundCompleted = Color(hex: "E0D9E9")
     /// Light lavender for grouped cards
-    let groupedCardBackground = Color(hex: "EDE8F3")
+    let groupedCardBackground = Color(hex: "FFFFFF")
     /// Completed grouped card
     let groupedCardBackgroundCompleted = Color(hex: "E0D9E9")
+    /// Secondary card background for nested elements
+    let cardBackgroundSecondary = Color(hex: "F5F2F9")
 
     // MARK: - Accent Colors
     /// Soft lavender accent
@@ -645,11 +665,13 @@ struct RoseTeaTheme: ColorTheme {
     /// White cards for clear contrast
     let cardBackground = Color(hex: "FFFFFF")
     /// Warm blush for completed cards
-    let cardBackgroundCompleted = Color(hex: "F8F3F0")
+    let cardBackgroundCompleted = Color(hex: "E6DAD3")
     /// Light rose-beige for grouped cards
-    let groupedCardBackground = Color(hex: "F2E8E3")
+    let groupedCardBackground = Color(hex: "FFFFFF")
     /// Completed grouped card
     let groupedCardBackgroundCompleted = Color(hex: "E6DAD3")
+    /// Secondary card background for nested elements
+    let cardBackgroundSecondary = Color(hex: "F8F3F0")
 
     // MARK: - Accent Colors
     /// Rose accent
@@ -692,11 +714,13 @@ struct MatchaCreamTheme: ColorTheme {
     /// White cards for clear contrast
     let cardBackground = Color(hex: "FFFFFF")
     /// Sage-tinted completed cards
-    let cardBackgroundCompleted = Color(hex: "F4F7F2")
+    let cardBackgroundCompleted = Color(hex: "E0E7DC")
     /// Light sage for grouped cards
-    let groupedCardBackground = Color(hex: "EDF2EA")
+    let groupedCardBackground = Color(hex: "FFFFFF")
     /// Completed grouped card
     let groupedCardBackgroundCompleted = Color(hex: "E0E7DC")
+    /// Secondary card background for nested elements
+    let cardBackgroundSecondary = Color(hex: "F4F7F2")
 
     // MARK: - Accent Colors
     /// Sage accent
@@ -739,11 +763,13 @@ struct ApricotSandTheme: ColorTheme {
     /// White cards for clear contrast
     let cardBackground = Color(hex: "FFFFFF")
     /// Apricot-tinted completed cards
-    let cardBackgroundCompleted = Color(hex: "F8F4EF")
+    let cardBackgroundCompleted = Color(hex: "E6DCD0")
     /// Light sand for grouped cards
-    let groupedCardBackground = Color(hex: "F3EBE2")
+    let groupedCardBackground = Color(hex: "FFFFFF")
     /// Completed grouped card
     let groupedCardBackgroundCompleted = Color(hex: "E6DCD0")
+    /// Secondary card background for nested elements
+    let cardBackgroundSecondary = Color(hex: "F8F4EF")
 
     // MARK: - Accent Colors
     /// Apricot accent
@@ -786,11 +812,13 @@ struct PowderBlueTheme: ColorTheme {
     /// White cards for clear contrast
     let cardBackground = Color(hex: "FFFFFF")
     /// Blue-tinted completed cards
-    let cardBackgroundCompleted = Color(hex: "F3F7FA")
+    let cardBackgroundCompleted = Color(hex: "DEE6EE")
     /// Light blue for grouped cards
-    let groupedCardBackground = Color(hex: "ECF1F6")
+    let groupedCardBackground = Color(hex: "FFFFFF")
     /// Completed grouped card
     let groupedCardBackgroundCompleted = Color(hex: "DEE6EE")
+    /// Secondary card background for nested elements
+    let cardBackgroundSecondary = Color(hex: "F3F7FA")
 
     // MARK: - Accent Colors
     /// Powder blue accent
@@ -834,11 +862,13 @@ struct OceanTheme: ColorTheme {
     /// Dark teal for cards
     let cardBackground = Color(hex: "122830")
     /// Deeper teal for completed cards
-    let cardBackgroundCompleted = Color(hex: "0E2028")
+    let cardBackgroundCompleted = Color(hex: "142830")
     /// Elevated card with cyan tint
-    let groupedCardBackground = Color(hex: "183038")
+    let groupedCardBackground = Color(hex: "122830")
     /// Completed grouped card
     let groupedCardBackgroundCompleted = Color(hex: "142830")
+    /// Secondary card background for nested elements
+    let cardBackgroundSecondary = Color(hex: "0E2028")
 
     // MARK: - Accent Colors
     /// Bright aqua accent

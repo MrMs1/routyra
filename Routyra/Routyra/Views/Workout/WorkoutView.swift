@@ -74,6 +74,7 @@ struct WorkoutView: View {
 
     @State private var selectedDate: Date = DateUtilities.todayWorkoutDate(transitionHour: 3)
     @State private var expandedEntryId: UUID?
+    @State private var expandedGroupId: UUID?
     @State private var snackBarMessage: String?
     @State private var snackBarUndoAction: (() -> Void)?
     @State private var currentWeight: Double = 60
@@ -110,6 +111,9 @@ struct WorkoutView: View {
     @State private var groupSwipeOffsets: [UUID: CGFloat] = [:]
     @State private var groupSwipeStartOffsets: [UUID: CGFloat] = [:]
     @State private var openGroupSwipeId: UUID?
+    @State private var pendingHealthKitLinkCardio: CardioWorkout?
+    @State private var showHealthKitLinkDialog = false
+    @State private var optimisticCardioWorkouts: [CardioWorkout] = []
 
     // Past day rescue support
     @State private var showPastDayRescuePicker = false
@@ -173,7 +177,7 @@ struct WorkoutView: View {
         let selectedDate = selectedWorkoutDate
         let linkedWorkoutDayId = selectedWorkoutDay?.id
 
-        return allCardioWorkouts.filter { workout in
+        var workouts = allCardioWorkouts.filter { workout in
             if let profileId = profileId, workout.profile?.id != profileId {
                 return false
             }
@@ -184,6 +188,35 @@ struct WorkoutView: View {
 
             return workout.workoutDayId == nil &&
                 DateUtilities.isSameDay(workout.startDate, selectedDate)
+        }
+        let existingIds = Set(workouts.map(\.id))
+        let optimisticMatches = optimisticCardioWorkouts.filter { workout in
+            if let profileId = profileId, workout.profile?.id != profileId {
+                return false
+            }
+            if let linkedId = linkedWorkoutDayId, workout.workoutDayId == linkedId {
+                return true
+            }
+            return workout.workoutDayId == nil &&
+                DateUtilities.isSameDay(workout.startDate, selectedDate)
+        }
+        workouts.append(contentsOf: optimisticMatches.filter { !existingIds.contains($0.id) })
+        return workouts
+    }
+
+    /// Unlinked HealthKit workouts for the selected date (link candidates).
+    private var availableHealthKitWorkoutsForSelectedDate: [CardioWorkout] {
+        let profileId = profile?.id
+        let selectedDate = selectedWorkoutDate
+
+        return allCardioWorkouts.filter { workout in
+            if let profileId = profileId, workout.profile?.id != profileId {
+                return false
+            }
+
+            guard workout.source == .healthKit else { return false }
+            guard workout.workoutDayId == nil else { return false }
+            return DateUtilities.isSameDay(workout.startDate, selectedDate)
         }
     }
 
@@ -595,6 +628,25 @@ struct WorkoutView: View {
             } message: {
                 Text(L10n.tr("workout_delete_group_message"))
             }
+            .confirmationDialog(
+                L10n.tr("cardio_link_healthkit_title"),
+                isPresented: $showHealthKitLinkDialog,
+                titleVisibility: .visible
+            ) {
+                ForEach(availableHealthKitWorkoutsForSelectedDate, id: \.id) { workout in
+                    Button(healthKitLinkLabel(for: workout)) {
+                        if let target = pendingHealthKitLinkCardio {
+                            linkHealthKitWorkout(workout, to: target)
+                        }
+                        pendingHealthKitLinkCardio = nil
+                    }
+                }
+                Button(L10n.tr("cancel"), role: .cancel) {
+                    pendingHealthKitLinkCardio = nil
+                }
+            } message: {
+                Text(L10n.tr("cardio_link_healthkit_message"))
+            }
     }
 
     private var bodyWithSheets: some View {
@@ -628,6 +680,9 @@ struct WorkoutView: View {
             .onAppear(perform: handleOnAppear)
             .onChange(of: selectedDate) { _, _ in
                 handleSelectedDateChange()
+            }
+            .onChange(of: allCardioWorkouts) { _, newValue in
+                pruneOptimisticCardioWorkouts(using: newValue)
             }
     }
 
@@ -1259,6 +1314,7 @@ struct WorkoutView: View {
 
     @ViewBuilder
     private func groupView(for group: WorkoutExerciseGroup, scrollProxy: ScrollViewProxy) -> some View {
+        let isExpanded = expandedGroupId == group.id
         let defaultRoundIndex = max(0, min(group.activeRound - 1, max(group.setCount - 1, 0)))
         let selectedRound = selectedGroupRoundIndex[group.id] ?? defaultRoundIndex
         let isCombinationMode = profile?.combineRecordAndTimerStart ?? false
@@ -1269,128 +1325,147 @@ struct WorkoutView: View {
             lastCompletedRoundIndex >= 0 &&
             canUncompleteGroupRound(group, roundIndex: selectedRound)
 
-        VStack(alignment: .leading, spacing: 10) {
-            WorkoutExerciseGroupCardView(
-                group: group,
-                onUpdateRest: { newRest in
-                    group.roundRestSeconds = newRest
-                },
-                showsBackground: false,
-                showsRestTimeButton: false
-            )
-
-            HStack(alignment: .top, spacing: 10) {
-                GroupRoundDotsColumnView(
-                    completedRounds: group.roundsCompleted,
-                    totalRounds: group.setCount,
-                    activeRound: group.activeRound,
-                    isAllRoundsComplete: group.isAllRoundsComplete,
-                    isViewingCompletedRound: isViewingCompletedRound,
-                    selectedRoundIndex: selectedRound,
-                    onSelectRound: { index in
-                        selectedGroupRoundIndex[group.id] = index
-                    }
-                )
-                .padding(.top, 2)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(group.sortedEntries, id: \.id) { entry in
-                        GroupedExerciseRowView(
-                            entry: entry,
-                            exerciseName: getExerciseName(for: entry.exerciseId),
-                            bodyPartColor: getBodyPartColor(for: entry.exerciseId),
-                            selectedRoundIndex: selectedRound,
-                            onInvalidInput: {
-                                showSnackBar(
-                                    message: L10n.tr("workout_invalid_input"),
-                                    undoAction: {}
-                                )
-                            },
-                            weightUnit: profile?.effectiveWeightUnit ?? .kg
-                        )
-                    }
-
-                    if !group.isAllRoundsComplete {
-                        if isViewingCompletedRound {
-                            // Match single-exercise behavior:
-                            // When viewing a completed round, show "Go to latest set"
-                            // instead of logging the next (active) round.
-                            Button(action: {
-                                selectedGroupRoundIndex[group.id] = defaultRoundIndex
-                            }) {
-                                HStack(spacing: 6) {
-                                    Text("workout_go_to_current_set")
-                                    Image(systemName: "arrow.right")
-                                        .font(.subheadline.weight(.semibold))
-                                }
-                                .font(.headline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(AppColors.textPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(AppColors.accentBlue.opacity(0.18))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .stroke(AppColors.accentBlue.opacity(0.45), lineWidth: 1)
-                                )
-                                .cornerRadius(12)
-                            }
-                        } else {
-                            // Group spec: log round (single action). No REST timer UI for groups.
-                            Button(action: {
-                                let success = logGroupRound(for: group)
-                                guard success else { return }
-
-                                // Do NOT start rest timer when the final round was just completed.
-                                guard !group.isAllRoundsComplete else { return }
-
-                                // Start rest timer only for non-final rounds (combination mode).
-                                if isCombinationMode, restSeconds > 0 {
-                                    handleCombinationModeTimer(restTimeSeconds: group.roundRestSeconds)
-                                }
-                            }) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "checkmark")
-                                        .font(.subheadline.weight(.semibold))
-                                    Text(L10n.tr(isCombinationMode ? "rest_timer_log_and_start" : "rest_timer_log_set"))
-                                        .font(.headline)
-                                        .fontWeight(.semibold)
-                                }
-                                .foregroundColor(AppColors.textPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(AppColors.accentBlue)
-                                .cornerRadius(12)
-                            }
+        VStack(alignment: .leading, spacing: 0) {
+            if isExpanded {
+                // MARK: - Expanded Content
+                VStack(alignment: .leading, spacing: 10) {
+                    WorkoutExerciseGroupCardView(
+                        group: group,
+                        onUpdateRest: { newRest in
+                            group.roundRestSeconds = newRest
+                        },
+                        showsBackground: false,
+                        showsRestTimeButton: false
+                    )
+                    .onTapGesture {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            expandedGroupId = nil
                         }
                     }
 
-                    // Uncomplete (undo) button for group rounds:
-                    // Only the last completed round can be reverted (same rule as single-set undo).
-                    if canUncompleteSelectedRound {
-                        Button(action: {
-                            _ = uncompleteGroupRound(for: group, roundIndex: selectedRound)
-                            // Match single-exercise behavior: return to latest after undo when viewing past rounds.
-                            if isViewingCompletedRound {
-                                selectedGroupRoundIndex[group.id] = max(0, group.activeRound - 1)
+                    HStack(alignment: .top, spacing: 10) {
+                        GroupRoundDotsColumnView(
+                            completedRounds: group.roundsCompleted,
+                            totalRounds: group.setCount,
+                            activeRound: group.activeRound,
+                            isAllRoundsComplete: group.isAllRoundsComplete,
+                            isViewingCompletedRound: isViewingCompletedRound,
+                            selectedRoundIndex: selectedRound,
+                            onSelectRound: { index in
+                                selectedGroupRoundIndex[group.id] = index
                             }
-                        }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "arrow.uturn.backward")
-                                    .font(.subheadline.weight(.semibold))
-                                Text("workout_uncomplete_set")
+                        )
+                        .padding(.top, 2)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(group.sortedEntries, id: \.id) { entry in
+                                GroupedExerciseRowView(
+                                    entry: entry,
+                                    exerciseName: getExerciseName(for: entry.exerciseId),
+                                    bodyPartColor: getBodyPartColor(for: entry.exerciseId),
+                                    selectedRoundIndex: selectedRound,
+                                    onInvalidInput: {
+                                        showSnackBar(
+                                            message: L10n.tr("workout_invalid_input"),
+                                            undoAction: {}
+                                        )
+                                    },
+                                    weightUnit: profile?.effectiveWeightUnit ?? .kg
+                                )
                             }
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundColor(AppColors.textSecondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
+
+                            if !group.isAllRoundsComplete {
+                                if isViewingCompletedRound {
+                                    // Match single-exercise behavior:
+                                    // When viewing a completed round, show "Go to latest set"
+                                    // instead of logging the next (active) round.
+                                    Button(action: {
+                                        selectedGroupRoundIndex[group.id] = defaultRoundIndex
+                                    }) {
+                                        HStack(spacing: 6) {
+                                            Text("workout_go_to_current_set")
+                                            Image(systemName: "arrow.right")
+                                                .font(.subheadline.weight(.semibold))
+                                        }
+                                        .font(.headline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(AppColors.textPrimary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 14)
+                                        .background(AppColors.accentBlue.opacity(0.18))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .stroke(AppColors.accentBlue.opacity(0.45), lineWidth: 1)
+                                        )
+                                        .cornerRadius(12)
+                                    }
+                                } else {
+                                    // Group spec: log round (single action). No REST timer UI for groups.
+                                    Button(action: {
+                                        let success = logGroupRound(for: group)
+                                        guard success else { return }
+
+                                        // Do NOT start rest timer when the final round was just completed.
+                                        guard !group.isAllRoundsComplete else { return }
+
+                                        // Start rest timer only for non-final rounds (combination mode).
+                                        if isCombinationMode, restSeconds > 0 {
+                                            handleCombinationModeTimer(restTimeSeconds: group.roundRestSeconds)
+                                        }
+                                    }) {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "checkmark")
+                                                .font(.subheadline.weight(.semibold))
+                                            Text(L10n.tr(isCombinationMode ? "rest_timer_log_and_start" : "rest_timer_log_set"))
+                                                .font(.headline)
+                                                .fontWeight(.semibold)
+                                        }
+                                        .foregroundColor(AppColors.textPrimary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 14)
+                                        .background(AppColors.accentBlue)
+                                        .cornerRadius(12)
+                                    }
+                                }
+                            }
+
+                            // Uncomplete (undo) button for group rounds:
+                            // Only the last completed round can be reverted (same rule as single-set undo).
+                            if canUncompleteSelectedRound {
+                                Button(action: {
+                                    _ = uncompleteGroupRound(for: group, roundIndex: selectedRound)
+                                    // Match single-exercise behavior: return to latest after undo when viewing past rounds.
+                                    if isViewingCompletedRound {
+                                        selectedGroupRoundIndex[group.id] = max(0, group.activeRound - 1)
+                                    }
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "arrow.uturn.backward")
+                                            .font(.subheadline.weight(.semibold))
+                                        Text("workout_uncomplete_set")
+                                    }
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(AppColors.textSecondary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                }
+                            }
                         }
                     }
                 }
+                .padding(10)
+            } else {
+                // MARK: - Collapsed Content
+                groupCollapsedContent(for: group)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            expandedGroupId = group.id
+                        }
+                    }
             }
         }
-        .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 // Match single exercise card behavior:
@@ -1401,6 +1476,83 @@ struct WorkoutView: View {
                         .stroke(AppColors.divider.opacity(0.6), lineWidth: 0.5)
                 )
         )
+    }
+
+    /// Collapsed content for group card showing exercise names and round progress.
+    @ViewBuilder
+    private func groupCollapsedContent(for group: WorkoutExerciseGroup) -> some View {
+        let progressColor: Color = {
+            switch group.progressState {
+            case .notStarted:
+                return AppColors.textMuted
+            case .inProgress:
+                return AppColors.textSecondary
+            case .completed:
+                return AppColors.accentBlue
+            }
+        }()
+
+        // Round subtitle text (matches single exercise format)
+        let roundSubtitle: String = {
+            let completed = group.roundsCompleted
+            let total = group.setCount
+            if completed >= total {
+                return L10n.tr("workout_rounds_completed", total)
+            } else {
+                return L10n.tr("workout_rounds_progress", completed, total)
+            }
+        }()
+
+        VStack(alignment: .leading, spacing: 4) {
+            // Group badge row
+            HStack(spacing: 8) {
+                // Group label badge
+                HStack(spacing: 4) {
+                    Image(systemName: "rectangle.stack")
+                        .font(.caption)
+                    Text(group.displayName)
+                        .font(.caption.weight(.medium))
+                }
+                .foregroundColor(progressColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(progressColor.opacity(0.15))
+                .cornerRadius(6)
+            }
+
+            // Exercise names list
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(group.sortedEntries, id: \.id) { entry in
+                    HStack(spacing: 8) {
+                        // Body part color dot
+                        if let color = getBodyPartColor(for: entry.exerciseId) {
+                            Circle()
+                                .fill(color)
+                                .frame(width: 8, height: 8)
+                        }
+
+                        Text(getExerciseName(for: entry.exerciseId))
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.textPrimary)
+                    }
+                }
+            }
+
+            // Round progress subtitle (same position as single exercise sets)
+            HStack(spacing: 6) {
+                Text(roundSubtitle)
+                    .font(.subheadline)
+                    .foregroundColor(AppColors.textMuted)
+
+                if group.isAllRoundsComplete {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(AppColors.accentBlue)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
     }
 
     private func entryCardView(
@@ -1512,6 +1664,12 @@ struct WorkoutView: View {
             onDelete: {
                 deleteCardioWorkout(cardio)
             },
+            showsHealthKitLinkButton: cardio.source == .manual
+                && !availableHealthKitWorkoutsForSelectedDate.isEmpty,
+            onLinkFromHealthKit: {
+                pendingHealthKitLinkCardio = cardio
+                showHealthKitLinkDialog = true
+            },
             onUpdateDuration: { newDuration in
                 cardio.duration = newDuration
                 try? modelContext.save()
@@ -1524,13 +1682,57 @@ struct WorkoutView: View {
         .id(cardio.id)
     }
 
+    private func linkHealthKitWorkout(_ source: CardioWorkout, to target: CardioWorkout) {
+        guard source.id != target.id else { return }
+
+        target.activityType = source.activityType
+        target.manualExerciseCode = nil
+        target.startDate = source.startDate
+        target.duration = source.duration
+        target.totalDistance = source.totalDistance
+        target.totalEnergyBurned = source.totalEnergyBurned
+        target.averageHeartRate = source.averageHeartRate
+        target.maxHeartRate = source.maxHeartRate
+        target.isCompleted = true
+        target.source = .healthKit
+        target.healthKitUUID = source.healthKitUUID
+        if let workoutDayId = selectedWorkoutDay?.id {
+            target.workoutDayId = workoutDayId
+        }
+
+        modelContext.delete(source)
+        try? modelContext.save()
+        optimisticCardioWorkouts.removeAll { $0.id == source.id || $0.id == target.id }
+    }
+
+    private func healthKitLinkLabel(for workout: CardioWorkout) -> String {
+        let typeName = HKWorkoutActivityType(rawValue: UInt(workout.activityType))?.displayName
+            ?? L10n.tr("unknown")
+        var parts: [String] = [typeName]
+
+        if workout.duration > 0 {
+            parts.append(workout.formattedDuration)
+        }
+        if let distance = workout.formattedDistance {
+            parts.append(distance)
+        }
+
+        return parts.joined(separator: " · ")
+    }
+
     private func deleteCardioWorkout(_ cardio: CardioWorkout) {
         modelContext.delete(cardio)
         try? modelContext.save()
+        optimisticCardioWorkouts.removeAll { $0.id == cardio.id }
 
         if expandedEntryId == cardio.id {
             expandedEntryId = nil
         }
+    }
+
+    private func pruneOptimisticCardioWorkouts(using workouts: [CardioWorkout]) {
+        let existingIds = Set(workouts.map(\.id))
+        optimisticCardioWorkouts.removeAll { existingIds.contains($0.id) }
     }
 
     @ViewBuilder
@@ -1541,16 +1743,8 @@ struct WorkoutView: View {
         Group {
             switch item {
             case .group(let group):
-                // Use system swipe actions to avoid vertical scroll conflicts.
-                groupView(for: group, scrollProxy: scrollProxy)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            pendingGroupDelete = group
-                            showGroupDeleteDialog = true
-                        } label: {
-                            Label(L10n.tr("delete"), systemImage: "trash")
-                        }
-                    }
+                // Use custom swipe implementation for delete functionality in LazyVStack.
+                groupSwipeCardView(for: group, scrollProxy: scrollProxy)
             case .entry(let entry):
                 entryCardView(for: entry, scrollProxy: scrollProxy, isGrouped: false)
             case .cardio(let cardio):
@@ -1577,6 +1771,7 @@ struct WorkoutView: View {
         let deleteButtonWidth: CGFloat = 80
         let deleteButtonHeight: CGFloat = 56
         let offset = groupSwipeOffsets[group.id] ?? 0
+        let isSwipeOpen = openGroupSwipeId == group.id
 
         ZStack(alignment: .trailing) {
             Button(role: .destructive) {
@@ -1597,10 +1792,9 @@ struct WorkoutView: View {
 
             groupView(for: group, scrollProxy: scrollProxy)
                 .offset(x: offset)
-                // Allow vertical scrolling on the card, while still supporting horizontal swipe-to-delete.
-                .simultaneousGesture(groupSwipeGesture(for: group, deleteWidth: deleteButtonWidth))
+                .gesture(groupSwipeGesture(for: group, deleteWidth: deleteButtonWidth))
                 .onTapGesture {
-                    if openGroupSwipeId == group.id {
+                    if isSwipeOpen {
                         closeGroupSwipe(group.id)
                     }
                 }
@@ -1611,31 +1805,49 @@ struct WorkoutView: View {
         for group: WorkoutExerciseGroup,
         deleteWidth: CGFloat
     ) -> some Gesture {
-        DragGesture(minimumDistance: 12, coordinateSpace: .local)
+        DragGesture(minimumDistance: 20, coordinateSpace: .local)
             .onChanged { value in
-                // Only treat as a swipe when horizontal intent is clear.
-                // This prevents the swipe gesture from stealing vertical ScrollView scrolling.
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
                 if openGroupSwipeId != nil && openGroupSwipeId != group.id {
                     closeAllGroupSwipes(except: group.id)
                 }
 
-                let startOffset = groupSwipeStartOffsets[group.id] ?? (groupSwipeOffsets[group.id] ?? 0)
-                groupSwipeStartOffsets[group.id] = startOffset
+                let isSwipeOpen = openGroupSwipeId == group.id
+                let translation = value.translation.width
 
-                let newOffset = startOffset + value.translation.width
-                groupSwipeOffsets[group.id] = min(0, max(-deleteWidth, newOffset))
+                if isSwipeOpen {
+                    // Already open, allow dragging back
+                    let newOffset = -deleteWidth + translation
+                    groupSwipeOffsets[group.id] = min(0, max(-deleteWidth, newOffset))
+                } else {
+                    // Only allow left swipe (negative translation)
+                    if translation < 0 {
+                        groupSwipeOffsets[group.id] = max(-deleteWidth, translation)
+                    }
+                }
             }
             .onEnded { value in
-                groupSwipeStartOffsets[group.id] = nil
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                let translation = value.translation.width
+                let velocity = value.predictedEndTranslation.width - translation
+                let isSwipeOpen = openGroupSwipeId == group.id
 
-                let offset = groupSwipeOffsets[group.id] ?? 0
-                let shouldOpen = offset <= -deleteWidth / 2 || value.predictedEndTranslation.width <= -deleteWidth
-                if shouldOpen {
-                    openGroupSwipe(group.id, width: deleteWidth)
-                } else {
-                    closeGroupSwipe(group.id)
+                withAnimation(.easeOut(duration: 0.2)) {
+                    if isSwipeOpen {
+                        // If swiping right fast enough or past threshold, close
+                        if translation > deleteWidth / 2 || velocity > 50 {
+                            groupSwipeOffsets[group.id] = 0
+                            openGroupSwipeId = nil
+                        } else {
+                            groupSwipeOffsets[group.id] = -deleteWidth
+                        }
+                    } else {
+                        // If swiping left fast enough or past threshold, open
+                        if translation < -deleteWidth / 2 || velocity < -50 {
+                            groupSwipeOffsets[group.id] = -deleteWidth
+                            openGroupSwipeId = group.id
+                        } else {
+                            groupSwipeOffsets[group.id] = 0
+                        }
+                    }
                 }
             }
     }
@@ -1821,7 +2033,10 @@ struct WorkoutView: View {
         }
 
         guard !workouts.isEmpty else { return .none }
-        return workouts.allSatisfy { $0.isCompleted } ? .complete : .incomplete
+        if workouts.allSatisfy({ $0.isCompleted }) {
+            return .complete
+        }
+        return workouts.contains(where: { $0.isCompleted }) ? .incomplete : .none
     }
 
     /// Computes workout state for each day of the current week
@@ -1837,16 +2052,24 @@ struct WorkoutView: View {
             let normalizedDate = DateUtilities.startOfDay(date)
 
             let strengthState: WorkoutDayState
+            let strengthHasEntries: Bool
+            let strengthHasCompletedSets: Bool
             if let workoutDay = workoutDays.first(where: { $0.date == normalizedDate }) {
+                strengthHasEntries = !workoutDay.entries.isEmpty
+                strengthHasCompletedSets = workoutDay.totalCompletedSets > 0
                 if workoutDay.entries.isEmpty {
                     strengthState = .none
                 } else if workoutDay.entries.allSatisfy({ $0.isPlannedSetsCompleted }) {
                     strengthState = .complete
-                } else {
+                } else if strengthHasCompletedSets {
                     strengthState = .incomplete
+                } else {
+                    strengthState = .none
                 }
             } else {
                 strengthState = .none
+                strengthHasEntries = false
+                strengthHasCompletedSets = false
             }
 
             let cardioState = cardioState(for: normalizedDate)
@@ -1856,6 +2079,9 @@ struct WorkoutView: View {
             switch (strengthState, cardioState) {
             case (.incomplete, _), (_, .incomplete):
                 // If either is incomplete, the day is incomplete
+                finalState = .incomplete
+            case (.none, .complete) where strengthHasEntries && !strengthHasCompletedSets:
+                // Cardio completed but strength entries exist with no progress: mark incomplete
                 finalState = .incomplete
             case (.complete, .complete), (.complete, .none), (.none, .complete):
                 // If all existing workouts are complete, the day is complete
@@ -2684,6 +2910,7 @@ struct WorkoutView: View {
 
         modelContext.insert(cardioWorkout)
         try? modelContext.save()
+        optimisticCardioWorkouts.append(cardioWorkout)
 
         withAnimation(.easeInOut(duration: 0.2)) {
             expandedEntryId = cardioWorkout.id
@@ -2907,8 +3134,12 @@ struct WorkoutView: View {
 
         // Combination mode: auto-start timer after logging set (ungrouped only)
         if group == nil {
-            let detail = nextSetNotificationDetail(afterLoggingEntry: entry, allSetsCompleted: allSetsCompleted)
-            handleCombinationModeTimer(restTimeSeconds: nextSet.restTimeSeconds, notificationDetail: detail)
+            // Skip timer if this was the final set and skipRestTimerOnFinalSet is enabled
+            let shouldSkipFinalSet = (profile?.skipRestTimerOnFinalSet ?? true) && allSetsCompleted
+            if !shouldSkipFinalSet {
+                let detail = nextSetNotificationDetail(afterLoggingEntry: entry, allSetsCompleted: allSetsCompleted)
+                handleCombinationModeTimer(restTimeSeconds: nextSet.restTimeSeconds, notificationDetail: detail)
+            }
         }
 
         // Send updated data to Watch
@@ -3739,13 +3970,15 @@ struct WorkoutView: View {
 
         let defaultRestTime = profile?.defaultRestTimeSeconds ?? 60
         let combineMode = profile?.combineRecordAndTimerStart ?? false
+        let skipFinalSet = profile?.skipRestTimerOnFinalSet ?? true
 
         watchConnectivity.sendWorkoutData(
             workoutDay: selectedWorkoutDay,
             exercises: Array(exercises),
             bodyParts: Array(bodyParts),
             defaultRestTimeSeconds: defaultRestTime,
-            combineRecordAndTimerStart: combineMode
+            combineRecordAndTimerStart: combineMode,
+            skipRestTimerOnFinalSet: skipFinalSet
         )
 
         lastSentWorkoutHash = currentHash
