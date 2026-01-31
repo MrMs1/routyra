@@ -17,6 +17,7 @@ enum CardioActivityTypeResolver {
         "outdoor_running": .running,
 
         "treadmill": .running,
+        "running": .running,
         "cycling": .cycling,
         "rowing": .rowing,
         "elliptical": .elliptical,

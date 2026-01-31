@@ -300,7 +300,7 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
     // MARK: - Private Properties
 
     private var session: WCSession?
-    private var modelContext: ModelContext?
+    private var modelContainer: ModelContainer?
 
     // MARK: - Initialization
 
@@ -316,8 +316,8 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
 
     // MARK: - Configuration
 
-    func configure(modelContext: ModelContext) {
-        self.modelContext = modelContext
+    func configure(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
     }
 
     // MARK: - Public API
@@ -480,9 +480,39 @@ final class PhoneWatchConnectivityManager: NSObject, ObservableObject {
     private func handleSetCompletion(_ data: Data) {
         do {
             let completion = try JSONDecoder().decode(PhoneWatchSetCompletionMessage.self, from: data)
+
+            // DB更新（永続化） - 新しい ModelContext を作成してスレッドセーフに
+            if let container = self.modelContainer {
+                completeSetInDatabase(setId: completion.setId, container: container)
+            } else {
+                print("PhoneWatchConnectivityManager: ModelContainer not configured, set completion may be lost")
+            }
+
+            // UI更新（コールバックが設定されている場合のみ）
             self.onSetCompleted?(completion.setId)
         } catch {
             print("Error decoding set completion: \(error.localizedDescription)")
+        }
+    }
+
+    private func completeSetInDatabase(setId: UUID, container: ModelContainer) {
+        let context = ModelContext(container)
+        let descriptor = FetchDescriptor<WorkoutSet>(
+            predicate: #Predicate { $0.id == setId }
+        )
+
+        do {
+            if let set = try context.fetch(descriptor).first {
+                if !set.isCompleted {
+                    set.complete()
+                    try context.save()
+                    print("PhoneWatchConnectivityManager: Set \(setId) completed via Watch")
+                }
+            } else {
+                print("PhoneWatchConnectivityManager: Set \(setId) not found in database")
+            }
+        } catch {
+            print("PhoneWatchConnectivityManager: Error completing set: \(error.localizedDescription)")
         }
     }
 

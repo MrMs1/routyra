@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import GoogleMobileAds
+import HealthKit
 
 struct HistoryDayDetailView: View {
     let date: Date
@@ -19,6 +20,12 @@ struct HistoryDayDetailView: View {
     var isPremiumUser: Bool = false
 
     @StateObject private var adManager = NativeAdManager()
+
+    @Environment(\.modelContext) private var modelContext
+    @State private var entryToDelete: WorkoutExerciseEntry?
+    @State private var cardioToDelete: CardioWorkout?
+    @State private var showDeleteEntryConfirmation = false
+    @State private var showDeleteCardioConfirmation = false
 
     var body: some View {
         ScrollView {
@@ -42,6 +49,43 @@ struct HistoryDayDetailView: View {
         .onAppear {
             if adManager.nativeAds.isEmpty {
                 adManager.loadNativeAds(count: 1)
+            }
+        }
+        .confirmationDialog(
+            L10n.tr("workout_delete_entry_title"),
+            isPresented: $showDeleteEntryConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.tr("delete"), role: .destructive) {
+                if let entry = entryToDelete {
+                    deleteEntry(entry)
+                }
+            }
+            Button(L10n.tr("cancel"), role: .cancel) {
+                entryToDelete = nil
+            }
+        } message: {
+            if let entry = entryToDelete,
+               let exercise = exercisesDict[entry.exerciseId] {
+                Text(L10n.tr("workout_delete_entry_message", exercise.localizedName))
+            }
+        }
+        .confirmationDialog(
+            L10n.tr("workout_delete_entry_title"),
+            isPresented: $showDeleteCardioConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.tr("delete"), role: .destructive) {
+                if let cardio = cardioToDelete {
+                    deleteCardio(cardio)
+                }
+            }
+            Button(L10n.tr("cancel"), role: .cancel) {
+                cardioToDelete = nil
+            }
+        } message: {
+            if let cardio = cardioToDelete {
+                Text(L10n.tr("workout_delete_entry_message", cardioActivityName(cardio)))
             }
         }
     }
@@ -142,6 +186,14 @@ struct HistoryDayDetailView: View {
         CardioWorkoutRowView(workout: workout, showsActivityName: true)
             .background(AppColors.cardBackground)
             .cornerRadius(12)
+            .contextMenu {
+                Button(role: .destructive) {
+                    cardioToDelete = workout
+                    showDeleteCardioConfirmation = true
+                } label: {
+                    Label(L10n.tr("delete"), systemImage: "trash")
+                }
+            }
     }
 
     // MARK: - Exercise Card
@@ -167,6 +219,14 @@ struct HistoryDayDetailView: View {
         .padding(12)
         .background(AppColors.cardBackground)
         .cornerRadius(12)
+        .contextMenu {
+            Button(role: .destructive) {
+                entryToDelete = entry
+                showDeleteEntryConfirmation = true
+            } label: {
+                Label(L10n.tr("delete"), systemImage: "trash")
+            }
+        }
     }
 
     private func exerciseHeader(exercise: Exercise?) -> some View {
@@ -350,6 +410,27 @@ struct HistoryDayDetailView: View {
         } else {
             return String(format: "%.0fm", meters)
         }
+    }
+
+
+    // MARK: - Delete Actions
+
+    private func deleteEntry(_ entry: WorkoutExerciseEntry) {
+        modelContext.delete(entry)
+        entryToDelete = nil
+    }
+
+    private func deleteCardio(_ cardio: CardioWorkout) {
+        modelContext.delete(cardio)
+        cardioToDelete = nil
+    }
+
+
+    private func cardioActivityName(_ cardio: CardioWorkout) -> String {
+        guard let type = HKWorkoutActivityType(rawValue: UInt(cardio.activityType)) else {
+            return "Other"
+        }
+        return type.displayName
     }
 }
 

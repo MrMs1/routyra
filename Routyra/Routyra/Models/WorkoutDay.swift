@@ -95,13 +95,15 @@ final class WorkoutDay {
     }
 
     /// Whether this is a routine workout and all planned exercises are complete.
-    /// Completion means: for every entry with plannedSetCount > 0, there are
-    /// exactly plannedSetCount non-deleted completed sets.
+    /// Completion means: for every routine-source entry with plannedSetCount > 0,
+    /// there are exactly plannedSetCount non-deleted completed sets.
+    /// Free-source entries (manually added) do not affect plan progression.
     var isRoutineCompleted: Bool {
         guard mode == .routine else { return false }
 
-        // All entries with planned sets must be fully completed
-        return entries.allSatisfy { entry in
+        // Only routine-source entries affect plan completion
+        let routineEntries = entries.filter { $0.source == .routine }
+        return routineEntries.allSatisfy { entry in
             if entry.plannedSetCount == 0 { return true }
             return entry.isPlannedSetsCompleted
         }

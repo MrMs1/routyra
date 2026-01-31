@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1737CB5E2F227A0600EB64FC /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1737CB5D2F227A0600EB64FC /* WidgetKit.framework */; };
+		1737CB602F227A0600EB64FC /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1737CB5F2F227A0600EB64FC /* SwiftUI.framework */; };
+		1737CB6D2F227A0700EB64FC /* RoutyraComplicationsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1737CB5B2F227A0600EB64FC /* RoutyraComplicationsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		17D41DD92F0A74ED001333BB /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 17D41DD82F0A74ED001333BB /* GoogleMobileAds */; };
 		17D41E042F0C9062001333BB /* Routyra Watch App Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 17D41DE42F0C9061001333BB /* Routyra Watch App Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		17D41E2D2F0D3284001333BB /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 27C1A1F52F0E1B2C3D4E5F6A /* Localizable.strings */; };
@@ -15,6 +18,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		1737CB6B2F227A0700EB64FC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 179C25A82EEE9BC800564643 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1737CB5A2F227A0600EB64FC;
+			remoteInfo = RoutyraComplicationsExtension;
+		};
 		179C25C02EEE9BCA00564643 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 179C25A82EEE9BC800564643 /* Project object */;
@@ -53,6 +63,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		1737CB722F227A0700EB64FC /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				1737CB6D2F227A0700EB64FC /* RoutyraComplicationsExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		17D41E082F0C9062001333BB /* Embed Watch Content */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -67,6 +88,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		1737CB5B2F227A0600EB64FC /* RoutyraComplicationsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RoutyraComplicationsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		1737CB5D2F227A0600EB64FC /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		1737CB5F2F227A0600EB64FC /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		1737CB782F227A2A00EB64FC /* RoutyraComplicationsExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RoutyraComplicationsExtension.entitlements; sourceTree = "<group>"; };
 		179C25B02EEE9BC800564643 /* Routyra.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Routyra.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		179C25BF2EEE9BCA00564643 /* RoutyraTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RoutyraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		179C25C92EEE9BCA00564643 /* RoutyraUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RoutyraUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -79,6 +104,20 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		1737CB712F227A0700EB64FC /* Exceptions for "RoutyraComplications" folder in "RoutyraComplicationsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 1737CB5A2F227A0600EB64FC /* RoutyraComplicationsExtension */;
+		};
+		1737CB7A2F227A8C00EB64FC /* Exceptions for "Routyra Watch App Watch App" folder in "RoutyraComplicationsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				SharedTimerState.swift,
+			);
+			target = 1737CB5A2F227A0600EB64FC /* RoutyraComplicationsExtension */;
+		};
 		17D41DDD2F0A7722001333BB /* Exceptions for "Routyra" folder in "Routyra" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -120,6 +159,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		1737CB612F227A0600EB64FC /* RoutyraComplications */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				1737CB712F227A0700EB64FC /* Exceptions for "RoutyraComplications" folder in "RoutyraComplicationsExtension" target */,
+			);
+			path = RoutyraComplications;
+			sourceTree = "<group>";
+		};
 		179C25B22EEE9BC800564643 /* Routyra */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -141,6 +188,9 @@
 		};
 		17D41DE52F0C9061001333BB /* Routyra Watch App Watch App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				1737CB7A2F227A8C00EB64FC /* Exceptions for "Routyra Watch App Watch App" folder in "RoutyraComplicationsExtension" target */,
+			);
 			path = "Routyra Watch App Watch App";
 			sourceTree = "<group>";
 		};
@@ -157,6 +207,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		1737CB582F227A0600EB64FC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1737CB602F227A0600EB64FC /* SwiftUI.framework in Frameworks */,
+				1737CB5E2F227A0600EB64FC /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		179C25AD2EEE9BC800564643 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -203,9 +262,19 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1737CB5C2F227A0600EB64FC /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				1737CB5D2F227A0600EB64FC /* WidgetKit.framework */,
+				1737CB5F2F227A0600EB64FC /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		179C25A72EEE9BC800564643 = {
 			isa = PBXGroup;
 			children = (
+				1737CB782F227A2A00EB64FC /* RoutyraComplicationsExtension.entitlements */,
 				27C1A1F62F0E1B2C3D4E5F6A /* Resources */,
 				179C25B22EEE9BC800564643 /* Routyra */,
 				179C25C22EEE9BCA00564643 /* RoutyraTests */,
@@ -213,6 +282,8 @@
 				17D41DE52F0C9061001333BB /* Routyra Watch App Watch App */,
 				17D41DF32F0C9062001333BB /* Routyra Watch App Watch AppTests */,
 				17D41DFD2F0C9062001333BB /* Routyra Watch App Watch AppUITests */,
+				1737CB612F227A0600EB64FC /* RoutyraComplications */,
+				1737CB5C2F227A0600EB64FC /* Frameworks */,
 				179C25B12EEE9BC800564643 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -226,6 +297,7 @@
 				17D41DE42F0C9061001333BB /* Routyra Watch App Watch App.app */,
 				17D41DF02F0C9062001333BB /* Routyra Watch App Watch AppTests.xctest */,
 				17D41DFA2F0C9062001333BB /* Routyra Watch App Watch AppUITests.xctest */,
+				1737CB5B2F227A0600EB64FC /* RoutyraComplicationsExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -243,6 +315,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		1737CB5A2F227A0600EB64FC /* RoutyraComplicationsExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1737CB6E2F227A0700EB64FC /* Build configuration list for PBXNativeTarget "RoutyraComplicationsExtension" */;
+			buildPhases = (
+				1737CB572F227A0600EB64FC /* Sources */,
+				1737CB582F227A0600EB64FC /* Frameworks */,
+				1737CB592F227A0600EB64FC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				1737CB612F227A0600EB64FC /* RoutyraComplications */,
+			);
+			name = RoutyraComplicationsExtension;
+			packageProductDependencies = (
+			);
+			productName = RoutyraComplicationsExtension;
+			productReference = 1737CB5B2F227A0600EB64FC /* RoutyraComplicationsExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		179C25AF2EEE9BC800564643 /* Routyra */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 179C25D32EEE9BCA00564643 /* Build configuration list for PBXNativeTarget "Routyra" */;
@@ -321,10 +415,12 @@
 				17D41DE02F0C9061001333BB /* Sources */,
 				17D41DE12F0C9061001333BB /* Frameworks */,
 				17D41DE22F0C9061001333BB /* Resources */,
+				1737CB722F227A0700EB64FC /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				1737CB6C2F227A0700EB64FC /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				17D41DE52F0C9061001333BB /* Routyra Watch App Watch App */,
@@ -392,6 +488,9 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					1737CB5A2F227A0600EB64FC = {
+						CreatedOnToolsVersion = 26.2;
+					};
 					179C25AF2EEE9BC800564643 = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -440,11 +539,19 @@
 				17D41DE32F0C9061001333BB /* Routyra Watch App Watch App */,
 				17D41DEF2F0C9062001333BB /* Routyra Watch App Watch AppTests */,
 				17D41DF92F0C9062001333BB /* Routyra Watch App Watch AppUITests */,
+				1737CB5A2F227A0600EB64FC /* RoutyraComplicationsExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		1737CB592F227A0600EB64FC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		179C25AE2EEE9BC800564643 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -493,6 +600,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		1737CB572F227A0600EB64FC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		179C25AC2EEE9BC800564643 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -538,6 +652,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		1737CB6C2F227A0700EB64FC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1737CB5A2F227A0600EB64FC /* RoutyraComplicationsExtension */;
+			targetProxy = 1737CB6B2F227A0700EB64FC /* PBXContainerItemProxy */;
+		};
 		179C25C12EEE9BCA00564643 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 179C25AF2EEE9BC800564643 /* Routyra */;
@@ -578,6 +697,74 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		1737CB6F2F227A0700EB64FC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = RoutyraComplicationsExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 46;
+				DEVELOPMENT_TEAM = UK55JY5WYY;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RoutyraComplications/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = RoutyraComplications;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mrms.Routyra.watchkitapp.RoutyraComplications;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.2;
+			};
+			name = Debug;
+		};
+		1737CB702F227A0700EB64FC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = RoutyraComplicationsExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 46;
+				DEVELOPMENT_TEAM = UK55JY5WYY;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RoutyraComplications/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = RoutyraComplications;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mrms.Routyra.watchkitapp.RoutyraComplications;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.2;
+			};
+			name = Release;
+		};
 		179C25D12EEE9BCA00564643 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -706,7 +893,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Routyra/Routyra.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 46;
 				DEVELOPMENT_TEAM = UK55JY5WYY;
 				ENABLE_PREVIEWS = YES;
 				EXCLUDED_SOURCE_FILE_NAMES = "*CLAUDE*";
@@ -751,7 +938,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Routyra/Routyra.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 46;
 				DEVELOPMENT_TEAM = UK55JY5WYY;
 				ENABLE_PREVIEWS = YES;
 				EXCLUDED_SOURCE_FILE_NAMES = "*CLAUDE*";
@@ -898,7 +1085,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Routyra Watch App Watch App/Routyra Watch App Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 46;
 				DEVELOPMENT_TEAM = UK55JY5WYY;
 				ENABLE_PREVIEWS = YES;
 				EXCLUDED_SOURCE_FILE_NAMES = "*CLAUDE*";
@@ -934,7 +1121,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Routyra Watch App Watch App/Routyra Watch App Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 46;
 				DEVELOPMENT_TEAM = UK55JY5WYY;
 				ENABLE_PREVIEWS = YES;
 				EXCLUDED_SOURCE_FILE_NAMES = "*CLAUDE*";
@@ -1056,6 +1243,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		1737CB6E2F227A0700EB64FC /* Build configuration list for PBXNativeTarget "RoutyraComplicationsExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1737CB6F2F227A0700EB64FC /* Debug */,
+				1737CB702F227A0700EB64FC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		179C25AB2EEE9BC800564643 /* Build configuration list for PBXProject "Routyra" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

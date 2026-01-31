@@ -122,7 +122,8 @@ enum HealthKitService {
     // MARK: - Import to App
 
     /// Imports workouts from HealthKit into the app's data store.
-    /// Skips workouts that have already been imported (based on UUID).
+    /// Uses a 2-phase approach: Phase 1 saves basic data immediately for fast UI update,
+    /// Phase 2 backfills heart rate data in parallel.
     /// - Parameters:
     ///   - workouts: Array of HKWorkout to import.
     ///   - profile: The user's profile.
@@ -145,6 +146,10 @@ enum HealthKitService {
 
         var importedCount = 0
         var updatedCount = 0
+        // Collect workouts that need heart rate backfill: (CardioWorkout, HKWorkout)
+        var heartRateBackfillTargets: [(CardioWorkout, HKWorkout)] = []
+
+        // MARK: Phase 1 - Insert/update basic data immediately
 
         for workout in workouts {
             let uuid = workout.uuid.uuidString
@@ -157,22 +162,10 @@ enum HealthKitService {
                     didUpdate = true
                 }
 
+                // Queue for heart rate backfill if missing
                 if existing.averageHeartRate == nil || existing.maxHeartRate == nil {
-                    let heartRateStats: HeartRateStats
-                    do {
-                        heartRateStats = try await fetchHeartRateStats(for: workout)
-                    } catch {
-                        heartRateStats = HeartRateStats(average: nil, max: nil)
-                    }
-
-                    if existing.averageHeartRate == nil, let averageHeartRate = heartRateStats.average {
-                        existing.averageHeartRate = averageHeartRate
-                        didUpdate = true
-                    }
-                    if existing.maxHeartRate == nil, let maxHeartRate = heartRateStats.max {
-                        existing.maxHeartRate = maxHeartRate
-                        didUpdate = true
-                    }
+                    heartRateBackfillTargets.append((existing, workout))
+                    didUpdate = true
                 }
 
                 if didUpdate {
@@ -181,23 +174,17 @@ enum HealthKitService {
                 continue
             }
 
-            let heartRateStats: HeartRateStats
-            do {
-                heartRateStats = try await fetchHeartRateStats(for: workout)
-            } catch {
-                heartRateStats = HeartRateStats(average: nil, max: nil)
-            }
-
+            // Insert new workout without heart rate (will be backfilled in Phase 2)
             let cardioWorkout = CardioWorkout(
                 activityType: Int(workout.workoutActivityType.rawValue),
                 startDate: workout.startDate,
                 duration: workout.duration,
                 totalDistance: workout.totalDistance?.doubleValue(for: .meter()),
                 totalEnergyBurned: workout.totalEnergyBurned?.doubleValue(for: .kilocalorie()),
-                averageHeartRate: heartRateStats.average,
-                maxHeartRate: heartRateStats.max,
-                isCompleted: true,  // HealthKit imports are always completed
-                workoutDayId: nil,  // Not linked to workout screen (history only)
+                averageHeartRate: nil,
+                maxHeartRate: nil,
+                isCompleted: true,
+                workoutDayId: nil,
                 orderIndex: 0,
                 source: .healthKit,
                 healthKitUUID: uuid,
@@ -205,11 +192,39 @@ enum HealthKitService {
             )
 
             modelContext.insert(cardioWorkout)
+            heartRateBackfillTargets.append((cardioWorkout, workout))
             importedCount += 1
         }
 
+        // Save basic data so @Query updates and UI reflects immediately
         if importedCount > 0 || updatedCount > 0 {
             try modelContext.save()
+        }
+
+        // MARK: Phase 2 - Backfill heart rate data
+
+        if !heartRateBackfillTargets.isEmpty {
+            // Phase 2a: Fetch heart rate stats in parallel (no model operations)
+            let hkWorkouts = heartRateBackfillTargets.map { $0.1 }
+            let heartRateResults = await fetchHeartRateStatsInParallel(for: hkWorkouts)
+
+            // Phase 2b: Apply results to models on MainActor
+            var heartRateUpdated = false
+            for (index, (cardioWorkout, _)) in heartRateBackfillTargets.enumerated() {
+                let stats = heartRateResults[index]
+                if cardioWorkout.averageHeartRate == nil, let avg = stats.average {
+                    cardioWorkout.averageHeartRate = avg
+                    heartRateUpdated = true
+                }
+                if cardioWorkout.maxHeartRate == nil, let max = stats.max {
+                    cardioWorkout.maxHeartRate = max
+                    heartRateUpdated = true
+                }
+            }
+
+            if heartRateUpdated {
+                try modelContext.save()
+            }
         }
 
         return importedCount
@@ -223,13 +238,56 @@ enum HealthKitService {
         return try modelContext.fetch(descriptor)
     }
 
-    private struct HeartRateStats {
+    struct HeartRateStats {
         let average: Double?
         let max: Double?
     }
 
+    /// Maximum number of concurrent heart rate queries to avoid HealthKit throttling.
+    private static let maxConcurrentHeartRateQueries = 5
+
+    /// Fetches heart rate stats for multiple workouts in parallel (max 5 concurrent).
+    /// Individual failures are silently caught and return nil values.
+    private static func fetchHeartRateStatsInParallel(for workouts: [HKWorkout]) async -> [HeartRateStats] {
+        var results = Array(repeating: HeartRateStats(average: nil, max: nil), count: workouts.count)
+
+        await withTaskGroup(of: (Int, HeartRateStats).self) { group in
+            var nextIndex = 0
+
+            // Seed initial batch
+            while nextIndex < min(maxConcurrentHeartRateQueries, workouts.count) {
+                let index = nextIndex
+                group.addTask { await fetchHeartRateStatsSafe(for: workouts[index], index: index) }
+                nextIndex += 1
+            }
+
+            // As each completes, launch the next
+            for await (index, stats) in group {
+                results[index] = stats
+                if nextIndex < workouts.count {
+                    let index = nextIndex
+                    group.addTask { await fetchHeartRateStatsSafe(for: workouts[index], index: index) }
+                    nextIndex += 1
+                }
+            }
+        }
+
+        return results
+    }
+
+    /// Fetches heart rate stats for a single workout, returning nil values on failure.
+    private static func fetchHeartRateStatsSafe(for workout: HKWorkout, index: Int) async -> (Int, HeartRateStats) {
+        do {
+            let stats = try await fetchHeartRateStats(for: workout)
+            return (index, stats)
+        } catch {
+            print("HealthKitService: Heart rate fetch failed for workout \(workout.uuid): \(error)")
+            return (index, HeartRateStats(average: nil, max: nil))
+        }
+    }
+
     /// Fetches heart rate statistics (average/max bpm) for a workout.
-    private static func fetchHeartRateStats(for workout: HKWorkout) async throws -> HeartRateStats {
+    static func fetchHeartRateStats(for workout: HKWorkout) async throws -> HeartRateStats {
         guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
             return HeartRateStats(average: nil, max: nil)
         }

@@ -340,13 +340,13 @@ enum ExerciseCreationService {
             ("kettlebell_swing", "Kettlebell Swing", "full_body", "ケトルベルスイング", "Kettlebell Swing"),
 
             // Cardio
-            ("treadmill", "Treadmill", "cardio", "トレッドミル", "Treadmill"),
+            ("running", "Running", "cardio", "ランニング", "Running"),
             ("cycling", "Cycling", "cardio", "サイクリング", "Cycling"),
             ("rowing", "Rowing", "cardio", "ローイング", "Rowing"),
             ("elliptical", "Elliptical", "cardio", "エリプティカル", "Elliptical"),
             ("jump_rope", "Jump Rope", "cardio", "縄跳び", "Jump Rope"),
-            ("stair_climber", "Stair Climber", "cardio", "ステアクライマー", "Stair Climber"),
-            ("stepper", "Stepper", "cardio", "ステッパー", "Stepper"),
+            ("stair_climber", "Stair Climbing", "cardio", "階段昇降", "Stair Climbing"),
+            ("stepper", "Step Training", "cardio", "ステップトレーニング", "Step Training"),
             ("hiit", "HIIT", "cardio", "HIIT", "HIIT"),
         ]
 
@@ -382,7 +382,8 @@ enum ExerciseCreationService {
     /// - 6: Added HIIT cardio exercise
     /// - 7: Added Stepper + Indoor/Outdoor Running cardio exercises
     /// - 8: Align manual cardio with HealthKit (remove Indoor/Outdoor Running split)
-    private static let currentSeedVersion = 8
+    /// - 9: Align cardio display names with Health-style labels (Running, Stair Climbing, Step Training)
+    private static let currentSeedVersion = 9
 
     /// UserDefaults key for tracking seed version
     private static let seedVersionKey = "SystemDataSeedVersion"
@@ -411,6 +412,9 @@ enum ExerciseCreationService {
         }
         if lastSeedVersion < 8 {
             migrateRemoveIndoorOutdoorRunningExercisesIfUnused(modelContext: modelContext)
+        }
+        if lastSeedVersion < 9 {
+            migrateUpdateCardioDisplayNamesToHealthStyle(modelContext: modelContext)
         }
 
         // Update seed version
@@ -551,6 +555,53 @@ enum ExerciseCreationService {
 
         if didChange {
             try? modelContext.save()
+        }
+    }
+
+    /// Updates cardio exercise display names to match Health-style labels.
+    /// Also renames "treadmill" code to "running" when safe.
+    @MainActor
+    private static func migrateUpdateCardioDisplayNamesToHealthStyle(modelContext: ModelContext) {
+        let exercisesDescriptor = FetchDescriptor<Exercise>()
+        guard let exercises = try? modelContext.fetch(exercisesDescriptor) else {
+            return
+        }
+
+        let hasRunning = exercises.contains { $0.code == "running" }
+        let updates: [String: (ja: String, en: String, renameCodeTo: String?)] = [
+            "treadmill": ("ランニング", "Running", hasRunning ? nil : "running"),
+            "running": ("ランニング", "Running", nil),
+            "cycling": ("サイクリング", "Cycling", nil),
+            "rowing": ("ローイング", "Rowing", nil),
+            "elliptical": ("エリプティカル", "Elliptical", nil),
+            "jump_rope": ("縄跳び", "Jump Rope", nil),
+            "stair_climber": ("階段昇降", "Stair Climbing", nil),
+            "stepper": ("ステップトレーニング", "Step Training", nil),
+            "hiit": ("HIIT", "HIIT", nil),
+        ]
+
+        for exercise in exercises {
+            guard let code = exercise.code, let update = updates[code] else { continue }
+
+            if let newCode = update.renameCodeTo {
+                exercise.code = newCode
+            }
+
+            // Update base name and normalized name.
+            exercise.updateName(update.en)
+
+            // Update translations (ja/en)
+            if let jaTranslation = exercise.translation(for: "ja") {
+                jaTranslation.name = update.ja
+            } else {
+                exercise.addTranslation(locale: "ja", name: update.ja)
+            }
+
+            if let enTranslation = exercise.translation(for: "en") {
+                enTranslation.name = update.en
+            } else {
+                exercise.addTranslation(locale: "en", name: update.en)
+            }
         }
     }
 }

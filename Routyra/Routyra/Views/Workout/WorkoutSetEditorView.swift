@@ -1176,7 +1176,7 @@ private struct WeightBodyweightEditorRow: View {
 
     // Vertical toggle: [ kg / BW ]
     private var verticalUnitToggle: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 1) {
             Button {
                 if isBodyweight {
                     metricType = .weightReps
@@ -1190,7 +1190,7 @@ private struct WeightBodyweightEditorRow: View {
                     .font(.caption2)
                     .fontWeight(isBodyweight ? .regular : .semibold)
                     .foregroundColor(isBodyweight ? AppColors.textMuted : .white)
-                    .frame(width: 32, height: 16)
+                    .frame(width: 36, height: 18)
                     .background(isBodyweight ? Color.clear : AppColors.accentBlue)
             }
 
@@ -1203,13 +1203,12 @@ private struct WeightBodyweightEditorRow: View {
                     .font(.caption2)
                     .fontWeight(isBodyweight ? .semibold : .regular)
                     .foregroundColor(isBodyweight ? .white : AppColors.textMuted)
-                    .frame(width: 32, height: 16)
+                    .frame(width: 36, height: 18)
                     .background(isBodyweight ? AppColors.accentBlue : Color.clear)
             }
         }
-        .padding(2)
         .background(AppColors.background)
-        .cornerRadius(6)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(
             RoundedRectangle(cornerRadius: 6)
                 .stroke(AppColors.textMuted.opacity(0.3), lineWidth: 1)

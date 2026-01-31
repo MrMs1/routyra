@@ -279,12 +279,15 @@ enum PlanService {
             return (false, workoutDay)
         }
 
-        // If any plan exercise has at least 1 completed set, advance (keep data)
-        if hasAnyPlanExerciseProgress(workoutDay: workoutDay, planDay: planDay) {
+        // If any plan exercise has progress (strength OR cardio), advance
+        let hasStrengthProgress = hasAnyPlanExerciseProgress(workoutDay: workoutDay, planDay: planDay)
+        let hasCardioProgress = hasAnyPlannedCardioProgress(workoutDayId: workoutDay.id, modelContext: modelContext)
+
+        if hasStrengthProgress || hasCardioProgress {
             return (true, nil)  // Advance, don't delete data
         }
 
-        // 0 sets completed - clear routine entries only and stay on same day
+        // 0 sets completed AND no plan cardio completed - clear routine entries only and stay on same day
         // (keeps CardioWorkouts and free entries)
         clearRoutineEntries(workoutDay: workoutDay, modelContext: modelContext)
         return (false, nil)  // Return nil to prevent deletion by caller
@@ -318,6 +321,27 @@ enum PlanService {
             }
         }
         return false
+    }
+
+    /// Checks if any planned cardio workout has been completed.
+    /// - Parameters:
+    ///   - workoutDayId: The workout day ID to check.
+    ///   - modelContext: The SwiftData model context.
+    /// - Returns: True if at least 1 plan-derived cardio is completed.
+    @MainActor
+    private static func hasAnyPlannedCardioProgress(
+        workoutDayId: UUID,
+        modelContext: ModelContext
+    ) -> Bool {
+        let descriptor = FetchDescriptor<CardioWorkout>(
+            predicate: #Predicate<CardioWorkout> {
+                $0.workoutDayId == workoutDayId &&
+                $0.planExerciseId != nil &&
+                $0.isCompleted == true
+            }
+        )
+        let completedPlanCardio = (try? modelContext.fetch(descriptor)) ?? []
+        return !completedPlanCardio.isEmpty
     }
 
     /// Clears routine entries from a workout day while preserving free entries and cardio.
@@ -594,6 +618,7 @@ enum PlanService {
                     workoutDayId: workoutDay.id,
                     orderIndex: nextOrderIndex,
                     source: .manual,
+                    planExerciseId: planExercise.id,
                     profile: profile
                 )
                 modelContext.insert(cardioWorkout)
@@ -615,6 +640,7 @@ enum PlanService {
                 workoutDayId: workoutDay.id,
                 orderIndex: nextOrderIndex,
                 source: .manual,
+                planExerciseId: planExercise.id,
                 profile: profile
             )
             modelContext.insert(cardioWorkout)

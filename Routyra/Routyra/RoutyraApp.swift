@@ -44,6 +44,10 @@ final class WatchSyncCoordinator: ObservableObject {
 
     func configure(with container: ModelContainer) {
         self.modelContainer = container
+
+        // PhoneWatchConnectivityManager にも ModelContainer を設定
+        PhoneWatchConnectivityManager.shared.configure(modelContainer: container)
+
         // Send initial data to Watch when app launches
         handleSyncRequest()
     }

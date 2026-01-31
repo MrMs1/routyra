@@ -86,6 +86,8 @@ final class LocalProfile {
     /// Optional for backward compatibility with existing data.
     var themeType: ThemeType?
 
+    var showCardioInHistory: Bool = true
+
     // MARK: - Notification Settings
 
     /// Whether notifications are enabled globally.
@@ -124,6 +126,7 @@ final class LocalProfile {
         self.hasShownCombinationAnnouncement = false
         self.weightUnit = .kg
         self.themeType = .dark
+        self.showCardioInHistory = true
     }
 
     // MARK: - Computed Properties

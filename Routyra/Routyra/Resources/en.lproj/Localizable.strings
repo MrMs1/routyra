@@ -135,6 +135,10 @@
 "history_progress_this_month" = "Progress This Month";
 "history_progress_this_year" = "Progress This Year";
 "history_progress_all_time" = "Overall Progress";
+"view_all_exercises" = "View all exercises (%d)";
+"view_all_cardio" = "View all cardio (%d)";
+"history_all_exercises" = "All Exercises";
+"history_all_cardio" = "All Cardio";
 
 // MARK: - Settings
 "settings_title" = "Settings";
@@ -598,6 +602,7 @@
 "cardio_record_subtitle" = "Track running, cycling, swimming, etc.";
 "cardio_monthly_summary" = "Cardio";
 "cardio_no_workouts_month" = "No cardio workouts this month";
+"cardio_no_workouts_year" = "No cardio workouts this year";
 "cardio_total_sessions" = "%d sessions";
 "cardio_max_heart_rate" = "Max %d bpm";
 "cardio_avg_heart_rate" = "Avg %d bpm";
@@ -686,3 +691,9 @@
 "workout_share_sets_format" = "%d sets";
 "workout_share_powered_by_format" = "Powered by %@";
 "workout_share_estimated_1rm_format" = "1RM %@";
+"workout_share_rm_format" = "Best 1RM %@";
+"workout_share_other_sets_format" = "+%d more";
+
+// MARK: - History Display Settings
+"history_strength_only_filter" = "Strength Only";
+"history_filter_all" = "All";

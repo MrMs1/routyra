@@ -135,6 +135,10 @@
 "history_progress_this_month" = "今月の進捗";
 "history_progress_this_year" = "今年の進捗";
 "history_progress_all_time" = "全体の進捗";
+"view_all_exercises" = "全ての種目を見る (%d件)";
+"view_all_cardio" = "全ての有酸素を見る (%d件)";
+"history_all_exercises" = "種目一覧";
+"history_all_cardio" = "有酸素一覧";
 
 // MARK: - Settings
 "settings_title" = "設定";
@@ -598,6 +602,7 @@
 "cardio_record_subtitle" = "ランニング、サイクリング、水泳などを記録";
 "cardio_monthly_summary" = "有酸素";
 "cardio_no_workouts_month" = "今月の有酸素ワークアウトなし";
+"cardio_no_workouts_year" = "今年の有酸素ワークアウトなし";
 "cardio_total_sessions" = "%d回";
 "cardio_max_heart_rate" = "最高心拍 %d bpm";
 "cardio_avg_heart_rate" = "平均心拍 %d bpm";
@@ -686,3 +691,9 @@
 "workout_share_sets_format" = "%dセット";
 "workout_share_powered_by_format" = "Powered by %@";
 "workout_share_estimated_1rm_format" = "推定1RM %@";
+"workout_share_rm_format" = "最高RM %@";
+"workout_share_other_sets_format" = "他%dセット";
+
+// MARK: - History Display Settings
+"history_strength_only_filter" = "筋トレのみ";
+"history_filter_all" = "すべて";

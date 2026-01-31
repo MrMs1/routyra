@@ -8,8 +8,8 @@
 import Combine
 import Foundation
 import SwiftUI
-import UserNotifications
 import WatchKit
+import WidgetKit
 
 // MARK: - Timer State
 
@@ -17,6 +17,15 @@ enum WatchTimerState {
     case idle
     case running
     case alarm
+
+    /// SharedTimerStateValue への変換
+    func toSharedValue() -> SharedTimerStateValue {
+        switch self {
+        case .idle: return .idle
+        case .running: return .running
+        case .alarm: return .alarm
+        }
+    }
 }
 
 // MARK: - Watch Rest Timer Manager
@@ -58,17 +67,7 @@ final class WatchRestTimerManager: NSObject, ObservableObject {
     private var timer: Timer?
     private var hapticTimer: Timer?
     private var session: WKExtendedRuntimeSession?
-    private var activeSession: WKExtendedRuntimeSession?
-    private let notificationIdentifier = "watchRestTimerNotification"
-
-    // Background state management
-    private var backgroundEntryDate: Date?
-    private var backgroundTimeRemaining: TimeInterval = 0
     private var isPlayingHaptics: Bool = false
-
-    // Notification category
-    private static let notificationCategoryIdentifier = "ROUTYRA_REST_TIMER"
-    private static let dismissActionIdentifier = "DISMISS_ALARM"
 
     // MARK: - Initialization
 
@@ -83,26 +82,24 @@ final class WatchRestTimerManager: NSObject, ObservableObject {
     func start(duration: Int) {
         guard state == .idle else { return }
 
-        // Cancel any existing notification/session to prevent duplicates
-        cancelNotification()
+        // Cancel any existing session to prevent duplicates
         session?.invalidate()
-        activeSession = nil
 
         let endTime = Date().addingTimeInterval(TimeInterval(duration))
         endDate = endTime
         totalDuration = duration
         state = .running
 
-        // 1. Schedule alarm session for background execution
+        // 1. Start extended runtime session to keep app alive in background
         session = WKExtendedRuntimeSession()
         session?.delegate = self
-        session?.start(at: endTime)
+        session?.start()
 
-        // 2. Schedule notification to ensure screen wake
-        scheduleNotification(in: duration)
-
-        // 3. Start UI update timer
+        // 2. Start UI update timer (continues in background via session)
         startTicking()
+
+        // 3. Sync state to complication
+        syncSharedStateAndReloadComplication()
     }
 
     /// Stops the timer and resets to idle state.
@@ -112,13 +109,12 @@ final class WatchRestTimerManager: NSObject, ObservableObject {
         stopAlarmHaptics()
         session?.invalidate()
         session = nil
-        activeSession = nil
-        cancelNotification()
         state = .idle
         endDate = nil
         totalDuration = 0
-        backgroundEntryDate = nil
-        backgroundTimeRemaining = 0
+
+        // Sync state to complication
+        syncSharedStateAndReloadComplication()
     }
 
     /// Skips the current timer and returns to idle.
@@ -131,114 +127,32 @@ final class WatchRestTimerManager: NSObject, ObservableObject {
         stopAlarmHaptics()
         session?.invalidate()
         session = nil
-        activeSession = nil
-        cancelNotification()
         state = .idle
         endDate = nil
         totalDuration = 0
-        backgroundEntryDate = nil
-        backgroundTimeRemaining = 0
+
+        // Delay complication update to avoid watchOS ignoring rapid reloadTimelines calls
+        // (timerCompleted may have just called reloadTimelines with .alarm)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.syncSharedStateAndReloadComplication()
+        }
     }
 
-    /// Sets up notification categories with foreground action for fallback.
-    func setupNotificationCategories() {
-        let dismissAction = UNNotificationAction(
-            identifier: Self.dismissActionIdentifier,
-            title: "停止",
-            options: [.foreground]
-        )
-        let category = UNNotificationCategory(
-            identifier: Self.notificationCategoryIdentifier,
-            actions: [dismissAction],
-            intentIdentifiers: [],
-            options: []
-        )
-        UNUserNotificationCenter.current().setNotificationCategories([category])
-    }
-
-    /// Handles transition to background: saves state and stops UI timer.
+    /// Handles transition to background.
     func handleEnterBackground() {
-        guard state == .running else { return }
-
-        // Save current remaining time and timestamp
-        backgroundEntryDate = Date()
-        backgroundTimeRemaining = TimeInterval(remainingSeconds)
-
-        // Stop UI timer (WKExtendedRuntimeSession continues)
-        timer?.invalidate()
-        timer = nil
+        // WKExtendedRuntimeSession がプロセスを維持するため、
+        // Timer を止めない。バックグラウンドでも tick() が発火し続ける。
     }
 
-    /// Handles return to foreground: restores state and corrects elapsed time.
+    /// Handles return to foreground.
     func handleEnterForeground() {
-        // If in alarm state, restart haptics (guard prevents double-play)
+        // If in alarm state, restart haptics (may have been stopped by session invalidation)
         if state == .alarm {
             startAlarmHaptics()
-            return
-        }
-
-        // If running, correct elapsed time
-        guard state == .running, let entryDate = backgroundEntryDate else { return }
-
-        let elapsedTime = Date().timeIntervalSince(entryDate)
-        let newTimeRemaining = backgroundTimeRemaining - elapsedTime
-        backgroundEntryDate = nil
-
-        if newTimeRemaining <= 0 {
-            // Completed while in background (fallback if session failed)
-            triggerAlarmIfNeeded()
-        } else {
-            // Resume timer
-            endDate = Date().addingTimeInterval(newTimeRemaining)
-            startTicking()
-        }
-    }
-
-    /// Requests notification permission if not already determined.
-    /// Note: getNotificationSettings callback returns on background thread.
-    func requestNotificationPermissionIfNeeded() {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            if settings.authorizationStatus == .notDetermined {
-                UNUserNotificationCenter.current().requestAuthorization(
-                    options: [.alert, .sound]
-                ) { _, _ in }
-            }
         }
     }
 
     // MARK: - Private Methods
-
-    private func scheduleNotification(in seconds: Int) {
-        // UNTimeIntervalNotificationTrigger requires timeInterval >= 1
-        guard seconds >= 1 else { return }
-
-        let content = UNMutableNotificationContent()
-        content.title = "レスト終了！"
-        content.body = "次のセットを始めましょう"
-        content.sound = .default
-        content.categoryIdentifier = Self.notificationCategoryIdentifier
-
-        let trigger = UNTimeIntervalNotificationTrigger(
-            timeInterval: TimeInterval(seconds),
-            repeats: false
-        )
-
-        let request = UNNotificationRequest(
-            identifier: notificationIdentifier,
-            content: content,
-            trigger: trigger
-        )
-        UNUserNotificationCenter.current().add(request)
-    }
-
-    private func cancelNotification() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(
-            withIdentifiers: [notificationIdentifier]
-        )
-        UNUserNotificationCenter.current().removeDeliveredNotifications(
-            withIdentifiers: [notificationIdentifier]
-        )
-    }
 
     private func startTicking() {
         timer?.invalidate()
@@ -264,15 +178,6 @@ final class WatchRestTimerManager: NSObject, ObservableObject {
         // Alarm condition: remaining time is zero or less
         guard remainingSeconds <= 0 else { return }
 
-        // Request watchOS to bring app to foreground via notifyUser
-        // repeatHandler: must return > 0 and <= 60 (0 is invalid)
-        // Returning 60 means "next haptic in 60 seconds" = effectively single play
-        if let session = activeSession ?? session {
-            session.notifyUser(hapticType: .notification) { _ in
-                return 60.0
-            }
-        }
-
         timerCompleted()
     }
 
@@ -280,8 +185,10 @@ final class WatchRestTimerManager: NSObject, ObservableObject {
         timer?.invalidate()
         timer = nil
         state = .alarm
-        cancelNotification()  // Cancel notification only when alarm is confirmed
         startAlarmHaptics()
+
+        // Sync state to complication
+        syncSharedStateAndReloadComplication()
     }
 
     private func startAlarmHaptics() {
@@ -303,6 +210,22 @@ final class WatchRestTimerManager: NSObject, ObservableObject {
         hapticTimer = nil
         isPlayingHaptics = false
     }
+
+    // MARK: - Complication Sync
+
+    /// 状態を App Groups に保存し、コンプリケーションを更新
+    /// Watch App 側からのみ呼び出す（Widget Extension からは呼ばない）
+    private func syncSharedStateAndReloadComplication() {
+        let sharedState = SharedTimerState(
+            endDate: endDate,
+            totalDuration: totalDuration,
+            state: state.toSharedValue()
+        )
+        SharedTimerStateManager.save(sharedState)
+
+        // Widget 更新は Watch App 側からのみ行う
+        WidgetCenter.shared.reloadTimelines(ofKind: SharedTimerStateManager.complicationKind)
+    }
 }
 
 // MARK: - WKExtendedRuntimeSessionDelegate
@@ -314,11 +237,9 @@ extension WatchRestTimerManager: WKExtendedRuntimeSessionDelegate {
         error: Error?
     ) {
         Task { @MainActor in
-            // Clear session references
             self.session = nil
-            self.activeSession = nil
 
-            // Stop haptics if not in alarm state (notification continues as fallback)
+            // Stop haptics if not in alarm state
             if self.state != .alarm {
                 self.stopAlarmHaptics()
             }
@@ -328,13 +249,8 @@ extension WatchRestTimerManager: WKExtendedRuntimeSessionDelegate {
     nonisolated func extendedRuntimeSessionDidStart(
         _ extendedRuntimeSession: WKExtendedRuntimeSession
     ) {
-        Task { @MainActor in
-            // Use self.session which was set in start() - it's the same session instance
-            // that triggered this callback, avoiding Sendable issues
-            self.activeSession = self.session
-            // Session started (alarm time reached): trigger alarm with double-fire guard
-            self.triggerAlarmIfNeeded()
-        }
+        // Timer.scheduledTimer が startTicking() で既に動作中。
+        // セッションがプロセスを維持するので、追加のスケジューリングは不要。
     }
 
     nonisolated func extendedRuntimeSessionWillExpire(
@@ -344,37 +260,3 @@ extension WatchRestTimerManager: WKExtendedRuntimeSessionDelegate {
     }
 }
 
-// MARK: - UNUserNotificationCenterDelegate
-
-extension WatchRestTimerManager: UNUserNotificationCenterDelegate {
-    nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse,
-        withCompletionHandler completionHandler: @escaping () -> Void
-    ) {
-        // Capture action identifier before crossing isolation boundary
-        let actionIdentifier = response.actionIdentifier
-        Task { @MainActor [actionIdentifier] in
-            // Handle foreground action from notification
-            if actionIdentifier == Self.dismissActionIdentifier {
-                self.dismissAlarm()
-            } else if actionIdentifier == UNNotificationDefaultActionIdentifier {
-                // User tapped the notification itself - alarm should already be showing
-                // but ensure haptics are playing if in alarm state
-                if self.state == .alarm {
-                    self.startAlarmHaptics()
-                }
-            }
-        }
-        completionHandler()
-    }
-
-    nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
-        // When app is in foreground, suppress notification (alarm UI is visible)
-        completionHandler([])
-    }
-}

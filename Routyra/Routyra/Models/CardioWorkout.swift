@@ -61,6 +61,12 @@ final class CardioWorkout {
     /// Order index for display in WorkoutView (relative to other cardio entries).
     var orderIndex: Int
 
+    // MARK: - Plan Integration
+
+    /// The PlanExercise ID this cardio was created from (nil for manual/ad-hoc entries).
+    /// Used to determine if this cardio contributes to plan day completion.
+    var planExerciseId: UUID?
+
     // MARK: - Metadata
 
     /// The source of this record (manual or healthKit).
@@ -91,6 +97,7 @@ final class CardioWorkout {
     ///   - orderIndex: Display order index.
     ///   - source: Whether manual or from HealthKit.
     ///   - healthKitUUID: HealthKit UUID if imported.
+    ///   - planExerciseId: PlanExercise ID if created from a plan (nil for manual/ad-hoc entries).
     ///   - profile: The user's profile.
     init(
         activityType: Int,
@@ -106,6 +113,7 @@ final class CardioWorkout {
         orderIndex: Int = 0,
         source: CardioSource = .manual,
         healthKitUUID: String? = nil,
+        planExerciseId: UUID? = nil,
         profile: LocalProfile? = nil
     ) {
         self.id = UUID()
@@ -122,6 +130,7 @@ final class CardioWorkout {
         self.orderIndex = orderIndex
         self.source = source
         self.healthKitUUID = healthKitUUID
+        self.planExerciseId = planExerciseId
         self.createdAt = Date()
         self.profile = profile
     }

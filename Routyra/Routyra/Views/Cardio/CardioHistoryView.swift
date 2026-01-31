@@ -9,6 +9,15 @@ import SwiftUI
 import SwiftData
 import HealthKit
 
+/// Period range for filtering cardio history
+private enum HistoryRange: String, CaseIterable, Identifiable {
+    case month
+    case year
+    case all
+
+    var id: String { rawValue }
+}
+
 struct CardioHistoryView: View {
     @Environment(\.modelContext) private var modelContext
 
@@ -17,11 +26,18 @@ struct CardioHistoryView: View {
 
     let profile: LocalProfile
     let activityType: Int?
+    let monthReference: Date?
     let useNavigationStack: Bool
 
-    init(profile: LocalProfile, activityType: Int? = nil, useNavigationStack: Bool = true) {
+    init(
+        profile: LocalProfile,
+        activityType: Int? = nil,
+        monthReference: Date? = nil,
+        useNavigationStack: Bool = true
+    ) {
         self.profile = profile
         self.activityType = activityType
+        self.monthReference = monthReference
         self.useNavigationStack = useNavigationStack
     }
 
@@ -30,6 +46,8 @@ struct CardioHistoryView: View {
     @State private var isSyncing = false
     @State private var syncResult: SyncResult?
     @State private var showingAuthAlert = false
+    @State private var range: HistoryRange = .month
+    @State private var selectedDate: Date = Date()
 
     // MARK: - Body
 
@@ -47,15 +65,38 @@ struct CardioHistoryView: View {
     }
 
     private var content: some View {
-        Group {
-            if filteredWorkouts.isEmpty {
-                emptyStateView
-            } else {
-                workoutListView
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Period range picker
+                Picker(L10n.tr("history_range_month"), selection: $range) {
+                    Text(L10n.tr("history_range_month")).tag(HistoryRange.month)
+                    Text(L10n.tr("history_range_year")).tag(HistoryRange.year)
+                    Text(L10n.tr("history_range_all")).tag(HistoryRange.all)
+                }
+                .pickerStyle(.segmented)
+
+                // Period navigation (hidden for "all" range)
+                if range != .all {
+                    periodNavigationView
+                }
+
+                // Content
+                if filteredWorkouts.isEmpty {
+                    emptyStateView
+                } else {
+                    workoutContentView
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
         .background(AppColors.background)
         .navigationTitle(navigationTitle)
+        .onAppear {
+            if let monthReference = monthReference {
+                selectedDate = monthReference
+            }
+        }
         .alert(L10n.tr("cardio_sync_complete"), isPresented: .constant(syncResult != nil)) {
             Button(L10n.tr("ok")) {
                 syncResult = nil
@@ -72,6 +113,77 @@ struct CardioHistoryView: View {
         }
     }
 
+    // MARK: - Period Navigation
+
+    private var periodNavigationView: some View {
+        HStack {
+            Button {
+                navigatePeriod(by: -1)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.body.weight(.medium))
+                    .foregroundColor(AppColors.accentBlue)
+            }
+
+            Spacer()
+
+            Text(periodLabel)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(AppColors.textPrimary)
+
+            Spacer()
+
+            Button {
+                navigatePeriod(by: 1)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.body.weight(.medium))
+                    .foregroundColor(canNavigateForward ? AppColors.accentBlue : AppColors.textMuted)
+            }
+            .disabled(!canNavigateForward)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(AppColors.cardBackground)
+        .cornerRadius(10)
+    }
+
+    private var periodLabel: String {
+        switch range {
+        case .month:
+            return Formatters.yearMonthShort.string(from: selectedDate)
+        case .year:
+            return Formatters.year.string(from: selectedDate)
+        case .all:
+            return ""
+        }
+    }
+
+    private var canNavigateForward: Bool {
+        let now = Date()
+        switch range {
+        case .month:
+            return DateUtilities.startOfMonth(for: selectedDate) < DateUtilities.startOfMonth(for: now)
+        case .year:
+            return startOfYear(for: selectedDate) < startOfYear(for: now)
+        case .all:
+            return false
+        }
+    }
+
+    private func navigatePeriod(by value: Int) {
+        let component: Calendar.Component = range == .month ? .month : .year
+        if let newDate = Calendar.current.date(byAdding: component, value: value, to: selectedDate) {
+            selectedDate = newDate
+        }
+    }
+
+    private func startOfYear(for date: Date) -> Date {
+        let components = Calendar.current.dateComponents([.year], from: date)
+        return Calendar.current.date(from: components) ?? date
+    }
+
     // MARK: - Views
 
     private var emptyStateView: some View {
@@ -80,7 +192,7 @@ struct CardioHistoryView: View {
                 .font(.system(size: 48))
                 .foregroundColor(AppColors.textMuted)
 
-            Text(L10n.tr("cardio_no_workouts"))
+            Text(emptyStateMessage)
                 .font(.headline)
                 .foregroundColor(AppColors.textSecondary)
 
@@ -99,44 +211,50 @@ struct CardioHistoryView: View {
                 .buttonStyle(.bordered)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
     }
 
-    private var workoutListView: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                ForEach(groupedWorkouts, id: \.date) { group in
-                    VStack(alignment: .leading, spacing: 8) {
-                        // Section header
-                        Text(formatDate(group.date))
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundColor(AppColors.textSecondary)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
+    private var emptyStateMessage: String {
+        switch range {
+        case .month:
+            return L10n.tr("cardio_no_workouts_month")
+        case .year:
+            return L10n.tr("cardio_no_workouts_year")
+        case .all:
+            return L10n.tr("cardio_no_workouts")
+        }
+    }
 
-                        // Workout cards
-                        VStack(spacing: 8) {
-                            ForEach(group.workouts) { workout in
-                                CardioWorkoutRowView(
-                                    workout: workout,
-                                    showsActivityName: activityType == nil,
-                                    onDelete: {
-                                        deleteWorkout(workout)
-                                    }
-                                )
-                                .background(AppColors.cardBackground)
-                                .cornerRadius(12)
-                                .padding(.horizontal, 16)
-                            }
+    private var workoutContentView: some View {
+        LazyVStack(spacing: 12) {
+            ForEach(groupedWorkouts, id: \.date) { group in
+                VStack(alignment: .leading, spacing: 8) {
+                    // Section header
+                    Text(formatDate(group.date))
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(AppColors.textSecondary)
+                        .padding(.top, 8)
+
+                    // Workout cards
+                    VStack(spacing: 8) {
+                        ForEach(group.workouts) { workout in
+                            CardioWorkoutRowView(
+                                workout: workout,
+                                showsActivityName: activityType == nil,
+                                onDelete: {
+                                    deleteWorkout(workout)
+                                }
+                            )
+                            .background(AppColors.cardBackground)
+                            .cornerRadius(12)
                         }
-                        .padding(.bottom, 4)
                     }
+                    .padding(.bottom, 4)
                 }
             }
-            .padding(.vertical, 8)
         }
-        .background(AppColors.background)
     }
 
     // MARK: - Grouped Data
@@ -175,10 +293,28 @@ struct CardioHistoryView: View {
     }
 
     private var filteredWorkouts: [CardioWorkout] {
-        guard let activityType = activityType else {
-            return cardioWorkouts
+        var workouts = cardioWorkouts.filter { workout in
+            workout.profile?.id == profile.id && workout.isCompleted
         }
-        return cardioWorkouts.filter { $0.activityType == activityType }
+
+        if let activityType = activityType {
+            workouts = workouts.filter { $0.activityType == activityType }
+        }
+
+        switch range {
+        case .month:
+            let start = DateUtilities.startOfMonth(for: selectedDate)
+            let end = Calendar.current.date(byAdding: .month, value: 1, to: start) ?? start
+            workouts = workouts.filter { $0.startDate >= start && $0.startDate < end }
+        case .year:
+            let start = startOfYear(for: selectedDate)
+            let end = Calendar.current.date(byAdding: .year, value: 1, to: start) ?? start
+            workouts = workouts.filter { $0.startDate >= start && $0.startDate < end }
+        case .all:
+            break  // No period filter
+        }
+
+        return workouts
     }
 
     // MARK: - Actions

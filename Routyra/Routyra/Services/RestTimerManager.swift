@@ -10,9 +10,10 @@
 import Foundation
 import Combine
 import UserNotifications
+import UIKit
 
 @MainActor
-final class RestTimerManager: ObservableObject {
+final class RestTimerManager: NSObject, ObservableObject {
     // MARK: - Singleton
 
     static let shared = RestTimerManager()
@@ -67,9 +68,22 @@ final class RestTimerManager: ObservableObject {
     private var notificationId: String?
     private var notificationDetail: String?
 
+
+    // MARK: - Haptic Feedback Properties
+
+    private let hapticGenerator = UINotificationFeedbackGenerator()
+    private var hapticTimer: Timer?
+    private var isPlayingHaptics: Bool = false
+
     // MARK: - Initialization
 
-    private init() {}
+    private override init() {
+        super.init()
+        // Set notification delegate for foreground handling
+        UNUserNotificationCenter.current().delegate = self
+        // Prepare haptic generator for quick response
+        hapticGenerator.prepare()
+    }
 
     // MARK: - Public API
 
@@ -110,6 +124,7 @@ final class RestTimerManager: ObservableObject {
         totalDuration = 0
         notificationDetail = nil
         cancelNotification()
+        stopCompletionHaptics()
     }
 
     /// Adds time to the current timer.
@@ -129,6 +144,7 @@ final class RestTimerManager: ObservableObject {
             endDate = nil
             totalDuration = 0
             notificationDetail = nil
+            stopCompletionHaptics()
         }
     }
 
@@ -157,6 +173,31 @@ final class RestTimerManager: ObservableObject {
         timer = nil
         isRunning = false
         // Keep endDate for display until dismissed
+        startCompletionHaptics()
+    }
+
+    // MARK: - Haptic Feedback
+
+    private func startCompletionHaptics() {
+        guard !isPlayingHaptics else { return }
+        isPlayingHaptics = true
+
+        // Immediate haptic feedback
+        hapticGenerator.prepare()
+        hapticGenerator.notificationOccurred(.success)
+
+        // Repeat every 1.5 seconds (matches Watch behavior)
+        hapticTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.hapticGenerator.notificationOccurred(.success)
+            }
+        }
+    }
+
+    private func stopCompletionHaptics() {
+        hapticTimer?.invalidate()
+        hapticTimer = nil
+        isPlayingHaptics = false
     }
 
     // MARK: - Notifications
@@ -171,6 +212,8 @@ final class RestTimerManager: ObservableObject {
             content.body = ""
         }
         content.sound = .default
+        // Prioritize delivery to reduce background delay
+        content.interruptionLevel = .timeSensitive
 
         let trigger = UNTimeIntervalNotificationTrigger(
             timeInterval: TimeInterval(seconds),
@@ -205,5 +248,20 @@ final class RestTimerManager: ObservableObject {
                 UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
             }
         }
+    }
+}
+
+// MARK: - UNUserNotificationCenterDelegate
+
+extension RestTimerManager: UNUserNotificationCenterDelegate {
+    /// Handle notification when app is in foreground.
+    /// We suppress the banner since haptic feedback is already playing.
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        // Don't show banner in foreground - haptics are sufficient
+        completionHandler([])
     }
 }

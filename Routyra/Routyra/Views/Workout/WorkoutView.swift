@@ -355,15 +355,19 @@ struct WorkoutView: View {
         // Never show on rest day
         guard !isRestDay else { return false }
 
-        // Must have at least 1 strength entry (cardio-only days should not show)
-        let strengthEntries = sortedEntries
-        guard !strengthEntries.isEmpty else { return false }
+        let hasStrength = !sortedEntries.isEmpty
+        let hasCardio = !selectedDateCardioWorkouts.isEmpty
 
-        // All strength entries must be "completed sets only"
-        guard strengthEntries.allSatisfy({ $0.isPlannedSetsCompleted }) else { return false }
+        // Must have at least 1 strength entry or 1 cardio workout
+        guard hasStrength || hasCardio else { return false }
 
-        // If there are cardio workouts for the day, all must be completed
-        if !selectedDateCardioWorkouts.isEmpty {
+        // All strength entries (if any) must be "completed sets only"
+        if hasStrength {
+            guard sortedEntries.allSatisfy({ $0.isPlannedSetsCompleted }) else { return false }
+        }
+
+        // All cardio workouts (if any) must be completed
+        if hasCardio {
             guard selectedDateCardioWorkouts.allSatisfy({ $0.isCompleted }) else { return false }
         }
 
@@ -739,6 +743,15 @@ struct WorkoutView: View {
         guard let newDate = Calendar.current.date(byAdding: .day, value: days, to: selectedWorkoutDate) else {
             return
         }
+
+        // Prevent moving to a different week
+        let currentWeekStart = DateUtilities.startOfWeekMonday(containing: selectedWorkoutDate)
+        let newWeekStart = DateUtilities.startOfWeekMonday(containing: newDate)
+
+        if currentWeekStart != newWeekStart {
+            return
+        }
+
         selectedDate = DateUtilities.startOfDay(newDate)
     }
 
@@ -904,7 +917,11 @@ struct WorkoutView: View {
                 if cachedDisplayItems.isEmpty {
                     VStack(spacing: 0) {
                         if shouldShowRestDayView {
-                            RestDayEmptyView()
+                            RestDayEmptyView(
+                                dayIndex: currentDayContextInfo?.dayIndex,
+                                totalDays: currentDayContextInfo?.totalDays,
+                                dayName: selectedPlanDay?.name
+                            )
                         // Future date without workout: show plan preview
                         } else if isFutureWithoutWorkout, let planDay = previewPlanDay, let dayInfo = currentDayContextInfo {
                             PlanDayPreviewView(
@@ -1685,6 +1702,9 @@ struct WorkoutView: View {
     private func linkHealthKitWorkout(_ source: CardioWorkout, to target: CardioWorkout) {
         guard source.id != target.id else { return }
 
+        // Copy HealthKit data to the target (plan-derived) cardio workout.
+        // Note: planExerciseId is intentionally NOT overwritten to preserve
+        // the plan association for day progression logic.
         target.activityType = source.activityType
         target.manualExerciseCode = nil
         target.startDate = source.startDate
@@ -2834,6 +2854,7 @@ struct WorkoutView: View {
                 reps: setData.reps,
                 durationSeconds: setData.durationSeconds,
                 distanceMeters: setData.distanceMeters,
+                restTimeSeconds: setData.restTimeSeconds,
                 isCompleted: false
             )
             entry.addSet(set)
@@ -4085,18 +4106,27 @@ struct WorkoutView: View {
         guard shouldShowShareCard else { return nil }
 
         let weightUnit = profile?.effectiveWeightUnit ?? .kg
-
-        let totalSets = sortedEntries.reduce(0) { $0 + $1.activeSets.count }
         let totalVolume = sortedEntries.reduce(Decimal.zero) { $0 + $1.totalVolume }
+
+        // Only show volume if there are weightReps exercises
+        let hasWeightRepsExercises = sortedEntries.contains { $0.metricType == .weightReps }
+        let volumeText: String? = hasWeightRepsExercises
+            ? Formatters.formatVolumeNumber(Double(truncating: totalVolume as NSNumber))
+            : nil
+
+        // Compute total cardio duration for hero display
+        let totalCardioDuration = selectedDateCardioWorkouts.reduce(0.0) { $0 + $1.duration }
+        let cardioDurationText: String? = (!selectedDateCardioWorkouts.isEmpty && volumeText == nil)
+            ? formatDuration(seconds: Int(totalCardioDuration))
+            : nil
 
         let shareView = WorkoutShareCardView(
             date: selectedWorkoutDate,
             exercises: buildShareExerciseSummaries(weightUnit: weightUnit),
             cardio: buildShareCardioSummaries(),
-            totalSetsText: "\(totalSets)",
-            totalVolumeText: Formatters.formatVolumeNumber(Double(truncating: totalVolume as NSNumber))
+            totalVolumeText: volumeText,
+            totalCardioDurationText: cardioDurationText
         )
-        .frame(width: 360)
         .preferredColorScheme(ThemeManager.shared.currentThemeType.colorScheme)
 
         let renderer = ImageRenderer(content: shareView)
@@ -4105,8 +4135,12 @@ struct WorkoutView: View {
         return renderer.uiImage
     }
 
+    // MARK: - Share Image Data Builders
+
     private func buildShareExerciseSummaries(weightUnit: WeightUnit) -> [WorkoutShareExerciseSummary] {
-        sortedEntries.map { entry in
+        let shouldCondense = sortedEntries.count >= 7
+
+        return sortedEntries.map { entry in
             let exercise = exercisesDict[entry.exerciseId]
             let name = exercise?.localizedName ?? getExerciseName(for: entry.exerciseId)
             let dotColor = exercise
@@ -4114,88 +4148,217 @@ struct WorkoutView: View {
                 .flatMap { bodyPartsDict[$0] }
                 .map(\.color)
 
-            let setsCount = entry.activeSets.count
-            let setsText = L10n.tr("workout_share_sets_format", setsCount)
+            let completedSets = entry.sortedSets.filter { $0.isCompleted }
 
-            let detailText: String?
-            switch entry.metricType {
-            case .weightReps:
-                let completed = entry.activeSets
-                    .filter { $0.isCompleted && $0.metricType == .weightReps }
+            // Find best set and calculate estimated RM
+            let (bestSetId, estimatedRM) = findBestSetAndRM(
+                entry: entry,
+                completedSets: completedSets,
+                weightUnit: weightUnit
+            )
 
-                let best = completed
-                    .filter { $0.isCompleted && $0.metricType == .weightReps }
-                    .max(by: { $0.weightDouble < $1.weightDouble })
-
-                let best1RM: Double? = completed
-                    .compactMap { set in
-                        guard let reps = set.reps, reps > 0, set.weightDouble > 0 else { return nil }
-                        // Epley: 1RM = w * (1 + reps/30)
-                        return set.weightDouble * (1.0 + (Double(reps) / 30.0))
-                    }
-                    .max()
-
-                if let best, let reps = best.reps, best.weightDouble > 0 {
-                    let bestText = "\(Formatters.formatWeight(best.weightDouble))\(weightUnit.symbol) × \(reps)"
-                    if let best1RM, best1RM > 0 {
-                        let oneRMText = L10n.tr(
-                            "workout_share_estimated_1rm_format",
-                            "\(Formatters.formatWeight(best1RM))\(weightUnit.symbol)"
-                        )
-                        detailText = "\(bestText)\n\(oneRMText)"
-                    } else {
-                        detailText = bestText
-                    }
-                } else {
-                    detailText = nil
-                }
-            case .bodyweightReps:
-                let bestReps = entry.activeSets
-                    .filter { $0.isCompleted && $0.metricType == .bodyweightReps }
-                    .compactMap(\.reps)
-                    .max()
-                if let bestReps {
-                    detailText = "\(L10n.tr("bodyweight_label")) × \(bestReps)"
-                } else {
-                    detailText = nil
-                }
-            case .timeDistance:
-                let totalSeconds = entry.activeSets
-                    .filter { $0.isCompleted && $0.metricType == .timeDistance }
-                    .reduce(0) { $0 + ($1.durationSeconds ?? 0) }
-                let totalDistance = entry.activeSets
-                    .filter { $0.isCompleted && $0.metricType == .timeDistance }
-                    .reduce(0.0) { $0 + ($1.distanceMeters ?? 0) }
-
-                let durationText = formatDuration(seconds: totalSeconds)
-                if totalDistance > 0 {
-                    detailText = "\(durationText) / \(formatDistance(meters: totalDistance))"
-                } else {
-                    detailText = durationText
-                }
-            case .completion:
-                detailText = L10n.tr("history_completed")
-            }
+            // Build all sets with best set first, passing RM to attach to best set
+            let allSets = buildShareSetDetails(
+                entry: entry,
+                completedSets: completedSets,
+                bestSetId: bestSetId,
+                bestSetRM: estimatedRM,
+                weightUnit: weightUnit,
+                shouldCondense: shouldCondense
+            )
 
             return WorkoutShareExerciseSummary(
                 name: name,
                 dotColor: dotColor,
-                setsText: setsText,
-                detailText: detailText
+                allSets: allSets,
+                bestSetIndex: allSets.isEmpty ? nil : 0  // Best is always first after reordering
             )
         }
     }
 
-    private func buildShareCardioSummaries() -> [WorkoutShareCardioSummary] {
-        selectedDateCardioWorkouts.map { workout in
-            let type = HKWorkoutActivityType(rawValue: UInt(workout.activityType))
-            let name = type?.displayName ?? L10n.tr("unknown")
-            let duration = workout.formattedDuration
-            if let distance = workout.formattedDistance {
-                return WorkoutShareCardioSummary(name: name, detailText: "\(duration) / \(distance)")
+    /// Finds the best set and calculates estimated RM based on metric type.
+    /// Returns (bestSetId, formattedRM string)
+    private func findBestSetAndRM(
+        entry: WorkoutExerciseEntry,
+        completedSets: [WorkoutSet],
+        weightUnit: WeightUnit
+    ) -> (UUID?, String?) {
+        guard !completedSets.isEmpty else { return (nil, nil) }
+
+        switch entry.metricType {
+        case .weightReps:
+            // Find set with highest Epley 1RM, prefer lower setIndex on tie
+            var bestSet: WorkoutSet?
+            var best1RM: Double = 0
+
+            for set in completedSets {
+                guard let reps = set.reps, reps > 0, set.weightDouble > 0 else { continue }
+                let epley1RM = set.weightDouble * (1.0 + Double(reps) / 30.0)
+
+                if epley1RM > best1RM || (epley1RM == best1RM && (bestSet == nil || set.setIndex < bestSet!.setIndex)) {
+                    best1RM = epley1RM
+                    bestSet = set
+                }
             }
-            return WorkoutShareCardioSummary(name: name, detailText: duration)
+
+            if let bestSet, best1RM > 0 {
+                let rmText = L10n.tr("workout_share_rm_format", "\(Formatters.formatWeight(best1RM))\(weightUnit.symbol)")
+                return (bestSet.id, rmText)
+            }
+            return (nil, nil)
+
+        case .bodyweightReps:
+            // Find set with most reps, prefer lower setIndex on tie
+            let bestSet = completedSets
+                .filter { ($0.reps ?? 0) > 0 }
+                .sorted { lhs, rhs in
+                    let lhsReps = lhs.reps ?? 0
+                    let rhsReps = rhs.reps ?? 0
+                    if lhsReps != rhsReps { return lhsReps > rhsReps }
+                    return lhs.setIndex < rhs.setIndex
+                }
+                .first
+
+            return (bestSet?.id, nil)  // No RM for bodyweight
+
+        case .timeDistance:
+            // Prefer longest distance, then longest time; lower setIndex on tie
+            let bestSet = completedSets
+                .sorted { lhs, rhs in
+                    let lhsDist = lhs.distanceMeters ?? 0
+                    let rhsDist = rhs.distanceMeters ?? 0
+                    if lhsDist != rhsDist { return lhsDist > rhsDist }
+
+                    let lhsTime = lhs.durationSeconds ?? 0
+                    let rhsTime = rhs.durationSeconds ?? 0
+                    if lhsTime != rhsTime { return lhsTime > rhsTime }
+
+                    return lhs.setIndex < rhs.setIndex
+                }
+                .first
+
+            return (bestSet?.id, nil)
+
+        case .completion:
+            return (nil, nil)  // No best set for completion type
         }
+    }
+
+    /// Builds ShareSetDetail array with best set first, then remaining in setIndex order.
+    /// The best set includes rmText; other sets have nil.
+    private func buildShareSetDetails(
+        entry: WorkoutExerciseEntry,
+        completedSets: [WorkoutSet],
+        bestSetId: UUID?,
+        bestSetRM: String?,
+        weightUnit: WeightUnit,
+        shouldCondense: Bool
+    ) -> [ShareSetDetail] {
+        guard !completedSets.isEmpty else { return [] }
+
+        // Sort: best set first, then by setIndex
+        let sortedSets: [WorkoutSet]
+        if let bestSetId {
+            let bestSet = completedSets.first { $0.id == bestSetId }
+            let others = completedSets.filter { $0.id != bestSetId }.sorted { $0.setIndex < $1.setIndex }
+            sortedSets = (bestSet.map { [$0] } ?? []) + others
+        } else {
+            sortedSets = completedSets.sorted { $0.setIndex < $1.setIndex }
+        }
+
+        // Condense mode: show only best + "other N sets"
+        if shouldCondense && sortedSets.count > 1 {
+            var result: [ShareSetDetail] = []
+
+            if let first = sortedSets.first {
+                let isBest = (first.id == bestSetId)
+                result.append(ShareSetDetail(
+                    text: formatSetText(set: first, metricType: entry.metricType, weightUnit: weightUnit),
+                    rmText: isBest ? bestSetRM : nil
+                ))
+            }
+
+            let otherCount = sortedSets.count - 1
+            if otherCount > 0 {
+                result.append(ShareSetDetail(
+                    text: L10n.tr("workout_share_other_sets_format", otherCount),
+                    rmText: nil
+                ))
+            }
+
+            return result
+        }
+
+        // Normal mode: show all sets
+        return sortedSets.enumerated().map { index, set in
+            let isBest = (index == 0 && set.id == bestSetId)
+            return ShareSetDetail(
+                text: formatSetText(set: set, metricType: entry.metricType, weightUnit: weightUnit),
+                rmText: isBest ? bestSetRM : nil
+            )
+        }
+    }
+
+    /// Formats a single set's display text based on metric type.
+    private func formatSetText(set: WorkoutSet, metricType: SetMetricType, weightUnit: WeightUnit) -> String {
+        switch metricType {
+        case .weightReps:
+            let weight = Formatters.formatWeight(set.weightDouble)
+            let reps = set.reps ?? 0
+            return "\(weight)\(weightUnit.symbol) × \(reps)"
+
+        case .bodyweightReps:
+            let reps = set.reps ?? 0
+            return "\(L10n.tr("bodyweight_label")) × \(reps)"
+
+        case .timeDistance:
+            let duration = formatDuration(seconds: set.durationSeconds ?? 0)
+            if let distance = set.distanceMeters, distance > 0 {
+                return "\(duration) / \(formatDistance(meters: distance))"
+            }
+            return duration
+
+        case .completion:
+            return L10n.tr("history_completed")
+        }
+    }
+
+    private func buildShareCardioSummaries() -> [WorkoutShareCardioSummary] {
+        // Group cardio workouts by activity type
+        let groupedByType = Dictionary(grouping: selectedDateCardioWorkouts) { workout in
+            HKWorkoutActivityType(rawValue: UInt(workout.activityType)) ?? .other
+        }
+
+        return groupedByType.map { (activityType, workouts) in
+            let name = activityType.displayName
+
+            // Build set details for each workout (cardio has no RM)
+            let allSets = workouts.map { workout -> ShareSetDetail in
+                let duration = workout.formattedDuration
+                if let distance = workout.formattedDistance {
+                    return ShareSetDetail(text: "\(duration) / \(distance)", rmText: nil)
+                }
+                return ShareSetDetail(text: duration, rmText: nil)
+            }
+
+            // Find best: prefer longest distance, then longest time
+            let bestIndex = workouts.enumerated()
+                .sorted { lhs, rhs in
+                    let lhsDist = lhs.element.totalDistance ?? 0
+                    let rhsDist = rhs.element.totalDistance ?? 0
+                    if lhsDist != rhsDist { return lhsDist > rhsDist }
+
+                    return lhs.element.duration > rhs.element.duration
+                }
+                .first?.offset
+
+            return WorkoutShareCardioSummary(
+                name: name,
+                allSets: allSets,
+                bestSetIndex: allSets.count > 1 ? bestIndex : (allSets.isEmpty ? nil : 0)
+            )
+        }
+        .sorted { $0.name < $1.name }  // Alphabetical order
     }
 
     private func formatDuration(seconds: Int) -> String {
@@ -4332,7 +4495,51 @@ struct EmptyStateView: View {
 
 /// Rest day view shown when selected date is a routine rest day.
 private struct RestDayEmptyView: View {
+    var dayIndex: Int? = nil
+    var totalDays: Int? = nil
+    var dayName: String? = nil
+
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Day info header (optional)
+            if let dayIndex = dayIndex, let totalDays = totalDays {
+                dayInfoHeader(dayIndex: dayIndex, totalDays: totalDays)
+            }
+
+            // Rest day card
+            restDayCard
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func dayInfoHeader(dayIndex: Int, totalDays: Int) -> some View {
+        HStack(spacing: 4) {
+            Text(L10n.tr("day_label", dayIndex))
+                .font(.headline)
+                .foregroundColor(AppColors.textPrimary)
+
+            if let dayName = dayName, !dayName.isEmpty {
+                Text(":")
+                    .font(.headline)
+                    .foregroundColor(AppColors.textSecondary)
+                Text(dayName)
+                    .font(.headline)
+                    .foregroundColor(AppColors.textPrimary)
+            }
+
+            Spacer()
+
+            Text("\(dayIndex)/\(totalDays)")
+                .font(.subheadline)
+                .foregroundColor(AppColors.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal)
+        .padding(.vertical, 12)
+    }
+
+    private var restDayCard: some View {
         VStack(spacing: 12) {
             Image(systemName: "bed.double")
                 .font(.system(size: 44))

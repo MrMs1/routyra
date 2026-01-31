@@ -21,44 +21,11 @@ struct PlanDayCardView<Destination: Hashable>: View {
 
     @State private var expandedExerciseIds: Set<UUID> = []
 
-    // MARK: - Display Item
-
-    /// Unified display item for groups and ungrouped exercises
-    private enum DayDisplayItem: Identifiable {
-        case group(PlanExerciseGroup)
-        case exercise(PlanExercise)
-
-        var id: String {
-            switch self {
-            case .group(let group): return "group-\(group.id)"
-            case .exercise(let exercise): return "exercise-\(exercise.id)"
-            }
-        }
-
-        var orderIndex: Int {
-            switch self {
-            case .group(let group): return group.orderIndex
-            case .exercise(let exercise): return exercise.orderIndex
-            }
-        }
-    }
+    // MARK: - Display Items
 
     /// Build unified display items from groups and ungrouped exercises
-    private var displayItems: [DayDisplayItem] {
-        var items: [DayDisplayItem] = []
-
-        // Add all groups
-        for group in day.exerciseGroups {
-            items.append(.group(group))
-        }
-
-        // Add ungrouped exercises
-        for exercise in day.sortedExercises where !exercise.isGrouped {
-            items.append(.exercise(exercise))
-        }
-
-        // Sort by orderIndex
-        return items.sorted { $0.orderIndex < $1.orderIndex }
+    private var displayItems: [PlanDayDisplayItem] {
+        PlanDayDisplayService.buildDisplayItems(from: day)
     }
 
     var body: some View {

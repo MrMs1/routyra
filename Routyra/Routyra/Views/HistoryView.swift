@@ -19,6 +19,16 @@ private struct MonthNavigation: Hashable {
     let month: Date
 }
 
+/// Navigation wrapper for exercise summary list.
+private struct ExerciseSummaryListNavigation: Hashable {
+    let month: Date
+}
+
+/// Navigation wrapper for cardio summary list.
+private struct CardioSummaryListNavigation: Hashable {
+    let month: Date
+}
+
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkoutDay.date, order: .reverse) private var workoutDays: [WorkoutDay]
@@ -31,6 +41,7 @@ struct HistoryView: View {
     @State private var selectedDate: Date = DateUtilities.startOfDay(Date())
     @State private var monthTransitionDirection: Int = 0
     @State private var isCardioSyncing = false
+    @State private var highlightChangedSections = false
     @State private var cardioSyncResult: CardioSyncResult?
     @State private var showingCardioAuthAlert = false
 
@@ -49,6 +60,7 @@ struct HistoryView: View {
     )
     @State private var cachedCardioActivitySummaries: [CardioActivitySummary] = []
     @State private var cachedWorkoutDates: Set<Date> = []
+    @State private var cachedCardioOnlyDates: Set<Date> = []
 
     // Ad manager
     @StateObject private var adManager = NativeAdManager()
@@ -59,6 +71,11 @@ struct HistoryView: View {
 
     private var bodyPartsDict: [UUID: BodyPart] {
         Dictionary(uniqueKeysWithValues: bodyParts.map { ($0.id, $0) })
+    }
+
+
+    private var showCardioInHistory: Bool {
+        profile?.showCardioInHistory ?? true
     }
 
     private var filteredWorkoutDays: [WorkoutDay] {
@@ -103,7 +120,8 @@ struct HistoryView: View {
     }
 
     private var selectedDayCardioWorkouts: [CardioWorkout] {
-        cardioWorkouts(for: selectedDate, workoutDayId: selectedWorkoutDay?.id)
+        guard showCardioInHistory else { return [] }
+        return cardioWorkouts(for: selectedDate, workoutDayId: selectedWorkoutDay?.id)
     }
 
     private var selectedDayCardioExerciseCount: Int {
@@ -148,7 +166,7 @@ struct HistoryView: View {
     /// Recalculates exercise summaries for the current month
     /// Called when month changes or when view first appears
     private func recalculateMonthlySummaries() {
-        cachedMonthSummary = buildWorkoutSummary(for: monthlyWorkoutDays)
+        let strengthSummary = buildWorkoutSummary(for: monthlyWorkoutDays)
 
         let cardioWorkoutsForMonth = monthlyCardioWorkouts
         let totalDuration = cardioWorkoutsForMonth.reduce(0.0) { $0 + $1.duration }
@@ -179,18 +197,44 @@ struct HistoryView: View {
             return $0.activityType < $1.activityType
         }
 
-        var dates = Set(
+        // Month summary: integrate cardio when toggle is ON
+        if showCardioInHistory && !cardioWorkoutsForMonth.isEmpty {
+            let strengthDays = Set(monthlyWorkoutDays
+                .filter { hasRelevantCompletedSets($0) }
+                .map { DateUtilities.startOfDay($0.date) })
+            let cardioDays = Set(cardioWorkoutsForMonth
+                .map { DateUtilities.startOfDay($0.startDate) })
+            let cardioTypes = Set(cardioWorkoutsForMonth.map { $0.activityType }).count
+
+            cachedMonthSummary = WorkoutSummary(
+                workoutDays: strengthDays.union(cardioDays).count,
+                exercises: strengthSummary.exercises + cardioTypes,
+                sets: strengthSummary.sets + cardioWorkoutsForMonth.count,
+                volume: strengthSummary.volume  // Volume is strength only
+            )
+        } else {
+            cachedMonthSummary = strengthSummary
+        }
+
+        // Calendar dates: include/exclude cardio days based on toggle
+        let strengthDates = Set(
             filteredWorkoutDays
                 .filter { hasRelevantCompletedSets($0) }
                 .map { DateUtilities.startOfDay($0.date) }
         )
+        var dates = strengthDates
+        var cardioOnly: Set<Date> = []
         if let profile = profile {
-            let cardioDates = cardioWorkouts
+            let cardioDates = Set(cardioWorkouts
                 .filter { $0.profile?.id == profile.id && $0.isCompleted }
-                .map { DateUtilities.startOfDay($0.startDate) }
-            dates.formUnion(cardioDates)
+                .map { DateUtilities.startOfDay($0.startDate) })
+            cardioOnly = cardioDates.subtracting(strengthDates)
+            if showCardioInHistory {
+                dates.formUnion(cardioDates)
+            }
         }
         cachedWorkoutDates = dates
+        cachedCardioOnlyDates = cardioOnly
 
         var accumulators: [UUID: ExerciseAccumulator] = [:]
 
@@ -265,13 +309,53 @@ struct HistoryView: View {
 
                     calendarSection
 
+                    // Filter chip (always visible, toggles between states)
+                    Button {
+                        let newValue = !showCardioInHistory
+                        profile?.showCardioInHistory = newValue
+                        try? modelContext.save()
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            recalculateMonthlySummaries()
+                            highlightChangedSections = true
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                            withAnimation(.easeOut(duration: 0.4)) {
+                                highlightChangedSections = false
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: showCardioInHistory
+                                ? "figure.run.circle"
+                                : "figure.strengthtraining.traditional")
+                                .font(.system(size: 11))
+                            Text(L10n.tr(showCardioInHistory
+                                ? "history_filter_all"
+                                : "history_strength_only_filter"))
+                                .font(.caption)
+                        }
+                        .foregroundColor(showCardioInHistory
+                            ? AppColors.textSecondary
+                            : AppColors.accentBlue)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(showCardioInHistory
+                            ? AppColors.cardBackground
+                            : AppColors.accentBlue.opacity(0.15))
+                        .cornerRadius(12)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
                     daySummarySection
 
                     monthSummarySection
 
                     exerciseSummarySection
 
-                    cardioSummarySection
+                    if showCardioInHistory {
+                        cardioSummarySection
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
 
                     // Bottom ad
                     if shouldShowAd {
@@ -312,6 +396,22 @@ struct HistoryView: View {
                     exercisesDict: exercisesDict,
                     bodyPartsDict: bodyPartsDict,
                     weightUnit: profile?.effectiveWeightUnit ?? .kg,
+                    isPremiumUser: profile?.isPremiumUser ?? false
+                )
+            }
+            .navigationDestination(for: ExerciseSummaryListNavigation.self) { _ in
+                ExerciseSummaryListView(
+                    summaries: exerciseSummaries,
+                    bodyPartsDict: bodyPartsDict,
+                    weightUnit: profile?.effectiveWeightUnit ?? .kg,
+                    isPremiumUser: profile?.isPremiumUser ?? false
+                )
+            }
+            .navigationDestination(for: CardioSummaryListNavigation.self) { nav in
+                CardioSummaryListView(
+                    summaries: cardioActivitySummaries,
+                    profile: profile ?? LocalProfile(),
+                    monthReference: nav.month,
                     isPremiumUser: profile?.isPremiumUser ?? false
                 )
             }
@@ -416,7 +516,7 @@ private extension HistoryView {
             ZStack {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 8) {
                     ForEach(Array(calendarDates(for: displayedMonth).enumerated()), id: \.offset) { _, date in
-                        calendarDayCell(for: date, workoutDates: cachedWorkoutDates)
+                        calendarDayCell(for: date, workoutDates: cachedWorkoutDates, cardioOnlyDates: cachedCardioOnlyDates)
                     }
                 }
                 .id(displayedMonth)
@@ -479,13 +579,15 @@ private extension HistoryView {
                     GridRow {
                         daySummaryCard(
                             value: "\(totalExercises)",
-                            label: L10n.tr("exercises")
+                            label: L10n.tr("exercises"),
+                            highlight: highlightChangedSections
                         )
                         .gridCellColumns(3)
 
                         daySummaryCard(
                             value: "\(totalSets)",
-                            label: L10n.tr("history_total_sets")
+                            label: L10n.tr("history_total_sets"),
+                            highlight: highlightChangedSections
                         )
                         .gridCellColumns(3)
 
@@ -510,7 +612,7 @@ private extension HistoryView {
         .cornerRadius(12)
     }
 
-    func daySummaryCard(value: String, label: String, scalable: Bool = false) -> some View {
+    func daySummaryCard(value: String, label: String, scalable: Bool = false, highlight: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value)
                 .font(.title3)
@@ -528,6 +630,11 @@ private extension HistoryView {
         .padding(.bottom, 12)
         .background(AppColors.cardBackgroundSecondary)
         .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(AppColors.accentBlue.opacity(highlight ? 0.12 : 0))
+                .allowsHitTesting(false)
+        )
     }
 
     var monthSummarySection: some View {
@@ -557,9 +664,9 @@ private extension HistoryView {
                     .foregroundColor(AppColors.textSecondary)
             } else {
                 SummaryStatsGrid(stats: [
-                    SummaryStat(title: L10n.tr("history_workout_days"), value: "\(monthSummary.workoutDays)"),
-                    SummaryStat(title: L10n.tr("exercises"), value: "\(monthSummary.exercises)"),
-                    SummaryStat(title: L10n.tr("history_total_sets"), value: "\(monthSummary.sets)"),
+                    SummaryStat(title: L10n.tr("history_workout_days"), value: "\(monthSummary.workoutDays)", highlighted: highlightChangedSections),
+                    SummaryStat(title: L10n.tr("exercises"), value: "\(monthSummary.exercises)", highlighted: highlightChangedSections),
+                    SummaryStat(title: L10n.tr("history_total_sets"), value: "\(monthSummary.sets)", highlighted: highlightChangedSections),
                     SummaryStat(title: L10n.tr("history_total_volume"), value: formatVolumeWithUnit(monthSummary.volume))
                 ], style: .carded)
             }
@@ -587,9 +694,23 @@ private extension HistoryView {
                     .cornerRadius(12)
             } else {
                 VStack(spacing: 8) {
-                    ForEach(exerciseSummaries) { summary in
+                    ForEach(exerciseSummaries.prefix(3)) { summary in
                         NavigationLink(value: summary.id) {
                             exerciseSummaryRow(summary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if exerciseSummaries.count > 3 {
+                        NavigationLink(value: ExerciseSummaryListNavigation(month: displayedMonth)) {
+                            HStack(spacing: 4) {
+                                Text(L10n.tr("view_all_exercises", exerciseSummaries.count))
+                                Image(systemName: "chevron.right")
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.accentBlue)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
                         }
                         .buttonStyle(.plain)
                     }
@@ -601,12 +722,10 @@ private extension HistoryView {
 
     var cardioSummarySection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            HStack(spacing: 6) {
                 Text(L10n.tr("cardio_monthly_summary"))
                     .font(.subheadline)
                     .foregroundColor(AppColors.textSecondary)
-
-                Spacer()
 
                 Button {
                     syncCardioFromHealthKit()
@@ -636,15 +755,30 @@ private extension HistoryView {
                     .cornerRadius(12)
             } else {
                 VStack(spacing: 8) {
-                    ForEach(cardioActivitySummaries) { summary in
+                    ForEach(cardioActivitySummaries.prefix(3)) { summary in
                         NavigationLink {
                             CardioHistoryView(
                                 profile: profile ?? LocalProfile(),
                                 activityType: summary.activityType,
+                                monthReference: displayedMonth,
                                 useNavigationStack: false
                             )
                         } label: {
                             cardioActivitySummaryRow(summary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if cardioActivitySummaries.count > 3 {
+                        NavigationLink(value: CardioSummaryListNavigation(month: displayedMonth)) {
+                            HStack(spacing: 4) {
+                                Text(L10n.tr("view_all_cardio", cardioActivitySummaries.count))
+                                Image(systemName: "chevron.right")
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(AppColors.accentBlue)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
                         }
                         .buttonStyle(.plain)
                     }
@@ -732,6 +866,7 @@ private extension HistoryView {
 
                 await MainActor.run {
                     isCardioSyncing = false
+                    recalculateMonthlySummaries()
                     if count > 0 {
                         cardioSyncResult = CardioSyncResult(
                             message: L10n.tr("cardio_sync_imported", count)
@@ -812,13 +947,15 @@ private extension HistoryView {
         }
     }
 
-    func calendarDayCell(for date: Date?, workoutDates: Set<Date>) -> some View {
+    func calendarDayCell(for date: Date?, workoutDates: Set<Date>, cardioOnlyDates: Set<Date>) -> some View {
         Group {
             if let date = date {
                 let isSelected = DateUtilities.isSameDay(date, selectedDate)
                 let isToday = DateUtilities.isToday(date)
                 let dayNumber = calendar.component(.day, from: date)
-                let hasWorkout = workoutDates.contains(DateUtilities.startOfDay(date))
+                let normalizedDate = DateUtilities.startOfDay(date)
+                let hasWorkout = workoutDates.contains(normalizedDate)
+                let isCardioOnly = cardioOnlyDates.contains(normalizedDate)
 
                 VStack(spacing: 4) {
                     Text("\(dayNumber)")
@@ -842,6 +979,12 @@ private extension HistoryView {
                     Circle()
                         .fill(hasWorkout ? AppColors.accentBlue : Color.clear)
                         .frame(width: 5, height: 5)
+                        .overlay(
+                            Circle()
+                                .fill(AppColors.accentBlue.opacity(isCardioOnly && highlightChangedSections ? 0.5 : 0))
+                                .frame(width: 14, height: 14)
+                                .allowsHitTesting(false)
+                        )
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 4)
@@ -1386,6 +1529,247 @@ private struct HistoryMonthDetailView: View {
         VolumeFormatter.format(volume, weightUnit: weightUnit)
     }
 
+}
+
+// MARK: - Exercise Summary List View
+
+private struct ExerciseSummaryListView: View {
+    let summaries: [ExerciseMonthlySummary]
+    let bodyPartsDict: [UUID: BodyPart]
+    let weightUnit: WeightUnit
+    var isPremiumUser: Bool = false
+
+    @StateObject private var adManager = NativeAdManager()
+
+    private var shouldShowAd: Bool {
+        guard !isPremiumUser else { return false }
+        guard !adManager.nativeAds.isEmpty else { return false }
+        return true
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 8) {
+                ForEach(summaries) { summary in
+                    NavigationLink(value: summary.id) {
+                        exerciseSummaryRow(summary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if shouldShowAd {
+                    NativeAdCardView(nativeAd: adManager.nativeAds[0])
+                        .padding(.top, 8)
+                }
+            }
+            .padding()
+        }
+        .background(AppColors.background)
+        .navigationTitle(L10n.tr("history_all_exercises"))
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if adManager.nativeAds.isEmpty {
+                adManager.loadNativeAds(count: 1)
+            }
+        }
+    }
+
+    private var weightUnitSymbol: String {
+        weightUnit.symbol
+    }
+
+    private func exerciseSummaryRow(_ summary: ExerciseMonthlySummary) -> some View {
+        let bodyPartColor = summary.bodyPartId
+            .flatMap { bodyPartsDict[$0]?.color } ?? AppColors.textMuted
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(bodyPartColor.opacity(0.8))
+                    .frame(width: 6, height: 6)
+
+                Text(summary.name)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.textPrimary)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(AppColors.textSecondary)
+            }
+
+            Text("\(summary.workoutDays) \(L10n.tr("history_workout_days")) / \(summary.sets) \(L10n.tr("sets"))")
+                .font(.caption)
+                .foregroundColor(AppColors.textSecondary)
+
+            HStack(spacing: 8) {
+                metricChip(
+                    value: formatVolumeWithUnit(summary.volume),
+                    label: L10n.tr("history_total_volume")
+                )
+
+                metricChip(
+                    value: "\(Formatters.formatWeight(summary.maxWeight))\(weightUnitSymbol)",
+                    label: L10n.tr("history_max_weight")
+                )
+
+                metricChip(
+                    value: "\(Formatters.formatWeight(summary.maxOneRM))\(weightUnitSymbol)",
+                    label: L10n.tr("history_estimated_1rm")
+                )
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppColors.cardBackground)
+        .cornerRadius(12)
+    }
+
+    private func metricChip(value: String, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(AppColors.textPrimary)
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(AppColors.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(AppColors.cardBackgroundSecondary)
+        )
+    }
+
+    private func formatVolumeWithUnit(_ volume: Decimal) -> String {
+        VolumeFormatter.format(volume, weightUnit: weightUnit)
+    }
+}
+
+// MARK: - Cardio Summary List View
+
+private struct CardioSummaryListView: View {
+    let summaries: [CardioActivitySummary]
+    let profile: LocalProfile
+    let monthReference: Date
+    var isPremiumUser: Bool = false
+
+    @StateObject private var adManager = NativeAdManager()
+
+    private var shouldShowAd: Bool {
+        guard !isPremiumUser else { return false }
+        guard !adManager.nativeAds.isEmpty else { return false }
+        return true
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 8) {
+                ForEach(summaries) { summary in
+                    NavigationLink {
+                        CardioHistoryView(
+                            profile: profile,
+                            activityType: summary.activityType,
+                            monthReference: monthReference,
+                            useNavigationStack: false
+                        )
+                    } label: {
+                        cardioActivitySummaryRow(summary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if shouldShowAd {
+                    NativeAdCardView(nativeAd: adManager.nativeAds[0])
+                        .padding(.top, 8)
+                }
+            }
+            .padding()
+        }
+        .background(AppColors.background)
+        .navigationTitle(L10n.tr("history_all_cardio"))
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if adManager.nativeAds.isEmpty {
+                adManager.loadNativeAds(count: 1)
+            }
+        }
+    }
+
+    private func cardioActivitySummaryRow(_ summary: CardioActivitySummary) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: summary.activityIcon)
+                    .font(.system(size: 14))
+                    .foregroundColor(AppColors.accentBlue)
+                    .frame(width: 20)
+
+                Text(summary.activityName)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(AppColors.textPrimary)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(AppColors.textSecondary)
+            }
+
+            Text(L10n.tr("cardio_total_sessions", summary.sessionCount))
+                .font(.caption)
+                .foregroundColor(AppColors.textSecondary)
+
+            HStack(spacing: 8) {
+                metricChip(
+                    value: summary.formattedDuration,
+                    label: L10n.tr("cardio_duration")
+                )
+
+                if let distance = summary.formattedDistance {
+                    metricChip(
+                        value: distance,
+                        label: L10n.tr("cardio_distance")
+                    )
+                }
+
+                if let maxHeartRate = summary.formattedMaxHeartRate {
+                    metricChip(
+                        value: maxHeartRate,
+                        label: L10n.tr("cardio_max_heart_rate_label")
+                    )
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppColors.cardBackground)
+        .cornerRadius(12)
+    }
+
+    private func metricChip(value: String, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(AppColors.textPrimary)
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(AppColors.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(AppColors.cardBackgroundSecondary)
+        )
+    }
 }
 
 private struct ExerciseHistoryDetailView: View {
@@ -2145,6 +2529,7 @@ private struct SummaryStat: Identifiable {
     let id = UUID()
     let title: String
     let value: String
+    var highlighted: Bool = false
 }
 
 private struct SummaryStatsGrid: View {
@@ -2180,6 +2565,11 @@ private struct SummaryStatsGrid: View {
                         ? RoundedRectangle(cornerRadius: 10)
                             .fill(AppColors.cardBackgroundSecondary)
                         : nil
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(AppColors.accentBlue.opacity(stat.highlighted ? 0.12 : 0))
+                        .allowsHitTesting(false)
                 )
             }
         }
